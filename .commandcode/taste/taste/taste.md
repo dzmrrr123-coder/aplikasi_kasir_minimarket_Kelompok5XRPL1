@@ -1,0 +1,16 @@
+# Taste
+- Development environment is Windows with Laragon, PHP 8.3, and MySQL 8.4. Confidence: 0.9
+- MySQL runs on 127.0.0.1:3306 with user `root` and no password. Confidence: 0.9
+- Write all PHP code using PHP 8.3 standards (not 8.2 or earlier). Confidence: 0.9
+- Communicates in Indonesian (Bahasa Indonesia); expects replies in the same language. Confidence: 0.9
+- Communicates page requirements as concise wireframe-style specs (layout sections + behavior) and expects the implementation to follow them. Confidence: 0.7
+- Prefers Bootstrap via CDN for front-end pages rather than local/vendored assets. Confidence: 0.9
+- Prefers new UI pages to reuse existing model methods (e.g., Transaksi::tambahItem, Kasir::prosesTransaksi, ReturBarang::prosesRetur) instead of reimplementing business logic — explicitly told to "ikuti alur di ReturBarang::prosesRetur() yang sudah ada". Confidence: 0.8
+- Prefers multi-step database writes to be atomic: wrap stock updates + record inserts in one DB transaction with automatic rollback if anything fails mid-way. Confidence: 0.8
+- Wants each new feature page wired into the admin navigation (e.g., add menu buttons in admin.php for new pages like Supplier/Retur). Confidence: 0.7
+- Works on projects incrementally across sessions — pauses mid-task (sometimes accidentally, e.g., hitting ESC, then "lanjutkan, maaf kepencet esc") and expects the assistant to resume the halted step and re-orient itself from the project state without re-asking for requirements. Confidence: 0.8
+- Prefers authentication with native PHP sessions (store user_id/role in $_SESSION, role-based redirect after login) rather than a framework or library-based auth. Confidence: 0.9
+- Wants page code to take the current user's identity from $_SESSION rather than hardcoding IDs/constants (e.g., replace hardcoded KASIR_ID with the session user id). Confidence: 0.9
+- Prefers passing values into functions as explicit parameters (e.g., `aksiBayar(..., int $kasirId, string $namaUser)`) over relying on global-scope variables/constants inside functions — approved a fix that changed function signatures instead of using `global`/constants. Confidence: 0.6
+- Distinguishes "not logged in" (redirect to login) from "logged in but wrong role" (show an HTTP 403 access-denied page with a friendly message like "Anda tidak memiliki akses ke halaman ini") instead of redirecting unauthorized users to login — explicitly requested this for laporan.php. Confidence: 0.7
+- Prefers pragmatic, minimal implementations over complex ones when constrained (no external library / limited time) — explicitly allowed exporting to CSV instead of a real PDF ("minimal ekspor ke CSV kalau PDF terlalu kompleks"). Confidence: 0.7

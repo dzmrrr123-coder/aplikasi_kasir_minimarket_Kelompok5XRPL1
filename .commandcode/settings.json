@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Shell(curl -s -b C:UsersDELLLA~1AppDataLocalTempcommandcodeC--laragon-www-kasir-minimarketfb37ec31-a770-46f5-b08e-f763ef275257scratchpadlogin-cookie.txt -c C:UsersDELLLA~1AppDataLocalTempcommandcodeC--laragon-www-kasir-minimarketfb37ec31-a770-46f5-b08e-f763ef275257scratchpadlogin-cookie.txt -d aksi=bayar&metode=tunai&jumlah_dibayar=10000 http://127.0.0.1:8099/transaksi.php -L -o C:UsersDELLLA~1AppDataLocalTempcommandcodeC--laragon-www-kasir-minimarketfb37ec31-a770-46f5-b08e-f763ef275257scratchpadp2.html)",
+      "Shell(findstr:*)",
+      "Shell(php test/e2e.php)",
+      "Shell(php -l public/supplier.php)",
+      "Shell(php -l public/retur.php)",
+      "Shell(php -l public/admin.php)",
+      "Shell(php -l test/e2e.php)",
+      "Shell(php -S 127.0.0.1:8099 -t public)",
+      "Shell(curl -s -b C:UsersDELLLA~1AppDataLocalTempcommandcodeC--laragon-www-kasir-minimarketfb37ec31-a770-46f5-b08e-f763ef275257scratchpadsr-cookie.txt -c C:UsersDELLLA~1AppDataLocalTempcommandcodeC--laragon-www-kasir-minimarketfb37ec31-a770-46f5-b08e-f763ef275257scratchpadsr-cookie.txt -d aksi=proses_retur&produk_id=1&supplier_id=1&qty=9999&alasan=Uji http://127.0.0.1:8099/retur.php -L -o C:UsersDELLLA~1AppDataLocalTempcommandcodeC--laragon-www-kasir-minimarketfb37ec31-a770-46f5-b08e-f763ef275257scratchpads3.html)"
+    ],
+    "deny": [],
+    "defaultMode": "default"
+  }
+}
