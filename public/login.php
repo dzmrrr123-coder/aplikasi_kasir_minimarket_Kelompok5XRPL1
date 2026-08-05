@@ -5,16 +5,16 @@ declare(strict_types=1);
 /**
  * Halaman login kasir minimarket.
  *
- * Alur: cek kredensial lewat User::login() (Admin/Kasir), simpan
- * user_id, role, dan nama ke $_SESSION, lalu redirect sesuai role:
+ * Alur: validasi kredensial lewat User::loginPolimorfik() yang mengembalikan
+ * objek Admin atau Kasir secara polimorfik (berdasarkan role di database),
+ * simpan user_id, role, dan nama ke $_SESSION, lalu redirect sesuai role:
+ *   - admin -> dashboard.php
  *   - kasir -> transaksi.php
- *   - admin -> admin.php
  */
 
 require __DIR__ . '/../src/autoload.php';
 
-use App\Models\Admin;
-use App\Models\Kasir;
+use App\Models\User;
 
 if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
@@ -23,7 +23,7 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
 function redirectSesuaiRole(string $role): never
 {
     if ($role === 'admin') {
-        header('Location: admin.php');
+        header('Location: dashboard.php');
     } else {
         header('Location: transaksi.php');
     }
@@ -42,26 +42,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = trim((string) ($_POST['username'] ?? ''));
     $password = (string) ($_POST['password'] ?? '');
 
-    // Coba login sebagai kasir dulu; kalau role-nya admin, User::login()
-    // tetap memvalidasi password dan mengisi data yang benar.
-    $user = new Kasir();
-    $berhasil = $user->login($username, $password);
+    // Login polimorfik: dapat objek Admin atau Kasir spesifik dari role DB.
+    $user = User::loginPolimorfik($username, $password);
 
-    if ($berhasil) {
-        // Ambil role dari database (bukan dari input).
-        $pdo = \App\Database\Database::connect();
-        $stmt = $pdo->prepare('SELECT role FROM users WHERE id = :id LIMIT 1');
-        $stmt->execute([':id' => $user->getId()]);
-        $row = $stmt->fetch();
-
-        $role = $row['role'] ?? 'kasir';
-
+    if ($user !== null) {
         session_regenerate_id(true);
         $_SESSION['user_id'] = (int) $user->getId();
         $_SESSION['nama']    = $user->getNama();
-        $_SESSION['role']    = $role;
+        $_SESSION['role']    = $user instanceof \App\Models\Admin ? 'admin' : 'kasir';
 
-        redirectSesuaiRole($role);
+        redirectSesuaiRole($_SESSION['role']);
     }
 
     $error = 'Username atau password salah.';

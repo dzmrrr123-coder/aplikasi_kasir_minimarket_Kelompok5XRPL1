@@ -666,6 +666,30 @@ $admin = new Admin();
 assertTrue($admin->login('admin_uji', 'rahasia'), 'login dengan password benar sukses');
 assertTrue($admin->getNama() === 'Admin Uji', 'data user terisi setelah login');
 
+// ---- Inheritance & Overriding: getHakAkses ----
+$hakAdmin = $admin->getHakAkses();
+assertTrue(in_array('kelola_diskon', $hakAdmin, true), 'admin punya izin kelola diskon');
+assertTrue(in_array('retur', $hakAdmin, true), 'admin punya izin retur');
+assertTrue(in_array('kelola_user', $hakAdmin, true), 'admin punya izin kelola user');
+assertTrue(in_array('transaksi', $hakAdmin, true), 'admin punya izin transaksi');
+
+// ---- Login polimorfik: admin -> objek Admin spesifik ----
+$userAdmin = User::loginPolimorfik('admin_uji', 'rahasia');
+assertTrue($userAdmin instanceof Admin, 'login polimorfik admin mengembalikan objek Admin');
+assertTrue(!$userAdmin instanceof Kasir, 'login admin bukan objek Kasir');
+
+// ---- Login polimorfik: kasir -> objek Kasir spesifik ----
+$userKasir = User::loginPolimorfik('kasir_uji', 'password_baru');
+assertTrue($userKasir instanceof Kasir, 'login polimorfik kasir mengembalikan objek Kasir');
+assertTrue(!$userKasir instanceof Admin, 'login kasir bukan objek Admin');
+$hakKasir = $userKasir->getHakAkses();
+assertTrue(in_array('transaksi', $hakKasir, true), 'kasir punya izin transaksi');
+assertTrue(!in_array('kelola_diskon', $hakKasir, true), 'kasir TIDAK punya izin kelola diskon');
+assertTrue(!in_array('retur', $hakKasir, true), 'kasir TIDAK punya izin retur');
+
+// Login polimorfik gagal -> null.
+assertTrue(User::loginPolimorfik('admin_uji', 'salah') === null, 'login polimorfik password salah -> null');
+
 // Jalur gagal: password salah.
 $adminSalah = new Admin();
 assertTrue(!$adminSalah->login('admin_uji', 'salah'), 'login dengan password salah ditolak');

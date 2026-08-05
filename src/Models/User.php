@@ -46,7 +46,23 @@ abstract class User
         return $this->username;
     }
 
-    public function login(string $username, string $password): bool
+    /**
+     * Hak akses pengguna (Inheritance + Overriding).
+     * Diimplementasikan ulang (override) oleh Admin (izin penuh) dan
+     * Kasir (izin terbatas). Mengembalikan daftar izin.
+     *
+     * @return string[]
+     */
+    abstract public function getHakAkses(): array;
+
+    /**
+     * Login polimorfik: memvalidasi kredensial dan mengembalikan objek
+     * Admin atau Kasir yang SPESIFIK berdasarkan role di database,
+     * bukan objek User generik.
+     *
+     * @return Admin|Kasir|null null bila kredensial salah / user tidak ditemukan
+     */
+    public static function loginPolimorfik(string $username, string $password): ?self
     {
         $pdo = Database::connect();
 
@@ -57,13 +73,30 @@ abstract class User
         $row = $stmt->fetch();
 
         if ($row === false || !password_verify($password, $row['password'])) {
+            return null;
+        }
+
+        // Deteksi role -> instansiasi polimorfik (Admin atau Kasir).
+        return $row['role'] === 'admin' ? new Admin($row) : new Kasir($row);
+    }
+
+    /**
+     * Login pada instance. Kredensial divalidasi via loginPolimorfik();
+     * data pengguna diisi ke instance ini sesuai hasil deteksi role.
+     * Method ini tetap ada untuk kompatibilitas pemanggilan lama.
+     */
+    public function login(string $username, string $password): bool
+    {
+        $user = self::loginPolimorfik($username, $password);
+
+        if ($user === null) {
             return false;
         }
 
-        $this->id       = (string) $row['id'];
-        $this->nama     = $row['nama'];
-        $this->username = $row['username'];
-        $this->password = $row['password'];
+        $this->id       = $user->getId();
+        $this->nama     = $user->getNama();
+        $this->username = $user->getUsername();
+        $this->password = $user->password;
 
         return true;
     }
