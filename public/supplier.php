@@ -18,8 +18,39 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
 }
 
 // Wajib login sebagai admin.
-if (!isset($_SESSION['user_id'], $_SESSION['role']) || $_SESSION['role'] !== 'admin') {
+if (!isset($_SESSION['user_id'], $_SESSION['role'])) {
     header('Location: login.php');
+    exit;
+}
+
+if ($_SESSION['role'] !== 'admin') {
+    http_response_code(403);
+    $nama403 = $_SESSION['nama'] ?? 'Pengguna';
+    ?>
+    <!DOCTYPE html>
+    <html lang="id">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Akses Ditolak - Kasir Minimarket</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+        <link href="assets/theme.css" rel="stylesheet">
+    </head>
+    <body class="d-flex align-items-center" style="min-height: 100vh;">
+    <div class="container">
+        <div class="card pos-card mx-auto" style="max-width: 480px;">
+            <div class="card-body text-center p-4">
+                <span class="badge text-bg-danger mb-3"><i class="bi bi-shield-exclamation me-1"></i>403</span>
+                <h1 class="h4 mb-3">Akses Ditolak</h1>
+                <p class="mb-4">Anda tidak memiliki akses ke halaman ini.</p>
+                <a href="transaksi.php" class="btn btn-primary"><i class="bi bi-cash-register me-1"></i>Kembali ke Kasir</a>
+            </div>
+        </div>
+    </div>
+    </body>
+    </html>
+    <?php
     exit;
 }
 
@@ -144,7 +175,10 @@ $editSupplier = $editSupplierId > 0 ? Supplier::cari($editSupplierId) : null;
         <div class="collapse navbar-collapse" id="nav-supplier">
             <ul class="navbar-nav me-auto">
                 <li class="nav-item">
-                    <a class="nav-link" href="admin.php"><i class="bi bi-speedometer2"></i> Admin</a>
+                    <a class="nav-link" href="dashboard.php"><i class="bi bi-speedometer2"></i> Dashboard</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="admin.php"><i class="bi bi-box-seam"></i> Admin</a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link" href="transaksi.php"><i class="bi bi-cash-register"></i> Kasir</a>
@@ -157,6 +191,9 @@ $editSupplier = $editSupplierId > 0 ? Supplier::cari($editSupplierId) : null;
                 </li>
                 <li class="nav-item">
                     <a class="nav-link" href="retur.php"><i class="bi bi-arrow-counterclockwise"></i> Retur</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="user.php"><i class="bi bi-people"></i> Kelola Kasir</a>
                 </li>
             </ul>
             <div class="d-flex align-items-center gap-2">
