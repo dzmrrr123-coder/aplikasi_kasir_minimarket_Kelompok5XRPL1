@@ -255,7 +255,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // ---- Data untuk tampilan ----
 $kategoriSemua = Kategori::semua();
-$produkSemua = Produk::semua();
 
 // Produk/kategori yang sedang diedit (kalau ada).
 $editKategoriId = (int) ($_SESSION['edit_kategori_id'] ?? 0);
@@ -268,11 +267,8 @@ function formatRupiah(float $jumlah): string
     return 'Rp ' . number_format($jumlah, 0, ',', '.');
 }
 
-// Produk dengan stok menipis (pakai cekStokMenipis()).
-$stokMenipis = array_values(array_filter(
-    $produkSemua,
-    static fn (Produk $p): bool => $p->cekStokMenipis()
-));
+// Produk dengan stok menipis (alert; tabel produk diisi via DataTables).
+$stokMenipis = Produk::cariStokMenipis();
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -282,6 +278,7 @@ $stokMenipis = array_values(array_filter(
     <title>Admin - Kasir Minimarket</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="https://cdn.datatables.net/2.1.8/css/dataTables.bootstrap5.min.css" rel="stylesheet">
     <link href="assets/theme.css" rel="stylesheet">
     <style>
         .table-produk td { vertical-align: middle; }
@@ -553,67 +550,90 @@ $stokMenipis = array_values(array_filter(
             <div class="card pos-card">
                 <div class="card-header bg-white d-flex justify-content-between align-items-center">
                     <span>Daftar Produk</span>
-                    <span class="text-muted small"><?= count($produkSemua) ?> produk</span>
+                    <span class="text-muted small">DataTables</span>
                 </div>
                 <div class="card-body p-0">
-                    <?php if ($produkSemua === []): ?>
-                        <div class="p-4 text-center text-muted">Belum ada produk.</div>
-                    <?php else: ?>
-                        <div class="table-responsive">
-                            <table class="table table-hover align-middle mb-0 table-produk">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>Nama</th>
-                                        <th>Kategori</th>
-                                        <th class="text-end">Harga</th>
-                                        <th class="text-center">Stok</th>
-                                        <th class="text-center">Aksi</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php foreach ($produkSemua as $p): ?>
-                                        <?php $stok = $p->getStok(); ?>
-                                        <tr>
-                                            <td><?= htmlspecialchars($p->getNama()) ?></td>
-                                            <td><?= htmlspecialchars($p->getKategori()->getNama()) ?></td>
-                                            <td class="text-end"><?= formatRupiah($p->getHarga()) ?></td>
-                                            <td class="text-center">
-                                                <?php if ($p->cekStokMenipis()): ?>
-                                                    <span class="<?= $stok <= 0 ? 'stok-habis' : 'stok-menipis' ?>">
-                                                        <?= $stok ?>
-                                                    </span>
-                                                    <?= $stok <= 0 ? '(habis)' : '(menipis)' ?>
-                                                <?php else: ?>
-                                                    <?= $stok ?>
-                                                <?php endif; ?>
-                                            </td>
-                                            <td class="text-center">
-                                                <span class="d-inline-flex gap-1">
-                                                    <form method="post" class="d-inline">
-                                                        <input type="hidden" name="aksi" value="edit_produk">
-                                                        <input type="hidden" name="produk_id" value="<?= $p->getId() ?>">
-                                                        <button type="submit" class="btn btn-sm btn-outline-primary" title="Edit"><i class="bi bi-pencil me-1"></i>Edit</button>
-                                                    </form>
-                                                    <form method="post" class="d-inline"
-                                                          onsubmit="return confirm('Hapus produk ini?');">
-                                                        <input type="hidden" name="aksi" value="hapus_produk">
-                                                        <input type="hidden" name="produk_id" value="<?= $p->getId() ?>">
-                                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Hapus"><i class="bi bi-trash me-1"></i>Hapus</button>
-                                                    </form>
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    <?php endif; ?>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0 table-produk" id="tabel-produk">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Nama</th>
+                                    <th>Kategori</th>
+                                    <th class="text-end">Harga</th>
+                                    <th class="text-center">Stok</th>
+                                    <th class="text-center">Aksi</th>
+                                </tr>
+                            </thead>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.datatables.net/2.1.8/js/dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/2.1.8/js/dataTables.bootstrap5.min.js"></script>
 <script src="assets/theme.js"></script>
+<script>
+    // Tabel produk via DataTables server-side (api.php → InventarisController → Produk::getDataTabel).
+    (function () {
+        if (!window.jQuery || !window.DataTable) return;
+
+        function rupiah(n) {
+            return 'Rp ' + Number(n).toLocaleString('id-ID', {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0
+            });
+        }
+
+        jQuery('#tabel-produk').DataTable({
+            serverSide: true,
+            ajax: { url: 'api.php?aksi=produk.tabel', data: function (d) { d.draw = d.draw || 0; } },
+            pageLength: 10,
+            lengthChange: false,
+            order: [],
+            columns: [
+                { data: 'nama' },
+                { data: 'kategori' },
+                { data: 'harga', className: 'text-end font-num', render: function (d) { return rupiah(d); } },
+                {
+                    data: 'stok',
+                    className: 'text-center',
+                    render: function (d, t, row) {
+                        var stok = Number(d);
+                        if (stok <= 10) {
+                            return '<span class="' + (stok <= 0 ? 'stok-habis' : 'stok-menipis') + '">' + stok + '</span>' +
+                                (stok <= 0 ? ' (habis)' : ' (menipis)');
+                        }
+                        return stok;
+                    }
+                },
+                {
+                    data: 'id',
+                    className: 'text-center',
+                    orderable: false,
+                    render: function (d) {
+                        return '<span class="d-inline-flex gap-1">' +
+                            '<form method="post" class="d-inline">' +
+                            '<input type="hidden" name="aksi" value="edit_produk">' +
+                            '<input type="hidden" name="produk_id" value="' + d + '">' +
+                            '<button type="submit" class="btn btn-sm btn-outline-primary" title="Edit"><i class="bi bi-pencil me-1"></i>Edit</button>' +
+                            '</form>' +
+                            '<form method="post" class="d-inline" onsubmit="return confirm(\'Hapus produk ini?\');">' +
+                            '<input type="hidden" name="aksi" value="hapus_produk">' +
+                            '<input type="hidden" name="produk_id" value="' + d + '">' +
+                            '<button type="submit" class="btn btn-sm btn-outline-danger" title="Hapus"><i class="bi bi-trash me-1"></i>Hapus</button>' +
+                            '</form></span>';
+                    }
+                }
+            ],
+            language: {
+                url: 'https://cdn.datatables.net/plug-ins/2.1.8/i18n/id.json'
+            }
+        });
+    })();
+</script>
 </body>
 </html>

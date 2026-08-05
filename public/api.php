@@ -23,6 +23,7 @@ declare(strict_types=1);
 require __DIR__ . '/../src/autoload.php';
 
 use App\Controllers\DashboardController;
+use App\Controllers\InventarisController;
 use App\Controllers\LaporanController;
 use App\Controllers\ReturController;
 
@@ -53,10 +54,15 @@ unset($params['aksi']);
 $dashboard = new DashboardController();
 $laporan = new LaporanController();
 $retur = new ReturController();
+$inventaris = new InventarisController();
 
 $hasil = null;
 
 switch ($aksi) {
+    case 'produk.tabel':
+        $hasil = $inventaris->dataTabelProduk($params);
+        break;
+
     case 'dashboard.grafik':
         $hasil = $dashboard->grafikPenjualan($params);
         break;
@@ -100,7 +106,7 @@ switch ($aksi) {
 }
 
 // Aksi DataTables membungkus ke format server-side DataTables.
-if (in_array($aksi, ['dashboard.terlaris', 'dashboard.transaksi', 'laporan.tabel', 'retur.tabel'], true)) {
+if (in_array($aksi, ['produk.tabel', 'dashboard.terlaris', 'dashboard.transaksi', 'laporan.tabel', 'retur.tabel'], true)) {
     echo json_encode([
         'draw'            => (int) ($params['draw'] ?? 0),
         'recordsTotal'    => $hasil['total'],
