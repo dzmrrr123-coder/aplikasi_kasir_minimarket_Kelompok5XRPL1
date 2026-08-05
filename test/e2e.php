@@ -20,6 +20,7 @@ require __DIR__ . '/../src/autoload.php';
 
 use App\Database\Database;
 use App\Models\Admin;
+use App\Models\Dashboard;
 use App\Models\Diskon;
 use App\Models\Kasir;
 use App\Models\Kategori;
@@ -246,6 +247,16 @@ assertTrue(
 assertTrue($transaksiNonTunai->isSelesai(), 'transaksi non-tunai ditandai selesai');
 assertTrue($transaksiNonTunai->getId() !== '', 'transaksi non-tunai tersimpan dengan id');
 
+// Jalur gagal: jumlah dibayar kurang dari total -> ditolak (bug fix).
+$transaksiKurang = new Transaksi(['kasir_id' => $kasirId]);
+$transaksiKurang->tambahItem($produkSetelah, 1);
+$transaksiKurang->hitungTotal();
+assertTrue(
+    $transaksiKurang->prosesPembayaran(new PembayaranTunai(['jumlah' => 100])) === false,
+    'pembayaran tunai kurang dari total ditolak'
+);
+assertTrue(!$transaksiKurang->isSelesai(), 'transaksi tidak selesai saat pembayaran kurang');
+
 echo "\n== 3. Batalkan transaksi ==\n";
 
 $transaksiBatal = new Transaksi(['kasir_id' => $kasirId]);
@@ -303,6 +314,10 @@ assertTrue(
     $transaksiLaporan[0]->getTotal() > 0 && $transaksiLaporan[0]->getId() !== '',
     'baris transaksi laporan memuat id dan total'
 );
+assertTrue(
+    $transaksiLaporan[0]->getKasirNama() !== '',
+    'laporan menampilkan nama kasir (bukan id)'
+);
 
 // Jalur gagal: periode tanpa data -> pesan "tidak ada data".
 $laporanKosong = new LaporanPenjualan();
@@ -315,6 +330,32 @@ assertTrue($hasilKosong['jumlah'] === 0, 'laporan periode kosong berjumlah 0');
 assertTrue(
     str_contains($hasilKosong['pesan'], 'Tidak ada data'),
     'pesan "tidak ada data" muncul saat periode kosong'
+);
+
+echo "\n== 4b. Dashboard analytics ==\n";
+
+$ringkasan = Dashboard::ringkasanHariIni();
+assertTrue((int) $ringkasan['jumlah'] >= 1, 'dashboard: jumlah transaksi hari ini >= 1');
+assertTrue((float) $ringkasan['total'] > 0, 'dashboard: total penjualan hari ini > 0');
+assertTrue((int) $ringkasan['item'] >= 1, 'dashboard: item terjual hari ini >= 1');
+
+$penjualan7 = Dashboard::penjualan7Hari();
+assertTrue(count($penjualan7) === 7, 'dashboard: penjualan 7 hari berisi 7 hari');
+assertTrue(
+    (float) $penjualan7[6]['total'] > 0,
+    'dashboard: hari terakhir (hari ini) punya total penjualan'
+);
+
+$terlaris = Dashboard::produkTerlaris();
+assertTrue(
+    isset($terlaris[0]['qty']) && (int) $terlaris[0]['qty'] > 0,
+    'dashboard: produk terlaris punya qty > 0'
+);
+
+$metode = Dashboard::metodePembayaran();
+assertTrue(
+    count($metode) >= 1 && isset($metode[0]['jenis']),
+    'dashboard: metode pembayaran hari ini terisi'
 );
 
 echo "\n== 5. Supplier & retur barang ==\n";
@@ -454,6 +495,28 @@ $kasirLoginUlang = new Kasir();
 assertTrue(
     $kasirLoginUlang->login('kasir_uji', 'password_baru'),
     'reset password: kasir bisa login dengan password baru'
+);
+
+echo "\n== 6b. Diskon dengan kode ==\n";
+
+// Diskon dengan kode bermakna.
+$diskonKode = new Diskon(['kode' => 'DISC10', 'jenis' => 'persen', 'nilai' => 10]);
+$diskonKodeId = $diskonKode->simpan();
+assertTrue($diskonKodeId > 0, 'simpan diskon dengan kode sukses');
+
+$ditemukan = Diskon::cariBerdasarkanKode('disc10'); // case-insensitive
+assertTrue(
+    $ditemukan !== null && $ditemukan->getId() === (string) $diskonKodeId,
+    'diskon bisa dicari berdasarkan kode (case-insensitive)'
+);
+
+assertTrue(Diskon::cariBerdasarkanKode('TIDAK_ADA') === null, 'kode diskon tidak dikenal ditolak');
+
+$diskonKode2 = new Diskon(['kode' => 'HEMAT2K', 'jenis' => 'nominal', 'nilai' => 2000]);
+$diskonKode2->simpan();
+assertTrue(
+    Diskon::cariBerdasarkanKode('HEMAT2K') !== null,
+    'diskon nominal bisa dicari berdasarkan kode'
 );
 
 echo "\n== 7. Login & logout ==\n";
