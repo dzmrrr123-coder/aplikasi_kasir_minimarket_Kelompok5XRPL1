@@ -12,7 +12,7 @@ class ItemTransaksi
     private string $id = '';
     private Transaksi $transaksi;
     private Produk $produk;
-    private int $qty = 0;
+    private float $qty = 0.0;
     private float $subtotal = 0.0;
 
     public function __construct(array $data = [])
@@ -35,7 +35,7 @@ class ItemTransaksi
             $this->produk = $data['produk'];
         }
         if (isset($data['qty'])) {
-            $this->qty = (int) $data['qty'];
+            $this->qty = (float) $data['qty'];
         }
         if (isset($data['subtotal'])) {
             $this->subtotal = (float) $data['subtotal'];
@@ -57,7 +57,7 @@ class ItemTransaksi
         return $this->produk;
     }
 
-    public function getQty(): int
+    public function getQty(): float
     {
         return $this->qty;
     }

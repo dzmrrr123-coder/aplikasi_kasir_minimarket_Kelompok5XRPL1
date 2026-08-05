@@ -21,11 +21,13 @@ CREATE TABLE IF NOT EXISTS kategori (
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS produk (
-    id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    nama        VARCHAR(150)    NOT NULL,
-    harga       DECIMAL(12,2)   NOT NULL,
-    stok        INT             NOT NULL DEFAULT 0,
-    kategori_id INT UNSIGNED    NOT NULL,
+    id             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    nama           VARCHAR(150)    NOT NULL,
+    harga          DECIMAL(12,2)   NOT NULL,
+    stok           INT             NOT NULL DEFAULT 0,
+    kategori_id    INT UNSIGNED    NOT NULL,
+    satuan         ENUM('pcs','gram') NOT NULL DEFAULT 'pcs',
+    harga_per_gram DECIMAL(12,2)   NULL,
     CONSTRAINT fk_produk_kategori
         FOREIGN KEY (kategori_id) REFERENCES kategori(id)
         ON UPDATE CASCADE ON DELETE RESTRICT
@@ -66,7 +68,7 @@ CREATE TABLE IF NOT EXISTS item_transaksi (
     id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     transaksi_id INT UNSIGNED    NOT NULL,
     produk_id    INT UNSIGNED    NOT NULL,
-    qty          INT             NOT NULL,
+    qty          DECIMAL(12,3)   NOT NULL,
     subtotal     DECIMAL(12,2)   NOT NULL,
     CONSTRAINT fk_item_transaksi
         FOREIGN KEY (transaksi_id) REFERENCES transaksi(id)

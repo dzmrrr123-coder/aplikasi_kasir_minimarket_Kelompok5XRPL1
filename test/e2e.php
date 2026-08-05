@@ -25,6 +25,7 @@ use App\Models\DataReporter;
 use App\Models\Diskon;
 use App\Models\Kasir;
 use App\Models\Kategori;
+use App\Models\ItemTransaksi;
 use App\Models\LaporanPenjualan;
 use App\Models\PaymentMethod;
 use App\Models\PembayaranNonTunai;
@@ -780,6 +781,47 @@ $apiJson = json_decode((string) $apiOut, true);
 assertTrue(is_array($apiJson), 'api.php mereturn JSON valid');
 assertTrue(isset($apiJson['data']) && is_array($apiJson['data']), 'api.php tabel punya data array');
 assertTrue((int) ($apiJson['recordsTotal'] ?? 0) >= 1, 'api.php recordsTotal >= 1');
+
+echo "\n== 9. Produk curah (gram) & qty float ==\n";
+
+// Produk gram: wajib harga_per_gram > 0.
+$katGram = new Kategori(['nama' => 'Buah Uji']);
+$katGramId = $katGram->simpan();
+
+assertThrows(
+    fn () => (new Produk(['nama' => 'Gram Tanpa Harga', 'harga' => 0, 'stok' => 1000, 'kategori_id' => $katGramId, 'satuan' => 'gram', 'harga_per_gram' => 0]))->simpan(),
+    'produk gram tanpa harga_per_gram ditolak'
+);
+
+$produkGram = new Produk([
+    'nama'           => 'Apel Uji',
+    'harga'          => 0,
+    'stok'           => 20000,
+    'kategori_id'    => $katGramId,
+    'satuan'         => 'gram',
+    'harga_per_gram' => 100,
+]);
+$produkGramId = $produkGram->simpan();
+assertTrue($produkGramId > 0, 'simpan produk gram sukses');
+
+$produkGramCari = Produk::cari($produkGramId);
+assertTrue($produkGramCari->getSatuan() === 'gram', 'produk gram terbaca satuan gram');
+assertTrue($produkGramCari->getHargaEfektif() === 100.0, 'getHargaEfektif = harga_per_gram utk gram');
+
+// Transaksi qty float (gram) -> subtotal = harga_per_gram x qty.
+$transaksiGram = new Transaksi(['kasir_id' => $kasirId]);
+$transaksiGram->tambahItem($produkGramCari, 1250.5); // 1.250,5 gram
+$totalGram = $transaksiGram->hitungTotal();
+assertTrue(abs($totalGram - (100 * 1250.5)) < 0.01, 'total transaksi gram = harga_per_gram x qty float');
+
+assertTrue(
+    $transaksiGram->prosesPembayaran(new PembayaranTunai(['jumlah' => 200000])),
+    'transaksi gram bisa diproses'
+);
+assertTrue(
+    abs(ItemTransaksi::untukTransaksi((int) $transaksiGram->getId())[0]->getQty() - 1250.5) < 0.01,
+    'qty float (gram) tersimpan di item_transaksi'
+);
 
 echo "\n== RINGKASAN ==\n";
 echo "Lulus: $lulus\n";

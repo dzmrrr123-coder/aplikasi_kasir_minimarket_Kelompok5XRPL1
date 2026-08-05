@@ -113,5 +113,30 @@ class Database
         if ($kolomDiskon === false) {
             $pdo->exec('ALTER TABLE diskon ADD COLUMN kode VARCHAR(50) NULL UNIQUE');
         }
+
+        // Migrasi idempotent: kolom satuan & harga_per_gram pada tabel produk
+        // (dukungan produk curah yang ditimbang, satuan gram).
+        $kolomSatuan = $pdo->query(
+            'SELECT COLUMN_NAME FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = ' . $pdo->quote($db['dbname']) . '
+               AND TABLE_NAME = \'produk\' AND COLUMN_NAME = \'satuan\''
+        )->fetchColumn();
+
+        if ($kolomSatuan === false) {
+            $pdo->exec("ALTER TABLE produk ADD COLUMN satuan ENUM('pcs','gram') NOT NULL DEFAULT 'pcs' AFTER stok");
+            $pdo->exec('ALTER TABLE produk ADD COLUMN harga_per_gram DECIMAL(12,2) NULL AFTER satuan');
+        }
+
+        // Migrasi idempotent: ubah tipe kolom qty di item_transaksi jadi
+        // DECIMAL supaya mendukung qty float (produk curah gram).
+        $tipeQty = $pdo->query(
+            'SELECT DATA_TYPE FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = ' . $pdo->quote($db['dbname']) . '
+               AND TABLE_NAME = \'item_transaksi\' AND COLUMN_NAME = \'qty\''
+        )->fetchColumn();
+
+        if ($tipeQty === 'int') {
+            $pdo->exec('ALTER TABLE item_transaksi MODIFY qty DECIMAL(12,3) NOT NULL');
+        }
     }
 }

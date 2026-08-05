@@ -75,6 +75,21 @@ foreach ($kategoriData as $namaKategori => [$namaProduk, $harga, $stok]) {
     $produkList[] = $namaProduk;
 }
 
+// Produk curah (satuan gram) — dibeli per berat via timbangan digital.
+$kategoriBuah = new Kategori(['nama' => 'Buah']);
+$kategoriBuahId = $kategoriBuah->simpan();
+
+$produkGram = new Produk([
+    'nama'           => 'Jeruk Peras',
+    'harga'          => 0,
+    'stok'           => 50000,   // 50 kg = 50.000 gram
+    'kategori_id'    => $kategoriBuahId,
+    'satuan'         => 'gram',
+    'harga_per_gram' => 25,      // Rp 25/gram = Rp 25.000/kg
+]);
+$produkGram->simpan();
+$produkList[] = 'Jeruk Peras (per gram)';
+
 // ---- Supplier ----
 $supplierData = [
     ['PT Sumber Jaya', '0812-3456-7890', 'Jl. Raya Industri No. 1, Jakarta'],

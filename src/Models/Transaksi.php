@@ -153,10 +153,11 @@ class Transaksi implements Subject
      * Menambahkan item ke transaksi.
      * Stok diperiksa dulu; bila stok kurang, item DITOLAK (tidak ditambahkan)
      * dan exception dilempar sesuai alur proses pada spesifikasi.
+     * Qty berupa float untuk mendukung produk curah (satuan gram).
      *
      * @throws RuntimeException bila stok produk tidak cukup
      */
-    public function tambahItem(Produk $produk, int $qty): void
+    public function tambahItem(Produk $produk, float $qty): void
     {
         if ($qty <= 0) {
             throw new RuntimeException('Jumlah item harus lebih dari 0.');
@@ -171,7 +172,7 @@ class Transaksi implements Subject
         // tidak mengubah objek Produk milik pemanggil (stok DB tetap aktual).
         $produkSalinan = clone $produk;
 
-        $subtotal = $produkSalinan->getHarga() * $qty;
+        $subtotal = $produkSalinan->getHargaEfektif() * $qty;
         $item = new ItemTransaksi([
             'produk'  => $produkSalinan,
             'qty'     => $qty,
