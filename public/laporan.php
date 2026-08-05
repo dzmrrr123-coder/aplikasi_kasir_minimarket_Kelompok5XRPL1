@@ -123,7 +123,10 @@ function formatRupiah(float $jumlah): string
         <div class="collapse navbar-collapse" id="nav-laporan">
             <ul class="navbar-nav me-auto">
                 <li class="nav-item">
-                    <a class="nav-link" href="admin.php"><i class="bi bi-speedometer2"></i> Admin</a>
+                    <a class="nav-link" href="dashboard.php"><i class="bi bi-speedometer2"></i> Dashboard</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="admin.php"><i class="bi bi-box-seam"></i> Admin</a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link" href="transaksi.php"><i class="bi bi-cash-register"></i> Kasir</a>
@@ -136,6 +139,9 @@ function formatRupiah(float $jumlah): string
                 </li>
                 <li class="nav-item">
                     <a class="nav-link" href="retur.php"><i class="bi bi-arrow-counterclockwise"></i> Retur</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="user.php"><i class="bi bi-people"></i> Kelola Kasir</a>
                 </li>
             </ul>
             <div class="d-flex align-items-center gap-2">
@@ -242,7 +248,7 @@ function formatRupiah(float $jumlah): string
                                         <tr>
                                             <td>#<?= $t->getId() ?></td>
                                             <td><?= $t->getTanggal()->format('d-m-Y H:i') ?></td>
-                                            <td><?= $t->getKasirId() ?></td>
+                                            <td><?= htmlspecialchars($t->getKasirNama()) ?></td>
                                             <td class="text-end"><?= formatRupiah($t->getTotal()) ?></td>
                                         </tr>
                                     <?php endforeach; ?>

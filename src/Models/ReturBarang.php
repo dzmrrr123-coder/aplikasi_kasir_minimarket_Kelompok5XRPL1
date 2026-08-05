@@ -170,4 +170,28 @@ class ReturBarang
 
         return $row === false ? null : new self($row);
     }
+
+    /**
+     * Riwayat retur terbaru (default 100), lengkap dengan nama produk
+     * dan nama supplier untuk keperluan tampilan.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public static function semua(int $batas = 100): array
+    {
+        $stmt = Database::connect()->prepare(
+            'SELECT r.id, r.tanggal, r.qty, r.alasan,
+                    p.nama AS produk_nama,
+                    s.nama AS supplier_nama
+             FROM retur_barang r
+             JOIN produk p ON p.id = r.produk_id
+             JOIN supplier s ON s.id = r.supplier_id
+             ORDER BY r.tanggal DESC
+             LIMIT :batas'
+        );
+        $stmt->bindValue(':batas', $batas, \PDO::PARAM_INT);
+        $stmt->execute();
+
+        return $stmt->fetchAll();
+    }
 }

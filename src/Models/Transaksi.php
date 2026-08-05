@@ -15,6 +15,7 @@ class Transaksi
     private DateTimeImmutable $tanggal;
     private float $total = 0.0;
     private int $kasirId = 0;
+    private string $kasirNama = '';
     private array $items = []; // ItemTransaksi[]
     private ?Diskon $diskon = null;
     private ?Pembayaran $pembayaran = null;
@@ -36,6 +37,9 @@ class Transaksi
         if (isset($data['kasir_id'])) {
             $this->kasirId = (int) $data['kasir_id'];
         }
+        if (isset($data['kasir_nama'])) {
+            $this->kasirNama = (string) $data['kasir_nama'];
+        }
     }
 
     public function getId(): string
@@ -56,6 +60,29 @@ class Transaksi
     public function getKasirId(): int
     {
         return $this->kasirId;
+    }
+
+    /**
+     * Nama kasir yang memproses transaksi.
+     * Bila belum terisi (transaksi in-memory), diambil dari database.
+     */
+    public function getKasirNama(): string
+    {
+        if ($this->kasirNama !== '') {
+            return $this->kasirNama;
+        }
+
+        if ($this->kasirId <= 0) {
+            return '';
+        }
+
+        $stmt = Database::connect()->prepare('SELECT nama FROM users WHERE id = :id LIMIT 1');
+        $stmt->execute([':id' => $this->kasirId]);
+        $row = $stmt->fetch();
+
+        $this->kasirNama = $row === false ? '' : (string) $row['nama'];
+
+        return $this->kasirNama;
     }
 
     /**
@@ -145,6 +172,13 @@ class Transaksi
         }
 
         $this->hitungTotal();
+
+        // Jumlah yang dibayar harus menutupi total transaksi.
+        // Tanpa ini, pembayaran kurang (mis. total Rp 13.500 dibayar Rp 100)
+        // tetap bisa lolos dan transaksi tersimpan.
+        if ($pembayaran->getJumlah() < $this->total) {
+            return false;
+        }
 
         if (!$pembayaran->proses()) {
             return false;
@@ -245,7 +279,10 @@ class Transaksi
     public static function cari(int $id): ?self
     {
         $stmt = Database::connect()->prepare(
-            'SELECT id, tanggal, total, kasir_id FROM transaksi WHERE id = :id LIMIT 1'
+            'SELECT t.id, t.tanggal, t.total, t.kasir_id, u.nama AS kasir_nama
+             FROM transaksi t
+             JOIN users u ON u.id = t.kasir_id
+             WHERE t.id = :id LIMIT 1'
         );
         $stmt->execute([':id' => $id]);
         $row = $stmt->fetch();

@@ -50,6 +50,8 @@ $namaUser = (string) ($_SESSION['nama'] ?? 'Kasir');
 
 $pesan = $_SESSION['pesan'] ?? '';
 unset($_SESSION['pesan']);
+$pesanTipe = $_SESSION['pesan_tipe'] ?? 'info';
+unset($_SESSION['pesan_tipe']);
 
 if (!isset($_SESSION['keranjang'])) {
     $_SESSION['keranjang'] = [];
@@ -79,9 +81,10 @@ function formatRupiah(float $jumlah): string
     return 'Rp ' . number_format($jumlah, 0, ',', '.');
 }
 
-function redirectSelf(string $pesan): never
+function redirectSelf(string $pesan, string $tipe = 'info'): never
 {
     $_SESSION['pesan'] = $pesan;
+    $_SESSION['pesan_tipe'] = $tipe;
     header('Location: transaksi.php');
     exit;
 }
@@ -92,7 +95,7 @@ function aksiTambahItem(int $produkId, int $qty, int $kasirId): void
     $produk = Produk::cari($produkId);
 
     if ($produk === null) {
-        redirectSelf('Produk tidak ditemukan.');
+        redirectSelf('Produk tidak ditemukan.', 'danger');
     }
 
     // Keranjang di-build sebagai objek Transaksi supaya validasi stok
@@ -113,7 +116,8 @@ function aksiTambahItem(int $produkId, int $qty, int $kasirId): void
 
             if ($produk->getStok() < $qtyBaru) {
                 redirectSelf(
-                    sprintf('Stok "%s" tidak cukup (tersedia: %d).', $produk->getNama(), $produk->getStok())
+                    sprintf('Stok "%s" tidak cukup (tersedia: %d).', $produk->getNama(), $produk->getStok()),
+                    'danger'
                 );
             }
 
@@ -138,7 +142,7 @@ function aksiTambahItem(int $produkId, int $qty, int $kasirId): void
     }
 
     $_SESSION['keranjang'] = $keranjang;
-    redirectSelf(sprintf('"%s" ditambahkan ke keranjang.', $produk->getNama()));
+    redirectSelf(sprintf('"%s" ditambahkan ke keranjang.', $produk->getNama()), 'success');
 }
 
 /** Hapus satu baris keranjang. */
@@ -148,7 +152,7 @@ function aksiHapusItem(int $produkId): void
     unset($keranjang[(string) $produkId]);
     $_SESSION['keranjang'] = $keranjang;
 
-    redirectSelf('Item dihapus dari keranjang.');
+    redirectSelf('Item dihapus dari keranjang.', 'success');
 }
 
 /** Terapkan diskon lewat method Transaksi::terapkanDiskon(). */
@@ -157,14 +161,14 @@ function aksiTerapkanDiskon(string $kode): void
     $diskon = Diskon::cariBerdasarkanKode($kode);
 
     if ($diskon === null) {
-        redirectSelf('Kode diskon tidak valid.');
+        redirectSelf('Kode diskon tidak valid.', 'danger');
     }
 
     $_SESSION['diskon_id']  = (int) $diskon->getId();
     $_SESSION['diskon_jenis'] = $diskon->getJenis();
     $_SESSION['diskon_nilai'] = $diskon->getNilai();
 
-    redirectSelf('Kode diskon diterapkan.');
+    redirectSelf('Kode diskon diterapkan.', 'success');
 }
 
 /**
@@ -175,7 +179,7 @@ function aksiBayar(string $metode, float $jumlahDibayar, int $kasirId, string $n
     $keranjang = keranjang();
 
     if ($keranjang === []) {
-        redirectSelf('Keranjang masih kosong.');
+        redirectSelf('Keranjang masih kosong.', 'danger');
     }
 
     $transaksi = new Transaksi(['kasir_id' => $kasirId]);
@@ -184,7 +188,7 @@ function aksiBayar(string $metode, float $jumlahDibayar, int $kasirId, string $n
         $produk = Produk::cari($item['produk_id']);
 
         if ($produk === null) {
-            redirectSelf('Produk tidak ditemukan, keranjang tidak valid.');
+            redirectSelf('Produk tidak ditemukan, keranjang tidak valid.', 'danger');
         }
 
         $transaksi->tambahItem($produk, $item['qty']);
@@ -210,7 +214,7 @@ function aksiBayar(string $metode, float $jumlahDibayar, int $kasirId, string $n
 
     // Jalur gagal: pembayaran ditolak -> transaksi tidak tersimpan.
     if (!$pembayaran->proses()) {
-        redirectSelf('Jumlah pembayaran tidak valid.');
+        redirectSelf('Jumlah pembayaran tidak valid.', 'danger');
     }
 
     // Jalur sukses: proses pembayaran -> simpan + update stok + struk.
@@ -219,7 +223,7 @@ function aksiBayar(string $metode, float $jumlahDibayar, int $kasirId, string $n
     $selesai = $transaksi->prosesPembayaran($pembayaran);
 
     if (!$selesai) {
-        redirectSelf('Pembayaran gagal diproses.');
+        redirectSelf('Pembayaran gagal diproses.', 'danger');
     }
 
     $struk = $kasir->cetakStruk($transaksi)->cetak();
@@ -234,7 +238,7 @@ function aksiBayar(string $metode, float $jumlahDibayar, int $kasirId, string $n
     );
     $_SESSION['struk'] = $struk;
 
-    redirectSelf('Pembayaran berhasil. Struk siap dicetak.');
+    redirectSelf('Pembayaran berhasil. Struk siap dicetak.', 'success');
 }
 
 /** Batalkan seluruh keranjang + diskon. */
@@ -247,7 +251,7 @@ function aksiBatalkan(): void
         $_SESSION['diskon_nilai']
     );
 
-    redirectSelf('Keranjang dibatalkan.');
+    redirectSelf('Keranjang dibatalkan.', 'info');
 }
 
 // ---- Routing aksi (POST) ----
@@ -299,6 +303,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // ---- Data untuk tampilan ----
 $keranjang  = keranjang();
 $subtotal   = subtotalKeranjang($keranjang);
+$diskonSemua = Diskon::semua();
 $diskonId   = $_SESSION['diskon_id'] ?? null;
 $diskon     = $diskonId !== null ? Diskon::cari((int) $diskonId) : null;
 $potongan   = 0.0;
@@ -310,7 +315,9 @@ if ($diskon !== null) {
 $total      = max(0.0, $subtotal - $potongan);
 $metode     = $_POST['metode'] ?? 'tunai';
 $jumlahBayar = (float) ($_POST['jumlah_dibayar'] ?? 0);
-$kembalian  = max(0.0, $jumlahBayar - $total);
+// Kembalian boleh negatif: kasir harus lihat "kurang Rp X" biar tahu
+// jumlah yang dibayar belum menutupi total.
+$kembalian  = $jumlahBayar - $total;
 $struk      = $_SESSION['struk'] ?? '';
 $produkDitemukan = null;
 
@@ -361,7 +368,10 @@ $produkSemua = Produk::semua();
                 </li>
                 <?php if (($_SESSION['role'] ?? '') === 'admin'): ?>
                     <li class="nav-item">
-                        <a class="nav-link" href="admin.php"><i class="bi bi-speedometer2"></i> Admin</a>
+                        <a class="nav-link" href="dashboard.php"><i class="bi bi-speedometer2"></i> Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="admin.php"><i class="bi bi-box-seam"></i> Admin</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="laporan.php"><i class="bi bi-bar-chart-line"></i> Laporan</a>
@@ -371,6 +381,9 @@ $produkSemua = Produk::semua();
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="retur.php"><i class="bi bi-arrow-counterclockwise"></i> Retur</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="user.php"><i class="bi bi-people"></i> Kelola Kasir</a>
                     </li>
                 <?php endif; ?>
             </ul>
@@ -396,7 +409,7 @@ $produkSemua = Produk::semua();
     </div>
 
     <?php if ($pesan !== ''): ?>
-        <div class="alert alert-info alert-dismissible fade show" role="alert">
+        <div class="alert alert-<?= htmlspecialchars($pesanTipe) ?> alert-dismissible fade show" role="alert">
             <?= htmlspecialchars($pesan) ?>
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Tutup"></button>
         </div>
@@ -600,7 +613,7 @@ $produkSemua = Produk::semua();
                                 name="kode_diskon"
                                 class="form-control form-control-sm"
                                 placeholder="Kode diskon"
-                                value="<?= htmlspecialchars($diskon !== null ? (string) $diskon->getId() : '') ?>"
+                                value="<?= htmlspecialchars($diskon !== null ? $diskon->getKode() : '') ?>"
                                 aria-label="Kode diskon"
                             >
                         </div>
@@ -609,8 +622,17 @@ $produkSemua = Produk::semua();
                         </div>
                         <?php if ($diskon !== null): ?>
                             <div class="col-12 small text-success">
-                                Diskon <?= $diskon->getJenis() === 'persen' ? $diskon->getNilai() . '%' : formatRupiah($diskon->getNilai()) ?>
+                                Diskon <?= $diskon->getKode() !== '' ? $diskon->getKode() . ' ' : '' ?>
+                                (<?= $diskon->getJenis() === 'persen' ? $diskon->getNilai() . '%' : formatRupiah($diskon->getNilai()) ?>)
                                 terpasang (-<?= formatRupiah($potongan) ?>)
+                            </div>
+                        <?php endif; ?>
+                        <?php if ($diskonSemua !== []): ?>
+                            <div class="col-12 small text-muted">
+                                Kode valid:
+                                <?php foreach ($diskonSemua as $d): ?>
+                                    <span class="badge text-bg-light border"><?= htmlspecialchars($d->getKode()) ?></span>
+                                <?php endforeach; ?>
                             </div>
                         <?php endif; ?>
                     </form>
@@ -655,11 +677,13 @@ $produkSemua = Produk::semua();
 
                         <div class="d-flex justify-content-between align-items-baseline mb-4">
                             <span class="text-muted">Kembalian</span>
-                            <span class="fw-semibold" id="kembalian"><?= formatRupiah($kembalian) ?></span>
+                            <span class="fw-semibold <?= $kembalian < 0 ? 'text-danger' : '' ?>" id="kembalian">
+                                <?= $kembalian < 0 ? 'Kurang ' . formatRupiah(abs($kembalian)) : formatRupiah($kembalian) ?>
+                            </span>
                         </div>
 
                         <div class="d-grid gap-2">
-                            <button type="submit" class="btn btn-success btn-lg" <?= $keranjang === [] ? 'disabled' : '' ?>>
+                            <button type="submit" class="btn btn-success btn-lg" <?= $keranjang === [] ? 'disabled data-kosong' : '' ?>>
                                 <i class="bi bi-check2-circle me-1"></i>Proses Pembayaran
                             </button>
                             <button type="submit" class="btn btn-outline-danger" form="form-batalkan" <?= $keranjang === [] ? 'disabled' : '' ?>>
@@ -679,19 +703,37 @@ $produkSemua = Produk::semua();
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
     // Hitung kembalian di sisi klien saat jumlah dibayar berubah.
+    // Bila jumlah dibayar kurang dari total, tampilkan "Kurang Rp X"
+    // dan nonaktifkan tombol proses pembayaran.
     (function () {
         var total = <?= json_encode($total) ?>;
         var input = document.getElementById('jumlah-dibayar');
         var kembalian = document.getElementById('kembalian');
+        var tombolBayar = document.querySelector('#form-bayar button[type="submit"]');
 
-        function hitung() {
-            var bayar = parseFloat(input.value) || 0;
-            kembalian.textContent = 'Rp ' + (bayar - total).toLocaleString('id-ID', {
+        function fmt(n) {
+            return 'Rp ' + n.toLocaleString('id-ID', {
                 minimumFractionDigits: 0,
                 maximumFractionDigits: 0
             });
         }
+
+        function hitung() {
+            var bayar = parseFloat(input.value) || 0;
+            var selisih = bayar - total;
+
+            if (selisih < 0) {
+                kembalian.textContent = 'Kurang ' + fmt(Math.abs(selisih));
+                kembalian.classList.add('text-danger');
+                if (tombolBayar) tombolBayar.disabled = true;
+            } else {
+                kembalian.textContent = fmt(selisih);
+                kembalian.classList.remove('text-danger');
+                if (tombolBayar && !tombolBayar.dataset.kosong) tombolBayar.disabled = false;
+            }
+        }
         input.addEventListener('input', hitung);
+        hitung();
     })();
 </script>
 </body>

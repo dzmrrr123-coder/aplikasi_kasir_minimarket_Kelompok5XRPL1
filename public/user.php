@@ -187,7 +187,10 @@ $editKasir = $editKasirId > 0 ? User::cariKasir($editKasirId) : null;
         <div class="collapse navbar-collapse" id="nav-user">
             <ul class="navbar-nav me-auto">
                 <li class="nav-item">
-                    <a class="nav-link" href="admin.php"><i class="bi bi-speedometer2"></i> Admin</a>
+                    <a class="nav-link" href="dashboard.php"><i class="bi bi-speedometer2"></i> Dashboard</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="admin.php"><i class="bi bi-box-seam"></i> Admin</a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link" href="transaksi.php"><i class="bi bi-cash-register"></i> Kasir</a>
@@ -380,41 +383,6 @@ $editKasir = $editKasirId > 0 ? User::cariKasir($editKasirId) : null;
                                                 </span>
                                             </td>
                                         </tr>
-
-                                        <!-- Modal reset password -->
-                                        <div class="modal fade" id="modal-reset-<?= $k->getId() ?>" tabindex="-1"
-                                             aria-labelledby="modal-reset-label-<?= $k->getId() ?>" aria-hidden="true">
-                                            <div class="modal-dialog">
-                                                <div class="modal-content">
-                                                    <form method="post">
-                                                        <input type="hidden" name="aksi" value="reset_password">
-                                                        <input type="hidden" name="kasir_id" value="<?= $k->getId() ?>">
-                                                        <div class="modal-header">
-                                                            <h5 class="modal-title" id="modal-reset-label-<?= $k->getId() ?>">
-                                                                Reset Password — <?= htmlspecialchars($k->getNama()) ?>
-                                                            </h5>
-                                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
-                                                        </div>
-                                                        <div class="modal-body">
-                                                            <label for="password-baru-<?= $k->getId() ?>" class="form-label">Password baru</label>
-                                                            <input
-                                                                type="password"
-                                                                id="password-baru-<?= $k->getId() ?>"
-                                                                name="password_baru"
-                                                                class="form-control"
-                                                                placeholder="Minimal 6 karakter"
-                                                                required
-                                                                autocomplete="new-password"
-                                                            >
-                                                        </div>
-                                                        <div class="modal-footer">
-                                                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Batal</button>
-                                                            <button type="submit" class="btn btn-warning"><i class="bi bi-key me-1"></i>Reset</button>
-                                                        </div>
-                                                    </form>
-                                                </div>
-                                            </div>
-                                        </div>
                                     <?php endforeach; ?>
                                 </tbody>
                             </table>
@@ -425,6 +393,47 @@ $editKasir = $editKasirId > 0 ? User::cariKasir($editKasirId) : null;
         </div>
     </div>
 </div>
+
+<?php if ($kasirSemua !== []): ?>
+    <?php foreach ($kasirSemua as $k): ?>
+        <!-- Modal reset password (di luar tabel, HTML valid) -->
+        <div class="modal fade" id="modal-reset-<?= $k->getId() ?>" tabindex="-1"
+             aria-labelledby="modal-reset-label-<?= $k->getId() ?>" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <form method="post">
+                        <input type="hidden" name="aksi" value="reset_password">
+                        <input type="hidden" name="kasir_id" value="<?= $k->getId() ?>">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="modal-reset-label-<?= $k->getId() ?>">
+                                Reset Password — <?= htmlspecialchars($k->getNama()) ?>
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+                        </div>
+                        <div class="modal-body">
+                            <label for="password-baru-<?= $k->getId() ?>" class="form-label">Password baru</label>
+                            <input
+                                type="password"
+                                id="password-baru-<?= $k->getId() ?>"
+                                name="password_baru"
+                                class="form-control"
+                                placeholder="Minimal 6 karakter"
+                                required
+                                minlength="6"
+                                autocomplete="new-password"
+                            >
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Batal</button>
+                            <button type="submit" class="btn btn-warning"><i class="bi bi-key me-1"></i>Reset</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    <?php endforeach; ?>
+<?php endif; ?>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

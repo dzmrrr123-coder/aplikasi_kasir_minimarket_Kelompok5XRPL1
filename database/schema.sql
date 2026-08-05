@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS produk (
 
 CREATE TABLE IF NOT EXISTS diskon (
     id    INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    kode  VARCHAR(50)  NULL UNIQUE,
     jenis ENUM('persen', 'nominal') NOT NULL,
     nilai DECIMAL(12,2)             NOT NULL
 ) ENGINE=InnoDB;

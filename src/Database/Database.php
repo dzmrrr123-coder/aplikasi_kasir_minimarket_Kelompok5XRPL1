@@ -100,5 +100,18 @@ class Database
 
             $pdo->exec($trimmed);
         }
+
+        // Migrasi idempotent: tambah kolom `kode` pada tabel diskon bila belum ada.
+        // MySQL tidak mendukung ADD COLUMN IF NOT EXISTS, jadi cek dulu
+        // keberadaan kolom lewat information_schema.
+        $kolomDiskon = $pdo->query(
+            'SELECT COLUMN_NAME FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = ' . $pdo->quote($db['dbname']) . '
+               AND TABLE_NAME = \'diskon\' AND COLUMN_NAME = \'kode\''
+        )->fetchColumn();
+
+        if ($kolomDiskon === false) {
+            $pdo->exec('ALTER TABLE diskon ADD COLUMN kode VARCHAR(50) NULL UNIQUE');
+        }
     }
 }

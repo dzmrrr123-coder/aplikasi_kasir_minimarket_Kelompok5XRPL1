@@ -39,16 +39,18 @@ class LaporanPenjualan
     /**
      * Mengambil semua transaksi dalam rentang tanggal (tanggalAkhir inklusif,
      * ditambah 1 hari agar transaksi pada tanggal akhir ikut terhitung).
+     * Nama kasir ikut diambil lewat JOIN users.
      *
      * @return Transaksi[]
      */
     public function ambilTransaksiPeriode(): array
     {
         $stmt = Database::connect()->prepare(
-            'SELECT id, tanggal, total, kasir_id
-             FROM transaksi
-             WHERE tanggal >= :mulai AND tanggal < :akhir
-             ORDER BY tanggal ASC'
+            'SELECT t.id, t.tanggal, t.total, t.kasir_id, u.nama AS kasir_nama
+             FROM transaksi t
+             JOIN users u ON u.id = t.kasir_id
+             WHERE t.tanggal >= :mulai AND t.tanggal < :akhir
+             ORDER BY t.tanggal ASC'
         );
         $stmt->execute([
             ':mulai' => $this->tanggalMulai->format('Y-m-d 00:00:00'),
@@ -116,7 +118,7 @@ class LaporanPenjualan
             $baris[] = [
                 $transaksi->getId(),
                 $transaksi->getTanggal()->format('d-m-Y H:i'),
-                $transaksi->getKasirId(),
+                $transaksi->getKasirNama(),
                 $transaksi->getTotal(),
             ];
         }

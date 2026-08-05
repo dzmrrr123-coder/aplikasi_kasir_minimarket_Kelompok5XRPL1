@@ -87,9 +87,9 @@ foreach ($supplierData as [$nama, $kontak, $alamat]) {
     $supplier->simpan();
 }
 
-// ---- Diskon (kode diskon = id baris) ----
-(new Diskon(['jenis' => 'persen', 'nilai' => 10]))->simpan();   // kode 1 = 10%
-(new Diskon(['jenis' => 'nominal', 'nilai' => 2000]))->simpan(); // kode 2 = Rp 2.000
+// ---- Diskon (kode bermakna, unik) ----
+(new Diskon(['kode' => 'DISC10', 'jenis' => 'persen', 'nilai' => 10]))->simpan();   // 10%
+(new Diskon(['kode' => 'HEMAT2K', 'jenis' => 'nominal', 'nilai' => 2000]))->simpan(); // Rp 2.000
 
 echo "Seed selesai.\n";
 echo "  - User kasir : kasir / kasir123\n";
@@ -97,4 +97,4 @@ echo "  - User admin : admin / admin123\n";
 echo '  - Kategori  : ' . count($kategoriData) . "\n";
 echo '  - Produk    : ' . count($produkList) . ' (' . implode(', ', $produkList) . ")\n";
 echo '  - Supplier  : ' . count($supplierData) . "\n";
-echo "  - Diskon    : 2 (kode 1 = 10%, kode 2 = Rp 2.000)\n";
+echo "  - Diskon    : 2 (DISC10 = 10%, HEMAT2K = Rp 2.000)\n";
