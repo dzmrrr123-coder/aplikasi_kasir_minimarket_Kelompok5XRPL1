@@ -134,7 +134,7 @@ function renderFragmentKeranjangKiri(): string
                             <?php foreach ($keranjang as $item): ?>
                                 <tr>
                                     <td><?= htmlspecialchars($item['nama']) ?></td>
-                                    <td class="text-center"><?= $item['qty'] ?></td>
+                                    <td class="text-center"><?= ($item['satuan'] ?? 'pcs') === 'gram' ? number_format($item['qty'], 0, ',', '.') . ' gr' : (int) $item['qty'] ?></td>
                                     <td class="text-end"><?= formatRupiah($item['harga']) ?></td>
                                     <td class="text-end"><?= formatRupiah($item['subtotal']) ?></td>
                                     <td class="text-center">
@@ -327,6 +327,38 @@ function renderFragmentKananKiosk(): string
         </form>
     </div>
 
+    <!-- Perangkat: timbangan & printer (Web Serial) -->
+    <div class="card pos-card mb-3">
+        <div class="card-header bg-white py-2"><i class="bi bi-usb-plug me-1"></i>Perangkat</div>
+        <div class="card-body py-2">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <span>
+                    <i class="bi bi-bullseye me-1"></i>Timbangan
+                    <span class="badge text-bg-secondary ms-1" id="status-timbangan">Belum</span>
+                </span>
+                <div class="d-flex gap-1">
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="btn-timbangan">
+                        <i class="bi bi-plug me-1"></i>Hubungkan
+                    </button>
+                </div>
+            </div>
+            <div class="d-flex justify-content-between align-items-center">
+                <span>
+                    <i class="bi bi-printer me-1"></i>Printer
+                    <span class="badge text-bg-secondary ms-1" id="status-printer">Belum</span>
+                </span>
+                <div class="d-flex gap-1">
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="btn-printer">
+                        <i class="bi bi-plug me-1"></i>Hubungkan
+                    </button>
+                </div>
+            </div>
+            <div class="small text-muted mt-2" id="hw-kompatibilitas">
+                Web Serial: Chrome/Edge desktop + HTTPS/localhost.
+            </div>
+        </div>
+    </div>
+
     <!-- Ringkasan -->
     <div class="kiosk-ringkasan">
         <div class="d-flex justify-content-between align-items-center mb-1">
@@ -463,7 +495,7 @@ function redirectSelf(string $pesan, string $tipe = 'info'): never
 }
 
 /** Tambah produk ke keranjang via method Transaksi::tambahItem(). */
-function aksiTambahItem(int $produkId, int $qty, int $kasirId): void
+function aksiTambahItem(int $produkId, float $qty, int $kasirId): void
 {
     $produk = Produk::cari($produkId);
 
@@ -496,7 +528,7 @@ function aksiTambahItem(int $produkId, int $qty, int $kasirId): void
 
             $baris['qty']      = $qtyBaru;
             $baris['stok']     = $produk->getStok();
-            $baris['subtotal'] = $produk->getHarga() * $qtyBaru;
+            $baris['subtotal'] = $produk->getHargaEfektif() * $qtyBaru;
             $sudahAda = true;
             break;
         }
@@ -508,9 +540,10 @@ function aksiTambahItem(int $produkId, int $qty, int $kasirId): void
             'produk_id' => $produkId,
             'nama'      => $produk->getNama(),
             'harga'     => $produk->getHarga(),
+            'satuan'    => $produk->getSatuan(),
             'qty'       => $qty,
             'stok'      => $produk->getStok(),
-            'subtotal'  => $produk->getHarga() * $qty,
+            'subtotal'  => $produk->getHargaEfektif() * $qty,
         ];
     }
 
@@ -662,7 +695,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         case 'tambah_item':
             aksiTambahItem(
                 (int) ($_POST['produk_id'] ?? 0),
-                (int) ($_POST['qty'] ?? 1),
+                (float) ($_POST['qty'] ?? 1),
                 $userId
             );
             break;
@@ -870,29 +903,60 @@ $produkSemua = Produk::semua();
                                 <div class="kiosk-produk-nama text-truncate" title="<?= htmlspecialchars($p->getNama()) ?>">
                                     <?= htmlspecialchars($p->getNama()) ?>
                                 </div>
-                                <div class="kiosk-produk-harga font-num"><?= formatRupiah($p->getHarga()) ?></div>
-                                <div class="small <?= $p->getStok() > 0 ? 'text-success' : 'text-danger' ?>">
-                                    stok <?= $p->getStok() ?>
+                                <div class="kiosk-produk-harga font-num">
+                                    <?= $p->getSatuan() === 'gram'
+                                        ? formatRupiah($p->getHargaPerGram()) . '/gr'
+                                        : formatRupiah($p->getHarga()) ?>
                                 </div>
-                                <form method="post" class="d-flex gap-1 mt-auto" data-aksi="tambah_item">
+                                <div class="small <?= $p->getStok() > 0 ? 'text-success' : 'text-danger' ?>">
+                                    stok <?= $p->getStok() ?> <?= $p->getSatuan() === 'gram' ? 'gr' : '' ?>
+                                </div>
+                                <form method="post" class="d-flex flex-column gap-1 mt-auto" data-aksi="tambah_item">
                                     <input type="hidden" name="aksi" value="tambah_item">
                                     <input type="hidden" name="produk_id" value="<?= $p->getId() ?>">
-                                    <input
-                                        type="number"
-                                        name="qty"
-                                        class="form-control form-control-sm qty-input"
-                                        value="1"
-                                        min="1"
-                                        max="<?= max(1, $p->getStok()) ?>"
-                                        required
-                                    >
-                                    <button
-                                        type="submit"
-                                        class="btn btn-sm btn-success flex-shrink-0"
-                                        <?= $p->getStok() < 1 ? 'disabled' : '' ?>
-                                    >
-                                        <i class="bi bi-cart-plus me-1"></i>Tambah
-                                    </button>
+                                    <?php if ($p->getSatuan() === 'gram'): ?>
+                                        <div class="d-flex gap-1">
+                                            <input
+                                                type="number"
+                                                name="qty"
+                                                class="form-control form-control-sm qty-input"
+                                                value="100"
+                                                min="1"
+                                                step="0.001"
+                                                max="<?= max(1, $p->getStok()) ?>"
+                                                placeholder="Berat (gr)"
+                                                required
+                                                data-produk-gram="<?= $p->getId() ?>"
+                                            >
+                                            <button
+                                                type="button"
+                                                class="btn btn-sm btn-outline-primary flex-shrink-0"
+                                                data-timbang="<?= $p->getId() ?>"
+                                                title="Ambil berat dari timbangan"
+                                            >
+                                                <i class="bi bi-bullseye"></i>
+                                            </button>
+                                        </div>
+                                    <?php else: ?>
+                                        <div class="d-flex gap-1">
+                                            <input
+                                                type="number"
+                                                name="qty"
+                                                class="form-control form-control-sm qty-input"
+                                                value="1"
+                                                min="1"
+                                                max="<?= max(1, $p->getStok()) ?>"
+                                                required
+                                            >
+                                            <button
+                                                type="submit"
+                                                class="btn btn-sm btn-success flex-shrink-0"
+                                                <?= $p->getStok() < 1 ? 'disabled' : '' ?>
+                                            >
+                                                <i class="bi bi-cart-plus"></i>
+                                            </button>
+                                        </div>
+                                    <?php endif; ?>
                                 </form>
                             </div>
                         </div>
@@ -1060,6 +1124,8 @@ $produkSemua = Produk::semua();
                     tampilkanFlash(res.pesan, res.tipe);
                     if (res.struk) {
                         tampilkanStruk(res.struk);
+                        // Hook hardware: cetak struk otomatis ke printer thermal.
+                        if (window.afterBayarSukses) window.afterBayarSukses(res);
                     }
                     if (res.fragment) {
                         gantiFragment(res.fragment);
@@ -1094,6 +1160,139 @@ $produkSemua = Produk::semua();
 
         initKembalian();
         initNumpad();
+    })();
+</script>
+<script src="assets/hardware.js"></script>
+<script>
+    // Hardware Integration (Web Serial): timbangan + printer thermal ESC/POS.
+    (function () {
+        'use strict';
+
+        function initHardware() {
+            if (!window.POSHardware) return;
+
+            var didukung = POSHardware.didukung();
+            var keterangan = document.getElementById('hw-kompatibilitas');
+            if (!didukung && keterangan) {
+                keterangan.textContent = 'Mode kompatibilitas: Web Serial tidak didukung, gunakan input manual.';
+            }
+            if (!didukung) return;
+
+            POSHardware.muatConfig().then(function () {
+                // Status LED.
+                POSHardware.setOnStatus(function (st) {
+                    var bT = document.getElementById('status-timbangan');
+                    var bP = document.getElementById('status-printer');
+                    if (bT) {
+                        bT.className = 'badge ms-1 ' + (st.timbangan ? 'text-bg-success' : 'text-bg-secondary');
+                        bT.textContent = st.timbangan ? 'Terhubung' : 'Belum';
+                    }
+                    if (bP) {
+                        bP.className = 'badge ms-1 ' + (st.printer ? 'text-bg-success' : 'text-bg-secondary');
+                        bP.textContent = st.printer ? 'Terhubung' : 'Belum';
+                    }
+                });
+
+                // Tombol hubungkan timbangan.
+                var btnT = document.getElementById('btn-timbangan');
+                if (btnT) {
+                    btnT.addEventListener('click', function () {
+                        POSHardware.hubungkanTimbangan()
+                            .catch(function (e) {
+                                var fl = document.getElementById('flash-pesan');
+                                if (fl) {
+                                    fl.className = 'alert alert-danger alert-dismissible fade show';
+                                    fl.innerHTML = 'Gagal hubungkan timbangan: ' + e.message +
+                                        '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+                                }
+                            });
+                    });
+                }
+
+                // Callback berat stabil -> isi input berat produk gram terfokus.
+                POSHardware.setOnBerat(function (gram) {
+                    var aktif = document.activeElement;
+                    var input = null;
+                    if (aktif && aktif.hasAttribute('data-produk-gram')) {
+                        input = aktif;
+                    } else {
+                        // Fallback: isi input gram pertama yang ada.
+                        input = document.querySelector('input[data-produk-gram]');
+                    }
+                    if (input) {
+                        input.value = gram.toFixed(3);
+                    }
+                });
+
+                // Tombol timbang per produk: baca berat terakhir -> isi input + submit.
+                document.addEventListener('click', function (e) {
+                    var tombol = e.target.closest('[data-timbang]');
+                    if (!tombol) return;
+                    var produkId = tombol.getAttribute('data-timbang');
+                    var berat = POSHardware.getBeratGram();
+                    if (berat <= 0) {
+                        var fl = document.getElementById('flash-pesan');
+                        if (fl) {
+                            fl.className = 'alert alert-warning alert-dismissible fade show';
+                            fl.innerHTML = 'Belum ada pembacaan berat dari timbangan.' +
+                                '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+                        }
+                        return;
+                    }
+                    var input = document.querySelector('input[data-produk-gram="' + produkId + '"]');
+                    if (input) {
+                        input.value = berat.toFixed(3);
+                        // Submit form tambah_item.
+                        var form = input.closest('form[data-aksi="tambah_item"]');
+                        if (form) form.requestSubmit();
+                    }
+                });
+
+                // Tombol hubungkan printer.
+                var btnP = document.getElementById('btn-printer');
+                if (btnP) {
+                    btnP.addEventListener('click', function () {
+                        POSHardware.hubungkanPrinter()
+                            .catch(function (e) {
+                                var fl = document.getElementById('flash-pesan');
+                                if (fl) {
+                                    fl.className = 'alert alert-danger alert-dismissible fade show';
+                                    fl.innerHTML = 'Gagal hubungkan printer: ' + e.message +
+                                        '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+                                }
+                            });
+                    });
+                }
+
+                // Cetak struk otomatis setelah bayar sukses (tanpa dialog print).
+                var asli = window.tampilkanStrukAfterBayar || null;
+                window.tampilkanStrukAfterBayar = function (struk) {
+                    if (asli) asli(struk);
+                    var st = POSHardware.getStatus();
+                    if (st.printer) {
+                        POSHardware.cetakStruk(struk).catch(function () { /* biarkan */ });
+                    }
+                };
+            });
+        }
+
+        // Hook: setelah bayar sukses (AJAX) -> panggil cetak otomatis.
+        // Dipasang setelah blok fetch utama didefinisikan.
+        var origBayar = window.afterBayarSukses || null;
+        window.afterBayarSukses = function (res) {
+            if (origBayar) origBayar(res);
+            if (res && res.struk && window.POSHardware) {
+                var st = POSHardware.getStatus();
+                if (st.printer) {
+                    POSHardware.cetakStruk(res.struk).catch(function () { /* biarkan */ });
+                }
+            }
+        };
+
+        // Panggil initHardware dari scope utama (sudah dipanggil di atas).
+        if (window.POSHardware) {
+            try { initHardware(); } catch (e) { /* jangan ganggu alur kasir */ }
+        }
     })();
 </script>
 <script src="assets/theme.js"></script>
