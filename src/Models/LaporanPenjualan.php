@@ -8,7 +8,7 @@ use DateTimeImmutable;
 use RuntimeException;
 use App\Database\Database;
 
-class LaporanPenjualan implements Observer
+class LaporanPenjualan implements Observer, DataReporter
 {
     private DateTimeImmutable $tanggalMulai;
     private DateTimeImmutable $tanggalAkhir;
@@ -189,5 +189,132 @@ class LaporanPenjualan implements Observer
         }
 
         return $nilai;
+    }
+
+    // ------------------------------------------------------------
+    // DataReporter (Polimorfisme) — untuk Chart.js & DataTables
+    // ------------------------------------------------------------
+
+    /**
+     * Data grafik: penjualan per hari dalam periode.
+     *
+     * @param array<string, mixed> $params berisi tanggal_mulai & tanggal_akhir
+     */
+    public function getAgregasiGrafik(array $params = []): array
+    {
+        $mulai = new DateTimeImmutable((string) ($params['tanggal_mulai'] ?? date('Y-m-d', strtotime('-6 days'))));
+        $akhir = new DateTimeImmutable((string) ($params['tanggal_akhir'] ?? date('Y-m-d')));
+        $this->setPeriode($mulai, $akhir);
+
+        $labels = [];
+        $data = [];
+
+        // Iterasi per hari dalam rentang, dibatasi maksimal 62 hari supaya
+        // periode yang terlalu lebar tidak membuat loop tak berujung.
+        $t = $mulai;
+        $batasAkhir = $akhir->modify('+1 day');
+        $hariIterasi = 0;
+
+        while ($t < $batasAkhir && $hariIterasi < 62) {
+            $hariMulai = $t->format('Y-m-d 00:00:00');
+            $hariAkhir = $t->format('Y-m-d 23:59:59');
+
+            $stmt = Database::connect()->prepare(
+                'SELECT COALESCE(SUM(total), 0) AS total
+                 FROM transaksi
+                 WHERE tanggal >= :mulai AND tanggal <= :akhir'
+            );
+            $stmt->execute([':mulai' => $hariMulai, ':akhir' => $hariAkhir]);
+            $total = (float) ($stmt->fetch()['total'] ?? 0);
+
+            $labels[] = $t->format('d M');
+            $data[] = $total;
+            $t = $t->modify('+1 day');
+            $hariIterasi++;
+        }
+
+        return [
+            'labels' => $labels,
+            'series' => [
+                'label' => 'Penjualan',
+                'data'  => $data,
+            ],
+        ];
+    }
+
+    /**
+     * Data tabel: daftar transaksi dalam periode dengan dukungan
+     * pencarian & pagination (untuk DataTables server-side).
+     *
+     * @param array<string, mixed> $params search/start/length/tanggal
+     */
+    public function getDataTabel(array $params = []): array
+    {
+        $mulai = new DateTimeImmutable((string) ($params['tanggal_mulai'] ?? date('Y-m-01')));
+        $akhir = new DateTimeImmutable((string) ($params['tanggal_akhir'] ?? date('Y-m-d')));
+        $this->setPeriode($mulai, $akhir);
+
+        $cari = trim((string) ($params['search'] ?? ''));
+        $start = max(0, (int) ($params['start'] ?? 0));
+        $length = max(1, (int) ($params['length'] ?? 10));
+
+        $where = 'WHERE t.tanggal >= :mulai AND t.tanggal < :akhir';
+        $bind = [
+            ':mulai' => $mulai->format('Y-m-d 00:00:00'),
+            ':akhir' => $akhir->modify('+1 day')->format('Y-m-d 00:00:00'),
+        ];
+
+        if ($cari !== '') {
+            $where .= ' AND (CAST(t.id AS CHAR) LIKE :cari OR u.nama LIKE :cari)';
+            $bind[':cari'] = '%' . $cari . '%';
+        }
+
+        $pdo = Database::connect();
+
+        $total = (int) $pdo->query(
+            'SELECT COUNT(*) FROM transaksi t
+             JOIN users u ON u.id = t.kasir_id
+             WHERE t.tanggal >= ' . $pdo->quote($bind[':mulai']) . '
+               AND t.tanggal < ' . $pdo->quote($bind[':akhir'])
+        )->fetchColumn();
+
+        $stmtFiltered = $pdo->prepare(
+            'SELECT COUNT(*) FROM transaksi t
+             JOIN users u ON u.id = t.kasir_id ' . $where
+        );
+        $stmtFiltered->execute($bind);
+        $filtered = (int) $stmtFiltered->fetchColumn();
+
+        $stmt = $pdo->prepare(
+            'SELECT t.id, t.tanggal, t.total, u.nama AS kasir_nama
+             FROM transaksi t
+             JOIN users u ON u.id = t.kasir_id ' . $where . '
+             ORDER BY t.tanggal DESC, t.id DESC
+             LIMIT :limit OFFSET :offset'
+        );
+
+        // Bind semua parameter via bindValue (tidak mencampur execute(array)
+        // dengan bindValue — bisa memicu HY093 pada emulasi prepare off).
+        foreach ($bind as $kunci => $nilai) {
+            $stmt->bindValue($kunci, $nilai);
+        }
+        $stmt->bindValue(':limit', $length, \PDO::PARAM_INT);
+        $stmt->bindValue(':offset', $start, \PDO::PARAM_INT);
+        $stmt->execute();
+
+        $rows = array_map(static function (array $r): array {
+            return [
+                'id'         => $r['id'],
+                'tanggal'    => (new DateTimeImmutable($r['tanggal']))->format('d-m-Y H:i'),
+                'kasir_nama' => $r['kasir_nama'],
+                'total'      => (float) $r['total'],
+            ];
+        }, $stmt->fetchAll());
+
+        return [
+            'total'    => $total,
+            'filtered' => $filtered,
+            'rows'     => $rows,
+        ];
     }
 }

@@ -72,30 +72,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['aksi'] ?? '') === 'logout'
 $tanggalMulai = $_GET['tanggal_mulai'] ?? date('Y-m-01');
 $tanggalAkhir = $_GET['tanggal_akhir'] ?? date('Y-m-d');
 
-$laporan = new LaporanPenjualan();
-
+// Validasi tanggal: kalau tidak valid, fallback ke bulan berjalan.
 try {
-    $laporan->setPeriode(
-        new DateTimeImmutable($tanggalMulai),
-        new DateTimeImmutable($tanggalAkhir)
-    );
-    $hasil = $laporan->generate();
+    $dMulai = new DateTimeImmutable($tanggalMulai);
+    $dAkhir = new DateTimeImmutable($tanggalAkhir);
 } catch (Throwable $e) {
-    // Tanggal tidak valid -> fallback ke bulan berjalan.
-    $laporan->setPeriode(
-        new DateTimeImmutable(date('Y-m-01')),
-        new DateTimeImmutable(date('Y-m-d'))
-    );
-    $hasil = $laporan->generate();
+    $dMulai = new DateTimeImmutable(date('Y-m-01'));
+    $dAkhir = new DateTimeImmutable(date('Y-m-d'));
 }
 
-$transaksi = $hasil['transaksi']; // Transaksi[]
-$jumlah = (int) $hasil['jumlah'];
-$total = (float) $hasil['total'];
-$pesan = (string) $hasil['pesan'];
-
-// Ekspor CSV: unduh laporan sesuai periode yang sedang difilter.
+// Ekspor CSV: unduh laporan sesuai periode (dipanggil server-side via model).
 if (isset($_GET['ekspor']) && $_GET['ekspor'] === '1') {
+    $laporan = new LaporanPenjualan();
+    $laporan->setPeriode($dMulai, $dAkhir);
     $csv = $laporan->eksporPDF();
     $namaFile = 'laporan-penjualan-' . date('Ymd-His') . '.csv';
 
@@ -106,10 +95,8 @@ if (isset($_GET['ekspor']) && $_GET['ekspor'] === '1') {
     exit;
 }
 
-function formatRupiah(float $jumlah): string
-{
-    return 'Rp ' . number_format($jumlah, 0, ',', '.');
-}
+// Tabel & grafik periode diambil via api.php (Controller → DataReporter),
+// bukan di-render di view. View murni konsumen JSON.
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -119,6 +106,7 @@ function formatRupiah(float $jumlah): string
     <title>Laporan Penjualan - Kasir Minimarket</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="https://cdn.datatables.net/2.1.8/css/dataTables.bootstrap5.min.css" rel="stylesheet">
     <link href="assets/theme.css" rel="stylesheet">
     <style>
         .total-besar { font-size: 1.5rem; font-weight: 700; }
@@ -224,16 +212,26 @@ function formatRupiah(float $jumlah): string
                     <dl class="row mb-0">
                         <dt class="col-7 text-muted fw-normal">Periode</dt>
                         <dd class="col-5 text-end mb-0">
-                            <?= htmlspecialchars($laporan->getTanggalMulai()->format('d M Y')) ?>
+                            <?= htmlspecialchars($dMulai->format('d M Y')) ?>
                             s/d
-                            <?= htmlspecialchars($laporan->getTanggalAkhir()->format('d M Y')) ?>
+                            <?= htmlspecialchars($dAkhir->format('d M Y')) ?>
                         </dd>
                         <dt class="col-7 text-muted fw-normal">Jumlah transaksi</dt>
-                        <dd class="col-5 text-end mb-0"><?= $jumlah ?></dd>
+                        <dd class="col-5 text-end mb-0 font-num" id="ringkasan-jumlah">—</dd>
                         <hr class="my-2">
                         <dt class="col-7 fw-semibold">Total penjualan</dt>
-                        <dd class="col-5 text-end total-besar"><?= formatRupiah($total) ?></dd>
+                        <dd class="col-5 text-end total-besar font-num" id="ringkasan-total">—</dd>
                     </dl>
+                </div>
+            </div>
+
+            <!-- Grafik penjualan periode -->
+            <div class="card pos-card mt-4">
+                <div class="card-header bg-white"><span>Grafik Penjualan</span></div>
+                <div class="card-body">
+                    <div class="chart-container" style="height: 240px;">
+                        <canvas id="grafik-laporan"></canvas>
+                    </div>
                 </div>
             </div>
         </div>
@@ -243,7 +241,7 @@ function formatRupiah(float $jumlah): string
                 <div class="card-header bg-white d-flex justify-content-between align-items-center">
                     <span>Daftar Transaksi</span>
                     <a
-                        href="?tanggal_mulai=<?= htmlspecialchars($laporan->getTanggalMulai()->format('Y-m-d')) ?>&amp;tanggal_akhir=<?= htmlspecialchars($laporan->getTanggalAkhir()->format('Y-m-d')) ?>&amp;ekspor=1"
+                        href="?tanggal_mulai=<?= htmlspecialchars($dMulai->format('Y-m-d')) ?>&amp;tanggal_akhir=<?= htmlspecialchars($dAkhir->format('Y-m-d')) ?>&amp;ekspor=1"
                         class="btn btn-sm btn-outline-success"
                         title="Unduh laporan periode ini sebagai CSV"
                     >
@@ -251,38 +249,18 @@ function formatRupiah(float $jumlah): string
                     </a>
                 </div>
                 <div class="card-body p-0">
-                    <?php if ($jumlah === 0): ?>
-                        <div class="p-4 text-center">
-                            <div class="text-muted mb-1">Tidak ada data penjualan pada periode tersebut.</div>
-                            <div class="small text-muted">
-                                Coba ubah rentang tanggal, atau buat transaksi baru di
-                                <a href="transaksi.php">halaman kasir</a>.
-                            </div>
-                        </div>
-                    <?php else: ?>
-                        <div class="table-responsive">
-                            <table class="table table-hover align-middle mb-0">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>No. Transaksi</th>
-                                        <th>Tanggal</th>
-                                        <th>Kasir</th>
-                                        <th class="text-end">Total</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php foreach ($transaksi as $t): ?>
-                                        <tr>
-                                            <td>#<?= $t->getId() ?></td>
-                                            <td><?= $t->getTanggal()->format('d-m-Y H:i') ?></td>
-                                            <td><?= htmlspecialchars($t->getKasirNama()) ?></td>
-                                            <td class="text-end"><?= formatRupiah($t->getTotal()) ?></td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    <?php endif; ?>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0" id="tabel-transaksi-laporan">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>No. Transaksi</th>
+                                    <th>Tanggal</th>
+                                    <th>Kasir</th>
+                                    <th class="text-end">Total</th>
+                                </tr>
+                            </thead>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
@@ -290,6 +268,92 @@ function formatRupiah(float $jumlah): string
 
 </div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.datatables.net/2.1.8/js/dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/2.1.8/js/dataTables.bootstrap5.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="assets/theme.js"></script>
+<script>
+    // View murni: ringkasan, grafik, dan tabel dari api.php (Controller → DataReporter).
+    (function () {
+        'use strict';
+
+        var mulai = <?= json_encode($dMulai->format('Y-m-d')) ?>;
+        var akhir = <?= json_encode($dAkhir->format('Y-m-d')) ?>;
+        var params = '&tanggal_mulai=' + mulai + '&tanggal_akhir=' + akhir;
+
+        function rupiah(n) {
+            return 'Rp ' + Number(n).toLocaleString('id-ID', {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0
+            });
+        }
+
+        // Ringkasan: ambil total & jumlah dari tabel (recordsTotal) + hitung total.
+        // Memakai endpoint grafik utk total periode.
+        fetch('api.php?aksi=laporan.grafik' + params)
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                var total = (d.series.data || []).reduce(function (a, b) { return a + b; }, 0);
+                document.getElementById('ringkasan-total').textContent = rupiah(total);
+
+                var el = document.getElementById('grafik-laporan');
+                if (el && typeof Chart !== 'undefined') {
+                    new Chart(el, {
+                        type: 'line',
+                        data: {
+                            labels: d.labels || [],
+                            datasets: [{
+                                label: 'Penjualan',
+                                data: d.series.data || [],
+                                borderColor: 'rgba(13, 148, 136, 0.9)',
+                                backgroundColor: 'rgba(13, 148, 136, 0.15)',
+                                fill: true,
+                                tension: 0.3,
+                                pointRadius: 4
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { display: false },
+                                tooltip: { callbacks: { label: function (c) { return rupiah(c.raw); } } }
+                            },
+                            scales: { y: { beginAtZero: true, ticks: { callback: function (v) { return rupiah(v); } } } }
+                        }
+                    });
+                }
+            })
+            .catch(function () { /* diam */ });
+
+        // DataTables server-side transaksi periode.
+        if (window.jQuery && window.DataTable) {
+            jQuery('#tabel-transaksi-laporan').DataTable({
+                serverSide: true,
+                ajax: {
+                    url: 'api.php?aksi=laporan.tabel' + params,
+                    data: function (d) { d.draw = d.draw || 0; }
+                },
+                pageLength: 10,
+                lengthChange: false,
+                order: [],
+                columns: [
+                    { data: 'id', render: function (d) { return '#' + d; } },
+                    { data: 'tanggal' },
+                    { data: 'kasir_nama' },
+                    { data: 'total', className: 'text-end font-num', render: function (d) { return rupiah(d); } }
+                ],
+                language: {
+                    url: 'https://cdn.datatables.net/plug-ins/2.1.8/i18n/id.json'
+                }
+            }).on('xhr.dt', function (e, settings, json) {
+                if (json && typeof json.recordsTotal !== 'undefined') {
+                    document.getElementById('ringkasan-jumlah').textContent = json.recordsTotal;
+                }
+            });
+        }
+    })();
+</script>
 </body>
 </html>

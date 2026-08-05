@@ -21,6 +21,7 @@ require __DIR__ . '/../src/autoload.php';
 use App\Database\Database;
 use App\Models\Admin;
 use App\Models\Dashboard;
+use App\Models\DataReporter;
 use App\Models\Diskon;
 use App\Models\Kasir;
 use App\Models\Kategori;
@@ -701,6 +702,76 @@ assertTrue(!$adminSalah->login('admin_uji', 'salah'), 'login dengan password sal
 
 $admin->logout();
 assertTrue($admin->getId() === '', 'logout mengosongkan sesi');
+
+echo "\n== 8. DataReporter & Controller PBO ==\n";
+
+// ---- Polimorfisme: model implement DataReporter ----
+$laporanReporter = new LaporanPenjualan();
+assertTrue($laporanReporter instanceof DataReporter, 'LaporanPenjualan implements DataReporter');
+assertTrue((new Produk()) instanceof DataReporter, 'Produk implements DataReporter');
+assertTrue((new ReturBarang()) instanceof DataReporter, 'ReturBarang implements DataReporter');
+
+// ---- getAgregasiGrafik: data grafik lengkap ----
+$grafik = $laporanReporter->getAgregasiGrafik([
+    'tanggal_mulai' => date('Y-m-d', strtotime('-30 days')),
+    'tanggal_akhir' => date('Y-m-d'),
+]);
+assertTrue(is_array($grafik['labels'] ?? null), 'grafik punya labels');
+assertTrue(is_array($grafik['series']['data'] ?? null), 'grafik punya series.data');
+assertTrue(
+    isset($grafik['series']['data']) && array_sum($grafik['series']['data']) > 0,
+    'grafik penjualan berisi total > 0'
+);
+
+// ---- getDataTabel: tabel transaksi ----
+$tabel = $laporanReporter->getDataTabel([
+    'tanggal_mulai' => date('Y-m-d', strtotime('-30 days')),
+    'tanggal_akhir' => date('Y-m-d'),
+    'start'  => 0,
+    'length' => 10,
+]);
+assertTrue(isset($tabel['total']) && $tabel['total'] >= 1, 'tabel transaksi punya total >= 1');
+assertTrue(count($tabel['rows']) >= 1, 'tabel transaksi punya baris');
+assertTrue(
+    isset($tabel['rows'][0]['kasir_nama']) && $tabel['rows'][0]['kasir_nama'] !== '',
+    'baris tabel memuat nama kasir'
+);
+
+// ---- getDataTabel Produk (inventaris) ----
+$tabelProduk = (new Produk())->getDataTabel(['search' => '', 'start' => 0, 'length' => 10]);
+assertTrue($tabelProduk['total'] >= 1, 'tabel produk punya total >= 1');
+assertTrue(isset($tabelProduk['rows'][0]['kategori']), 'baris produk memuat kategori');
+
+// ---- getDataTabel Retur (search) ----
+$tabelRetur = (new ReturBarang())->getDataTabel(['search' => '', 'start' => 0, 'length' => 10]);
+assertTrue($tabelRetur['total'] >= 1, 'tabel retur punya total >= 1');
+
+// ---- Controller PBO: dataTabelTransaksi mereturn array utk JSON ----
+$laporanCtrl = new \App\Controllers\LaporanController();
+$ctrlData = $laporanCtrl->dataTabelTransaksi([
+    'tanggal_mulai' => date('Y-m-d', strtotime('-30 days')),
+    'tanggal_akhir' => date('Y-m-d'),
+    'search' => '',
+    'start'  => 0,
+    'length' => 10,
+]);
+assertTrue(isset($ctrlData['rows']) && is_array($ctrlData['rows']), 'controller punya rows');
+assertTrue((int) ($ctrlData['total'] ?? 0) >= 1, 'controller total >= 1');
+
+// ---- api.php (front-controller) mereturn JSON valid ----
+// Dipanggil via subprocess agar perilaku exit/header tidak menghentikan e2e.
+$cmd = 'php -r ' . escapeshellarg(
+    "session_start(); \$_SESSION['user_id']=1; \$_SESSION['role']='admin'; " .
+    "\$_SERVER['REQUEST_METHOD']='GET'; \$_GET['aksi']='laporan.tabel'; " .
+    "\$_GET['tanggal_mulai']='" . date('Y-m-d', strtotime('-30 days')) . "'; " .
+    "\$_GET['tanggal_akhir']='" . date('Y-m-d') . "'; \$_GET['draw']=1; " .
+    "require 'C:/laragon/www/kasir-minimarket/public/api.php';"
+);
+$apiOut = shell_exec($cmd);
+$apiJson = json_decode((string) $apiOut, true);
+assertTrue(is_array($apiJson), 'api.php mereturn JSON valid');
+assertTrue(isset($apiJson['data']) && is_array($apiJson['data']), 'api.php tabel punya data array');
+assertTrue((int) ($apiJson['recordsTotal'] ?? 0) >= 1, 'api.php recordsTotal >= 1');
 
 echo "\n== RINGKASAN ==\n";
 echo "Lulus: $lulus\n";

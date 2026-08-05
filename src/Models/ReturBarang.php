@@ -8,7 +8,7 @@ use DateTimeImmutable;
 use RuntimeException;
 use App\Database\Database;
 
-class ReturBarang
+class ReturBarang implements DataReporter
 {
     private string $id = '';
     private DateTimeImmutable $tanggal;
@@ -193,5 +193,112 @@ class ReturBarang
         $stmt->execute();
 
         return $stmt->fetchAll();
+    }
+
+    // ------------------------------------------------------------
+    // DataReporter (Polimorfisme) — untuk Chart.js & DataTables
+    // ------------------------------------------------------------
+
+    /**
+     * Data grafik retur: jumlah unit diretur per bulan (6 bulan terakhir).
+     *
+     * @param array<string, mixed> $params (opsional; jumlah bulan)
+     */
+    public function getAgregasiGrafik(array $params = []): array
+    {
+        $bulan = max(1, (int) ($params['bulan'] ?? 6));
+        $labels = [];
+        $data = [];
+
+        for ($i = $bulan - 1; $i >= 0; $i--) {
+            $awal = (new DateTimeImmutable())->modify("-{$i} months")->format('Y-m-01 00:00:00');
+            $akhir = (new DateTimeImmutable())->modify("-{$i} months")->format('Y-m-t 23:59:59');
+
+            $stmt = Database::connect()->prepare(
+                'SELECT COALESCE(SUM(qty), 0) AS qty
+                 FROM retur_barang
+                 WHERE tanggal >= :mulai AND tanggal <= :akhir'
+            );
+            $stmt->execute([':mulai' => $awal, ':akhir' => $akhir]);
+            $qty = (int) ($stmt->fetch()['qty'] ?? 0);
+
+            $labels[] = (new DateTimeImmutable($awal))->format('M Y');
+            $data[] = $qty;
+        }
+
+        return [
+            'labels' => $labels,
+            'series' => [
+                'label' => 'Retur',
+                'data'  => $data,
+            ],
+        ];
+    }
+
+    /**
+     * Data tabel riwayat retur (tanggal, produk, supplier, qty, alasan)
+     * dengan pencarian & pagination (DataTables server-side).
+     *
+     * @param array<string, mixed> $params search/start/length
+     */
+    public function getDataTabel(array $params = []): array
+    {
+        $cari = trim((string) ($params['search'] ?? ''));
+        $start = max(0, (int) ($params['start'] ?? 0));
+        $length = max(1, (int) ($params['length'] ?? 10));
+
+        $where = '';
+        $bind = [];
+
+        if ($cari !== '') {
+            $where = 'WHERE p.nama LIKE :cari OR s.nama LIKE :cari OR r.alasan LIKE :cari';
+            $bind[':cari'] = '%' . $cari . '%';
+        }
+
+        $pdo = Database::connect();
+        $total = (int) $pdo->query('SELECT COUNT(*) FROM retur_barang')->fetchColumn();
+
+        $stmtFiltered = $pdo->prepare(
+            'SELECT COUNT(*) FROM retur_barang r
+             JOIN produk p ON p.id = r.produk_id
+             JOIN supplier s ON s.id = r.supplier_id ' . $where
+        );
+        $stmtFiltered->execute($bind);
+        $filtered = (int) $stmtFiltered->fetchColumn();
+
+        $stmt = $pdo->prepare(
+            'SELECT r.id, r.tanggal, r.qty, r.alasan,
+                    p.nama AS produk_nama,
+                    s.nama AS supplier_nama
+             FROM retur_barang r
+             JOIN produk p ON p.id = r.produk_id
+             JOIN supplier s ON s.id = r.supplier_id ' . $where . '
+             ORDER BY r.tanggal DESC, r.id DESC
+             LIMIT :limit OFFSET :offset'
+        );
+
+        foreach ($bind as $kunci => $nilai) {
+            $stmt->bindValue($kunci, $nilai);
+        }
+        $stmt->bindValue(':limit', $length, \PDO::PARAM_INT);
+        $stmt->bindValue(':offset', $start, \PDO::PARAM_INT);
+        $stmt->execute();
+
+        $rows = array_map(static function (array $r): array {
+            return [
+                'id'           => (int) $r['id'],
+                'tanggal'      => (new DateTimeImmutable($r['tanggal']))->format('d-m-Y H:i'),
+                'produk_nama'  => $r['produk_nama'],
+                'supplier_nama' => $r['supplier_nama'],
+                'qty'          => (int) $r['qty'],
+                'alasan'       => $r['alasan'],
+            ];
+        }, $stmt->fetchAll());
+
+        return [
+            'total'    => $total,
+            'filtered' => $filtered,
+            'rows'     => $rows,
+        ];
     }
 }

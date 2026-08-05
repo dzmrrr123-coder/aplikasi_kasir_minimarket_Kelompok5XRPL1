@@ -7,7 +7,7 @@ namespace App\Models;
 use PDO;
 use App\Database\Database;
 
-class Produk
+class Produk implements DataReporter
 {
     private string $id = '';
     private string $nama = '';
@@ -208,5 +208,105 @@ class Produk
         )->fetchAll();
 
         return array_map(static fn (array $row): self => new self($row), $rows);
+    }
+
+    // ------------------------------------------------------------
+    // DataReporter (Polimorfisme) — untuk Chart.js & DataTables
+    // ------------------------------------------------------------
+
+    /**
+     * Data grafik inventaris: total stok per kategori.
+     *
+     * @param array<string, mixed> $params (tidak wajib; limit kategori)
+     */
+    public function getAgregasiGrafik(array $params = []): array
+    {
+        $limit = max(1, (int) ($params['limit'] ?? 8));
+
+        $stmt = Database::connect()->prepare(
+            'SELECT k.nama AS kategori, COALESCE(SUM(p.stok), 0) AS stok
+             FROM kategori k
+             LEFT JOIN produk p ON p.kategori_id = k.id
+             GROUP BY k.id, k.nama
+             ORDER BY stok DESC
+             LIMIT :limit'
+        );
+        $stmt->bindValue(':limit', $limit, \PDO::PARAM_INT);
+        $stmt->execute();
+
+        $labels = [];
+        $data = [];
+
+        foreach ($stmt->fetchAll() as $row) {
+            $labels[] = $row['kategori'];
+            $data[] = (int) $row['stok'];
+        }
+
+        return [
+            'labels' => $labels,
+            'series' => [
+                'label' => 'Stok',
+                'data'  => $data,
+            ],
+        ];
+    }
+
+    /**
+     * Data tabel inventaris: daftar produk (nama, kategori, harga, stok)
+     * dengan pencarian & pagination (DataTables server-side).
+     *
+     * @param array<string, mixed> $params search/start/length
+     */
+    public function getDataTabel(array $params = []): array
+    {
+        $cari = trim((string) ($params['search'] ?? ''));
+        $start = max(0, (int) ($params['start'] ?? 0));
+        $length = max(1, (int) ($params['length'] ?? 10));
+
+        $where = '';
+        $bind = [];
+
+        if ($cari !== '') {
+            $where = 'WHERE p.nama LIKE :cari';
+            $bind[':cari'] = '%' . $cari . '%';
+        }
+
+        $pdo = Database::connect();
+        $total = (int) $pdo->query('SELECT COUNT(*) FROM produk')->fetchColumn();
+
+        $stmtFiltered = $pdo->prepare('SELECT COUNT(*) FROM produk p ' . $where);
+        $stmtFiltered->execute($bind);
+        $filtered = (int) $stmtFiltered->fetchColumn();
+
+        $stmt = $pdo->prepare(
+            'SELECT p.id, p.nama, p.harga, p.stok, k.nama AS kategori
+             FROM produk p
+             JOIN kategori k ON k.id = p.kategori_id ' . $where . '
+             ORDER BY p.nama ASC
+             LIMIT :limit OFFSET :offset'
+        );
+
+        foreach ($bind as $kunci => $nilai) {
+            $stmt->bindValue($kunci, $nilai);
+        }
+        $stmt->bindValue(':limit', $length, \PDO::PARAM_INT);
+        $stmt->bindValue(':offset', $start, \PDO::PARAM_INT);
+        $stmt->execute();
+
+        $rows = array_map(static function (array $r): array {
+            return [
+                'id'       => (int) $r['id'],
+                'nama'     => $r['nama'],
+                'kategori' => $r['kategori'],
+                'harga'    => (float) $r['harga'],
+                'stok'     => (int) $r['stok'],
+            ];
+        }, $stmt->fetchAll());
+
+        return [
+            'total'    => $total,
+            'filtered' => $filtered,
+            'rows'     => $rows,
+        ];
     }
 }

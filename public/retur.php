@@ -126,12 +126,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// ---- Data untuk tampilan ----
+// ---- Data untuk tampilan (view murni: produk & supplier utk form) ----
 $produkSemua = Produk::semua();
 $supplierSemua = Supplier::semua();
-
-// Riwayat retur via model (pola model-megang-CRUD).
-$riwayat = ReturBarang::semua();
+// Riwayat retur diambil via DataTables server-side dari api.php?aksi=retur.tabel
+// (Controller → ReturBarang::getDataTabel), bukan di-render di view.
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -141,6 +140,7 @@ $riwayat = ReturBarang::semua();
     <title>Retur Barang - Kasir Minimarket</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="https://cdn.datatables.net/2.1.8/css/dataTables.bootstrap5.min.css" rel="stylesheet">
     <link href="assets/theme.css" rel="stylesheet">
 </head>
 <body>
@@ -283,43 +283,31 @@ $riwayat = ReturBarang::semua();
             <div class="card pos-card">
                 <div class="card-header bg-white d-flex justify-content-between align-items-center">
                     <span>Riwayat Retur</span>
-                    <span class="text-muted small"><?= count($riwayat) ?> catatan</span>
+                    <span class="text-muted small">DataTables</span>
                 </div>
                 <div class="card-body p-0">
-                    <?php if ($riwayat === []): ?>
-                        <div class="p-4 text-center text-muted">Belum ada retur tercatat.</div>
-                    <?php else: ?>
-                        <div class="table-responsive">
-                            <table class="table table-hover align-middle mb-0">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>Tanggal</th>
-                                        <th>Produk</th>
-                                        <th>Supplier</th>
-                                        <th class="text-center">Qty</th>
-                                        <th>Alasan</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php foreach ($riwayat as $r): ?>
-                                        <tr>
-                                            <td><?= htmlspecialchars((new DateTimeImmutable($r['tanggal']))->format('d-m-Y H:i')) ?></td>
-                                            <td><?= htmlspecialchars($r['produk_nama']) ?></td>
-                                            <td><?= htmlspecialchars($r['supplier_nama']) ?></td>
-                                            <td class="text-center"><?= (int) $r['qty'] ?></td>
-                                            <td><?= htmlspecialchars($r['alasan']) ?></td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    <?php endif; ?>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0" id="tabel-retur">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Tanggal</th>
+                                    <th>Produk</th>
+                                    <th>Supplier</th>
+                                    <th class="text-center">Qty</th>
+                                    <th>Alasan</th>
+                                </tr>
+                            </thead>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.datatables.net/2.1.8/js/dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/2.1.8/js/dataTables.bootstrap5.min.js"></script>
 <script>
     // Batasi qty retur maksimal = stok produk yang dipilih.
     (function () {
@@ -337,6 +325,26 @@ $riwayat = ReturBarang::semua();
         select.addEventListener('change', syncMax);
         syncMax();
     })();
+
+    // Riwayat retur via DataTables server-side (api.php → ReturController).
+    if (window.jQuery && window.DataTable) {
+        jQuery('#tabel-retur').DataTable({
+            serverSide: true,
+            ajax: { url: 'api.php?aksi=retur.tabel', data: function (d) { d.draw = d.draw || 0; } },
+            pageLength: 10,
+            lengthChange: false,
+            columns: [
+                { data: 'tanggal' },
+                { data: 'produk_nama' },
+                { data: 'supplier_nama' },
+                { data: 'qty', className: 'text-center' },
+                { data: 'alasan' }
+            ],
+            language: {
+                url: 'https://cdn.datatables.net/plug-ins/2.1.8/i18n/id.json'
+            }
+        });
+    }
 </script>
 <script src="assets/theme.js"></script>
 </body>
