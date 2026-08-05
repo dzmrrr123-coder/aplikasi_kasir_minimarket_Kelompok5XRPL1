@@ -384,7 +384,12 @@ $laporan->setPeriode(
 $hasil = $laporan->generate();
 assertTrue($hasil['jumlah'] >= 1, 'laporan berisi minimal 1 transaksi');
 assertTrue($hasil['total'] > 0, 'total laporan > 0');
-assertTrue(str_contains($laporan->eksporPDF(), 'No. Transaksi'), 'ekspor laporan menghasilkan CSV');
+$csvEkspor = $laporan->eksporPDF();
+assertTrue(str_contains($csvEkspor, 'No. Transaksi'), 'ekspor laporan menghasilkan CSV');
+assertTrue(
+    str_contains($csvEkspor, $hasil['transaksi'][0]->getKasirNama()),
+    'CSV laporan memuat nama kasir'
+);
 
 // Ringkasan akurat: jumlah & total laporan sesuai transaksi yang tersimpan.
 $stored = Database::connect()->query(

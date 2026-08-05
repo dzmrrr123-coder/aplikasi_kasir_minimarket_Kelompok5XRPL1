@@ -94,6 +94,18 @@ $jumlah = (int) $hasil['jumlah'];
 $total = (float) $hasil['total'];
 $pesan = (string) $hasil['pesan'];
 
+// Ekspor CSV: unduh laporan sesuai periode yang sedang difilter.
+if (isset($_GET['ekspor']) && $_GET['ekspor'] === '1') {
+    $csv = $laporan->eksporPDF();
+    $namaFile = 'laporan-penjualan-' . date('Ymd-His') . '.csv';
+
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . $namaFile . '"');
+    // BOM UTF-8 supaya terbuka benar di Excel.
+    echo "\xEF\xBB\xBF" . $csv;
+    exit;
+}
+
 function formatRupiah(float $jumlah): string
 {
     return 'Rp ' . number_format($jumlah, 0, ',', '.');
@@ -225,7 +237,16 @@ function formatRupiah(float $jumlah): string
 
         <div class="col-lg-8">
             <div class="card pos-card">
-                <div class="card-header bg-white">Daftar Transaksi</div>
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <span>Daftar Transaksi</span>
+                    <a
+                        href="?tanggal_mulai=<?= htmlspecialchars($laporan->getTanggalMulai()->format('Y-m-d')) ?>&amp;tanggal_akhir=<?= htmlspecialchars($laporan->getTanggalAkhir()->format('Y-m-d')) ?>&amp;ekspor=1"
+                        class="btn btn-sm btn-outline-success"
+                        title="Unduh laporan periode ini sebagai CSV"
+                    >
+                        <i class="bi bi-download me-1"></i>Ekspor CSV
+                    </a>
+                </div>
                 <div class="card-body p-0">
                     <?php if ($jumlah === 0): ?>
                         <div class="p-4 text-center">
