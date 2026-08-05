@@ -26,7 +26,7 @@ $pdo = Database::connect();
 // Bersihkan data lama (urutan penting karena FK).
 $pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
 foreach ([
-    'item_transaksi', 'transaksi', 'pembayaran', 'diskon',
+    'item_transaksi', 'rekap_penjualan', 'transaksi', 'pembayaran', 'diskon',
     'retur_barang', 'produk', 'kategori', 'supplier', 'users',
 ] as $tabel) {
     $pdo->exec("TRUNCATE TABLE $tabel");

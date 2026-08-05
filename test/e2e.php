@@ -80,7 +80,7 @@ $pdo = Database::connect();
 // Bersihkan data uji lama (urutan penting karena FK).
 $pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
 foreach ([
-    'item_transaksi', 'transaksi', 'pembayaran', 'diskon',
+    'item_transaksi', 'rekap_penjualan', 'transaksi', 'pembayaran', 'diskon',
     'retur_barang', 'produk', 'kategori', 'supplier', 'users',
 ] as $tabel) {
     $pdo->exec("TRUNCATE TABLE $tabel");
@@ -291,6 +291,66 @@ assertThrows(
     fn () => $transaksiTanpaMetode->prosesPembayaran(),
     'proses pembayaran tanpa strategi ditolak'
 );
+
+echo "\n== 2c. Observer Pattern pasca-transaksi ==\n";
+
+// Observer Struk menyiapkan JSON setelah notify().
+$transaksiObserver = new Transaksi(['kasir_id' => $kasirId]);
+$transaksiObserver->tambahItem($produkSetelah, 2);
+$transaksiObserver->hitungTotal();
+
+$strukObserver = new Struk($transaksiObserver);
+$laporanObserver = new LaporanPenjualan();
+$transaksiObserver->attach($strukObserver);
+$transaksiObserver->attach($laporanObserver);
+
+// Sebelum diproses, JSON belum tersedia.
+assertTrue($strukObserver->getJsonOutput() === null, 'struk observer belum punya JSON sebelum notify');
+
+assertTrue(
+    $transaksiObserver->prosesPembayaran(new PembayaranTunai(['jumlah' => 50000])),
+    'transaksi dengan observer diproses sukses'
+);
+
+// notify() dipanggil otomatis -> JSON struk tersedia.
+$json = $strukObserver->getJsonOutput();
+assertTrue(is_array($json), 'notify() membuat JSON struk tersedia');
+assertTrue(
+    isset($json['kembalian']) && (float) $json['kembalian'] > 0,
+    'JSON struk memuat kembalian'
+);
+assertTrue(
+    isset($json['total']) && (float) $json['total'] > 0,
+    'JSON struk memuat total'
+);
+
+// Observer LaporanPenjualan mencatat rekap ke database.
+$rekap = Database::connect()->prepare(
+    'SELECT COUNT(*) FROM rekap_penjualan WHERE transaksi_id = :id'
+);
+$rekap->execute([':id' => $transaksiObserver->getId()]);
+assertTrue((int) $rekap->fetchColumn() === 1, 'laporan observer mencatat rekap ke database');
+
+// detach: transaksi berikutnya tanpa observer Laporan tidak mencatat rekap.
+$transaksiDetach = new Transaksi(['kasir_id' => $kasirId]);
+$transaksiDetach->tambahItem($produkSetelah, 1);
+$transaksiDetach->hitungTotal();
+$strukDetach = new Struk($transaksiDetach);
+$laporanDetach = new LaporanPenjualan();
+$transaksiDetach->attach($strukDetach);
+$transaksiDetach->attach($laporanDetach);
+$transaksiDetach->detach($laporanDetach);
+
+assertTrue(
+    $transaksiDetach->prosesPembayaran(new PembayaranNonTunai(['jumlah' => 5000])),
+    'transaksi dengan observer di-detach diproses sukses'
+);
+
+$rekap2 = Database::connect()->prepare(
+    'SELECT COUNT(*) FROM rekap_penjualan WHERE transaksi_id = :id'
+);
+$rekap2->execute([':id' => $transaksiDetach->getId()]);
+assertTrue((int) $rekap2->fetchColumn() === 0, 'observer yang di-detach tidak mencatat rekap');
 
 echo "\n== 3. Batalkan transaksi ==\n";
 
@@ -582,7 +642,7 @@ echo "Gagal: $gagal\n";
 // Bersihkan semua data uji.
 $pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
 foreach ([
-    'item_transaksi', 'transaksi', 'pembayaran', 'diskon',
+    'item_transaksi', 'rekap_penjualan', 'transaksi', 'pembayaran', 'diskon',
     'retur_barang', 'produk', 'kategori', 'supplier', 'users',
 ] as $tabel) {
     $pdo->exec("TRUNCATE TABLE $tabel");

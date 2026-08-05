@@ -6,11 +6,19 @@ namespace App\Models;
 
 use DateTimeImmutable;
 
-class Struk
+/**
+ * Struk: observer yang merespons penyelesaian transaksi (notify).
+ *
+ * Saat Transaksi (Subject) selesai diproses, Struk::update() menyiapkan
+ * representasi JSON untuk kembalian/cetak layar. Logika Struk tidak
+ * berada di dalam Transaksi — Transaksi hanya memanggil notify().
+ */
+class Struk implements Observer
 {
     private string $transaksiId = '';
     private DateTimeImmutable $tanggalCetak;
     private Transaksi $transaksi;
+    private ?array $jsonOutput = null;
 
     public function __construct(Transaksi $transaksi)
     {
@@ -27,6 +35,39 @@ class Struk
     public function getTanggalCetak(): DateTimeImmutable
     {
         return $this->tanggalCetak;
+    }
+
+    /**
+     * Observer Pattern: dipanggil Subject (Transaksi) saat notify().
+     * Menyiapkan format JSON struk (kembalian & detail cetak).
+     */
+    public function update(Subject $subject): void
+    {
+        if (!$subject instanceof Transaksi) {
+            return;
+        }
+
+        $this->transaksi = $subject;
+        $this->transaksiId = $subject->getId();
+        $this->tanggalCetak = new DateTimeImmutable();
+        $this->jsonOutput = $this->susunJson($subject);
+    }
+
+    /**
+     * JSON struk yang disiapkan observer (null sebelum ada notify).
+     *
+     * @return array<string, mixed>|null
+     */
+    public function getJsonOutput(): ?array
+    {
+        return $this->jsonOutput;
+    }
+
+    public function toJson(): ?string
+    {
+        return $this->jsonOutput === null
+            ? null
+            : json_encode($this->jsonOutput);
     }
 
     /**
@@ -96,6 +137,43 @@ class Struk
         $lines[] = 'Terima kasih atas kunjungan Anda!';
 
         return implode("\n", $lines) . "\n";
+    }
+
+    /**
+     * Menyusun struktur JSON struk dari transaksi.
+     *
+     * @return array<string, mixed>
+     */
+    private function susunJson(Transaksi $transaksi): array
+    {
+        $pembayaran = $transaksi->getPembayaran();
+        $kembalian = $pembayaran instanceof PaymentMethod
+            ? $pembayaran->hitungKembalian($transaksi->getTotal(), $pembayaran->getJumlah())
+            : 0.0;
+
+        $items = [];
+
+        foreach ($transaksi->getItems() as $item) {
+            $items[] = [
+                'nama'     => $item->getProduk()->getNama(),
+                'qty'      => $item->getQty(),
+                'harga'    => $item->getProduk()->getHarga(),
+                'subtotal' => $item->getSubtotal(),
+            ];
+        }
+
+        return [
+            'no_transaksi' => $transaksi->getId(),
+            'tanggal'      => $transaksi->getTanggal()->format('d-m-Y H:i'),
+            'kasir'        => $transaksi->getKasirNama(),
+            'items'        => $items,
+            'subtotal'     => $this->subtotalKotor(),
+            'diskon'       => $transaksi->getDiskon()?->getNilai() ?? 0.0,
+            'total'        => $transaksi->getTotal(),
+            'metode'       => $pembayaran?->getNamaMetode() ?? '',
+            'dibayar'      => $pembayaran?->getJumlah() ?? 0.0,
+            'kembalian'    => $kembalian,
+        ];
     }
 
     /** Subtotal seluruh item sebelum diskon. */

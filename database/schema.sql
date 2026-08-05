@@ -98,6 +98,22 @@ CREATE TABLE IF NOT EXISTS retur_barang (
         ON UPDATE CASCADE ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
+CREATE TABLE IF NOT EXISTS rekap_penjualan (
+    id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    transaksi_id INT UNSIGNED    NOT NULL,
+    tanggal      DATETIME        NOT NULL,
+    total        DECIMAL(12,2)   NOT NULL,
+    kasir_id     INT UNSIGNED    NOT NULL,
+    metode       VARCHAR(20)     NOT NULL DEFAULT 'tunai',
+    dicatat_pada DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_rekap_transaksi
+        FOREIGN KEY (transaksi_id) REFERENCES transaksi(id)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+    CONSTRAINT fk_rekap_kasir
+        FOREIGN KEY (kasir_id) REFERENCES users(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT
+) ENGINE=InnoDB;
+
 CREATE INDEX idx_produk_kategori ON produk(kategori_id);
 CREATE INDEX idx_transaksi_kasir ON transaksi(kasir_id);
 CREATE INDEX idx_transaksi_tanggal ON transaksi(tanggal);

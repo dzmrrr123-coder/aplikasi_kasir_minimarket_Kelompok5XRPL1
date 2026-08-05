@@ -30,9 +30,11 @@ require __DIR__ . '/../src/autoload.php';
 use App\Database\Database;
 use App\Models\Diskon;
 use App\Models\Kasir;
+use App\Models\LaporanPenjualan;
 use App\Models\PembayaranNonTunai;
 use App\Models\PembayaranTunai;
 use App\Models\Produk;
+use App\Models\Struk;
 use App\Models\Transaksi;
 
 if (session_status() !== PHP_SESSION_ACTIVE) {
@@ -455,6 +457,12 @@ function aksiBayar(string $metode, float $jumlahDibayar, int $kasirId, string $n
     // Strategy Pattern: injeksi strategi pembayaran via setter (DI).
     $transaksi->setMetodePembayaran($pembayaran);
 
+    // Observer Pattern: daftarkan observer pasca-penyelesaian.
+    // Struk menyiapkan JSON struk, LaporanPenjualan mencatat rekap ke DB.
+    $strukObserver = new Struk($transaksi);
+    $transaksi->attach($strukObserver);
+    $transaksi->attach(new LaporanPenjualan());
+
     // Jalur sukses: proses pembayaran -> simpan + update stok + struk.
     $kasir = new Kasir(['id' => $kasirId, 'nama' => $namaUser]);
     $kasir->prosesTransaksi($transaksi);
@@ -464,7 +472,9 @@ function aksiBayar(string $metode, float $jumlahDibayar, int $kasirId, string $n
         redirectSelf('Pembayaran gagal diproses.', 'danger');
     }
 
-    $struk = $kasir->cetakStruk($transaksi)->cetak();
+    // Struk observer sudah menyiapkan JSON via notify(); teks struk
+    // tetap dihasilkan dari objek Struk yang sama.
+    $struk = $strukObserver->cetak();
 
     // Keranjang & diskon dibersihkan setelah transaksi selesai.
     $_SESSION['keranjang'] = [];

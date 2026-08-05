@@ -8,7 +8,7 @@ use DateTimeImmutable;
 use RuntimeException;
 use App\Database\Database;
 
-class LaporanPenjualan
+class LaporanPenjualan implements Observer
 {
     private DateTimeImmutable $tanggalMulai;
     private DateTimeImmutable $tanggalAkhir;
@@ -18,6 +18,31 @@ class LaporanPenjualan
     {
         $this->tanggalMulai = new DateTimeImmutable();
         $this->tanggalAkhir = new DateTimeImmutable();
+    }
+
+    /**
+     * Observer Pattern: dipanggil Subject (Transaksi) saat notify().
+     * Mencatat rekap penjualan transaksi yang baru selesai ke database.
+     */
+    public function update(Subject $subject): void
+    {
+        if (!$subject instanceof Transaksi || $subject->getId() === '') {
+            return;
+        }
+
+        $metode = $subject->getPembayaran()?->getNamaMetode() ?? 'Tunai';
+
+        $stmt = Database::connect()->prepare(
+            'INSERT INTO rekap_penjualan (transaksi_id, tanggal, total, kasir_id, metode)
+             VALUES (:transaksi_id, :tanggal, :total, :kasir_id, :metode)'
+        );
+        $stmt->execute([
+            ':transaksi_id' => (int) $subject->getId(),
+            ':tanggal'      => $subject->getTanggal()->format('Y-m-d H:i:s'),
+            ':total'        => $subject->getTotal(),
+            ':kasir_id'     => $subject->getKasirId(),
+            ':metode'       => $metode,
+        ]);
     }
 
     public function getTanggalMulai(): DateTimeImmutable

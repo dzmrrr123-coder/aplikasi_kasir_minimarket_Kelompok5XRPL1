@@ -9,7 +9,7 @@ use DateTimeImmutable;
 use RuntimeException;
 use App\Database\Database;
 
-class Transaksi
+class Transaksi implements Subject
 {
     private string $id = '';
     private DateTimeImmutable $tanggal;
@@ -20,6 +20,8 @@ class Transaksi
     private ?Diskon $diskon = null;
     private ?PaymentMethod $pembayaran = null;
     private bool $selesai = false;
+    /** @var Observer[] */
+    private array $observers = [];
 
     public function __construct(array $data = [])
     {
@@ -106,6 +108,45 @@ class Transaksi
     public function isSelesai(): bool
     {
         return $this->selesai;
+    }
+
+    // ------------------------------------------------------------
+    // Observer Pattern (Subject)
+    // ------------------------------------------------------------
+
+    public function attach(Observer $observer): void
+    {
+        // Hindari duplikat observer yang sama.
+        foreach ($this->observers as $terpasang) {
+            if ($terpasang === $observer) {
+                return;
+            }
+        }
+
+        $this->observers[] = $observer;
+    }
+
+    public function detach(Observer $observer): void
+    {
+        foreach ($this->observers as $i => $terpasang) {
+            if ($terpasang === $observer) {
+                unset($this->observers[$i]);
+                $this->observers = array_values($this->observers);
+                return;
+            }
+        }
+    }
+
+    /**
+     * Memberi tahu semua observer bahwa transaksi baru saja diselesaikan.
+     * Dipanggil otomatis oleh prosesPembayaran() setelah transaksi sukses
+     * tersimpan (lihat alur di bawah).
+     */
+    public function notify(): void
+    {
+        foreach ($this->observers as $observer) {
+            $observer->update($this);
+        }
     }
 
     /**
@@ -240,6 +281,11 @@ class Transaksi
             }
 
             $pdo->commit();
+
+            // Pasca-penyelesaian: beri tahu observer (mis. Struk untuk
+            // menyiapkan JSON, LaporanPenjualan untuk mencatat rekap) —
+            // tanpa hardcode logika mereka di sini.
+            $this->notify();
         } catch (\Throwable $e) {
             $pdo->rollBack();
             $this->selesai = false;
