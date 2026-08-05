@@ -452,15 +452,13 @@ function aksiBayar(string $metode, float $jumlahDibayar, int $kasirId, string $n
         ? new PembayaranNonTunai(['jumlah' => $jumlahDibayar])
         : new PembayaranTunai(['jumlah' => $jumlahDibayar]);
 
-    // Jalur gagal: pembayaran ditolak -> transaksi tidak tersimpan.
-    if (!$pembayaran->proses()) {
-        redirectSelf('Jumlah pembayaran tidak valid.', 'danger');
-    }
+    // Strategy Pattern: injeksi strategi pembayaran via setter (DI).
+    $transaksi->setMetodePembayaran($pembayaran);
 
     // Jalur sukses: proses pembayaran -> simpan + update stok + struk.
     $kasir = new Kasir(['id' => $kasirId, 'nama' => $namaUser]);
     $kasir->prosesTransaksi($transaksi);
-    $selesai = $transaksi->prosesPembayaran($pembayaran);
+    $selesai = $transaksi->prosesPembayaran();
 
     if (!$selesai) {
         redirectSelf('Pembayaran gagal diproses.', 'danger');

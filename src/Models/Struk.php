@@ -77,14 +77,18 @@ class Struk
         $pembayaran = $this->transaksi->getPembayaran();
 
         if ($pembayaran !== null) {
-            $metode = $pembayaran instanceof PembayaranNonTunai ? 'Non-tunai' : 'Tunai';
-            $lines[] = 'Metode Bayar  : ' . $metode;
+            $lines[] = 'Metode Bayar  : ' . $pembayaran->getNamaMetode();
             $lines[] = 'Dibayar       : ' . $this->formatRupiah($pembayaran->getJumlah());
 
-            // Kembalian hanya relevan untuk pembayaran tunai.
-            if ($pembayaran instanceof PembayaranTunai) {
-                $kembalian = $pembayaran->getJumlah() - $this->transaksi->getTotal();
-                $lines[] = 'Kembalian     : ' . $this->formatRupiah(max(0.0, $kembalian));
+            // Kembalian dihitung polimorfik oleh strategi pembayaran
+            // (tunai: selisih; non-tunai: 0).
+            $kembalian = $pembayaran->hitungKembalian(
+                $this->transaksi->getTotal(),
+                $pembayaran->getJumlah()
+            );
+
+            if ($kembalian > 0) {
+                $lines[] = 'Kembalian     : ' . $this->formatRupiah($kembalian);
             }
         }
 

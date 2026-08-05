@@ -25,6 +25,7 @@ use App\Models\Diskon;
 use App\Models\Kasir;
 use App\Models\Kategori;
 use App\Models\LaporanPenjualan;
+use App\Models\PaymentMethod;
 use App\Models\PembayaranNonTunai;
 use App\Models\PembayaranTunai;
 use App\Models\Produk;
@@ -256,6 +257,40 @@ assertTrue(
     'pembayaran tunai kurang dari total ditolak'
 );
 assertTrue(!$transaksiKurang->isSelesai(), 'transaksi tidak selesai saat pembayaran kurang');
+
+echo "\n== 2b. Strategy Pattern pembayaran ==\n";
+
+// Polimorfisme: tiap strategi punya aturan prosesBayar sendiri.
+$tunai = new PembayaranTunai(['jumlah' => 10000]);
+$nonTunai = new PembayaranNonTunai(['jumlah' => 10000]);
+assertTrue($tunai->prosesBayar(5000, 10000), 'strategi tunai: bayar >= total diterima');
+assertTrue(!$tunai->prosesBayar(10000, 5000), 'strategi tunai: bayar < total ditolak');
+assertTrue($nonTunai->prosesBayar(5000, 10000), 'strategi non-tunai: bayar >= total diterima');
+assertTrue(!$nonTunai->prosesBayar(5000, 0), 'strategi non-tunai: jumlah 0 ditolak');
+
+// Kembalian dihitung polimorfik: tunai selisih, non-tunai 0.
+assertTrue($tunai->hitungKembalian(5000, 10000) === 5000.0, 'kembalian tunai = selisih');
+assertTrue($nonTunai->hitungKembalian(5000, 10000) === 0.0, 'non-tunai tanpa kembalian');
+
+// DI via setter: set strategi dulu, lalu prosesPembayaran() tanpa argumen.
+$transaksiSetter = new Transaksi(['kasir_id' => $kasirId]);
+$transaksiSetter->tambahItem($produkSetelah, 1);
+$transaksiSetter->hitungTotal();
+$transaksiSetter->setMetodePembayaran(new PembayaranTunai(['jumlah' => 100000]));
+assertTrue($transaksiSetter->prosesPembayaran(), 'proses pembayaran via setter (DI) berhasil');
+assertTrue(
+    $transaksiSetter->getPembayaran() instanceof PaymentMethod,
+    'strategi pembayaran terpasang (instanceof PaymentMethod)'
+);
+
+// Transaksi tanpa strategi pembayaran -> ditolak dengan pesan jelas.
+$transaksiTanpaMetode = new Transaksi(['kasir_id' => $kasirId]);
+$transaksiTanpaMetode->tambahItem($produkSetelah, 1);
+$transaksiTanpaMetode->hitungTotal();
+assertThrows(
+    fn () => $transaksiTanpaMetode->prosesPembayaran(),
+    'proses pembayaran tanpa strategi ditolak'
+);
 
 echo "\n== 3. Batalkan transaksi ==\n";
 

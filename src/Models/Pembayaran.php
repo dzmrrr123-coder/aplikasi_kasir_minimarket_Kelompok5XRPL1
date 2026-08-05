@@ -6,18 +6,25 @@ namespace App\Models;
 
 use App\Database\Database;
 
-abstract class Pembayaran
+/**
+ * Basis abstrak semua metode pembayaran.
+ *
+ * Menyimpan data nominal secara ter-enkapsulasi (private + getter/setter)
+ * dan menyediakan persistensi baris `pembayaran` di database. Subclass
+ * mengimplementasikan kontrak PaymentMethod (Strategy) lewat polimorfisme.
+ */
+abstract class Pembayaran implements PaymentMethod
 {
-    protected string $id = '';
-    protected float $jumlah = 0.0;
+    private string $id = '';
+    private float $jumlah = 0.0;
 
     public function __construct(array $data = [])
     {
         if (isset($data['id'])) {
-            $this->id = (string) $data['id'];
+            $this->setId((string) $data['id']);
         }
         if (isset($data['jumlah'])) {
-            $this->jumlah = (float) $data['jumlah'];
+            $this->setJumlah((float) $data['jumlah']);
         }
     }
 
@@ -26,12 +33,20 @@ abstract class Pembayaran
         return $this->id;
     }
 
+    public function setId(string $id): void
+    {
+        $this->id = $id;
+    }
+
     public function getJumlah(): float
     {
         return $this->jumlah;
     }
 
-    abstract public function proses(): bool;
+    public function setJumlah(float $jumlah): void
+    {
+        $this->jumlah = max(0.0, $jumlah);
+    }
 
     /**
      * Simpan baris pembayaran ke tabel `pembayaran`.
@@ -45,7 +60,7 @@ abstract class Pembayaran
         );
         $stmt->execute([
             ':jenis'  => $this->getJenis(),
-            ':jumlah' => $this->jumlah,
+            ':jumlah' => $this->getJumlah(),
         ]);
 
         $this->id = (string) $pdo->lastInsertId();
@@ -53,6 +68,10 @@ abstract class Pembayaran
         return (int) $pdo->lastInsertId();
     }
 
+    /**
+     * Jenis pembayaran untuk kolom `jenis` di tabel pembayaran
+     * ('tunai' / 'non_tunai'). Di-override subclass.
+     */
     protected function getJenis(): string
     {
         return 'tunai';

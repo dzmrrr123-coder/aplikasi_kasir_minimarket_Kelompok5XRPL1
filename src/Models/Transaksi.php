@@ -18,7 +18,7 @@ class Transaksi
     private string $kasirNama = '';
     private array $items = []; // ItemTransaksi[]
     private ?Diskon $diskon = null;
-    private ?Pembayaran $pembayaran = null;
+    private ?PaymentMethod $pembayaran = null;
     private bool $selesai = false;
 
     public function __construct(array $data = [])
@@ -98,7 +98,7 @@ class Transaksi
         return $this->diskon;
     }
 
-    public function getPembayaran(): ?Pembayaran
+    public function getPembayaran(): ?PaymentMethod
     {
         return $this->pembayaran;
     }
@@ -162,29 +162,46 @@ class Transaksi
     }
 
     /**
-     * Proses pembayaran sesuai alur: hitung total -> proses pembayaran ->
-     * kalau berhasil, simpan transaksi + item + pembayaran, update stok produk.
+     * Dependency Injection via setter: menetapkan strategi pembayaran
+     * (PaymentMethod) yang akan dipakai saat transaksi diproses.
      */
-    public function prosesPembayaran(Pembayaran $pembayaran): bool
+    public function setMetodePembayaran(PaymentMethod $metodePembayaran): void
     {
-        if ($this->pembayaran !== null || $this->selesai) {
+        $this->pembayaran = $metodePembayaran;
+    }
+
+    /**
+     * Proses pembayaran sesuai alur: hitung total -> proses pembayaran
+     * (delegasi ke strategi PaymentMethod) -> kalau berhasil, simpan
+     * transaksi + item + pembayaran, update stok produk.
+     *
+     * @param PaymentMethod|null $metodePembayaran strategi pembayaran
+     *        (opsional; bisa diset sebelumnya lewat setMetodePembayaran)
+     */
+    public function prosesPembayaran(?PaymentMethod $metodePembayaran = null): bool
+    {
+        if ($this->selesai) {
             throw new RuntimeException('Transaksi sudah diproses.');
+        }
+
+        if ($metodePembayaran !== null) {
+            $this->setMetodePembayaran($metodePembayaran);
+        }
+
+        $pembayaran = $this->pembayaran;
+
+        if (!$pembayaran instanceof PaymentMethod) {
+            throw new RuntimeException('Metode pembayaran belum ditentukan.');
         }
 
         $this->hitungTotal();
 
-        // Jumlah yang dibayar harus menutupi total transaksi.
-        // Tanpa ini, pembayaran kurang (mis. total Rp 13.500 dibayar Rp 100)
-        // tetap bisa lolos dan transaksi tersimpan.
-        if ($pembayaran->getJumlah() < $this->total) {
+        // Validasi jumlah dibayar vs total didelegasikan ke strategi
+        // (PembayaranTunai / PembayaranNonTunai), bukan IF/ELSE di sini.
+        if (!$pembayaran->prosesBayar($this->total, $pembayaran->getJumlah())) {
             return false;
         }
 
-        if (!$pembayaran->proses()) {
-            return false;
-        }
-
-        $this->pembayaran = $pembayaran;
         $this->selesai = true;
 
         $pdo = Database::connect();
@@ -195,7 +212,9 @@ class Transaksi
                 ? $this->diskon->getId()
                 : null;
 
-            $pembayaranId = $pembayaran->simpan();
+            // Persistensi baris pembayaran: hanya strategi bertipe Pembayaran
+            // yang punya representasi tabel `pembayaran`.
+            $pembayaranId = $pembayaran instanceof Pembayaran ? $pembayaran->simpan() : null;
 
             $stmt = $pdo->prepare(
                 'INSERT INTO transaksi (tanggal, total, kasir_id, diskon_id, pembayaran_id)
