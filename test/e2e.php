@@ -31,6 +31,7 @@ use App\Models\ReturBarang;
 use App\Models\Struk;
 use App\Models\Supplier;
 use App\Models\Transaksi;
+use App\Models\User;
 
 $lulus = 0;
 $gagal = 0;
@@ -385,7 +386,77 @@ assertThrows(
     'hapus supplier yang masih dipakai retur ditolak'
 );
 
-echo "\n== 6. Login & logout ==\n";
+echo "\n== 6. Kelola akun kasir ==\n";
+
+// ---- Tambah kasir sukses ----
+$kasirBaruId = User::simpanKasir([
+    'nama'     => 'Kasir Tambahan',
+    'username' => 'kasir_tambah',
+    'password' => 'rahasia1',
+]);
+assertTrue($kasirBaruId > 0, 'tambah kasir sukses');
+
+$kasirBaru = User::cariKasir($kasirBaruId);
+assertTrue(
+    $kasirBaru !== null
+        && $kasirBaru->getNama() === 'Kasir Tambahan'
+        && $kasirBaru->getUsername() === 'kasir_tambah',
+    'kasir baru tersimpan dan bisa dicari'
+);
+
+// ---- Validasi: username duplikat ditolak ----
+assertThrows(
+    fn () => User::simpanKasir([
+        'nama'     => 'Duplikat',
+        'username' => 'kasir_tambah',
+        'password' => 'rahasia1',
+    ]),
+    'tambah kasir dengan username duplikat ditolak'
+);
+
+// ---- Validasi: password < 6 karakter ditolak ----
+assertThrows(
+    fn () => User::simpanKasir([
+        'nama'     => 'Password Pendek',
+        'username' => 'kasir_pendek',
+        'password' => '123',
+    ]),
+    'tambah kasir dengan password < 6 karakter ditolak'
+);
+
+// ---- Edit kasir (nama & username) ----
+User::perbaruiKasir($kasirBaruId, [
+    'nama'     => 'Kasir Tambahan Baru',
+    'username' => 'kasir_tambah2',
+]);
+$kasirSetelahEdit = User::cariKasir($kasirBaruId);
+assertTrue(
+    $kasirSetelahEdit !== null
+        && $kasirSetelahEdit->getNama() === 'Kasir Tambahan Baru'
+        && $kasirSetelahEdit->getUsername() === 'kasir_tambah2',
+    'kasir bisa diperbarui (nama, username)'
+);
+
+// ---- Hapus kasir tanpa transaksi: sukses ----
+User::hapusKasir($kasirBaruId);
+assertTrue(User::cariKasir($kasirBaruId) === null, 'hapus kasir tanpa transaksi sukses');
+
+// ---- Hapus kasir yang masih punya transaksi: ditolak ----
+assertThrows(
+    fn () => User::hapusKasir($kasirId),
+    'hapus kasir yang masih punya transaksi ditolak'
+);
+assertTrue(User::cariKasir($kasirId) !== null, 'kasir dengan transaksi tetap ada setelah hapus ditolak');
+
+// ---- Reset password kasir ----
+User::resetPasswordKasir($kasirId, 'password_baru');
+$kasirLoginUlang = new Kasir();
+assertTrue(
+    $kasirLoginUlang->login('kasir_uji', 'password_baru'),
+    'reset password: kasir bisa login dengan password baru'
+);
+
+echo "\n== 7. Login & logout ==\n";
 
 $stmt = $pdo->prepare('INSERT INTO users (nama, username, password, role) VALUES (:nama, :username, :password, :role)');
 $stmt->execute([

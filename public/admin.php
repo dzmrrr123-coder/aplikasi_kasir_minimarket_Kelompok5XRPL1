@@ -281,6 +281,9 @@ $stokMenipis = array_values(array_filter(
                 <li class="nav-item">
                     <a class="nav-link" href="retur.php"><i class="bi bi-arrow-counterclockwise"></i> Retur</a>
                 </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="user.php"><i class="bi bi-people"></i> Kelola Kasir</a>
+                </li>
             </ul>
             <div class="d-flex align-items-center gap-2">
                 <span class="navbar-text text-white small me-2 d-none d-lg-inline">

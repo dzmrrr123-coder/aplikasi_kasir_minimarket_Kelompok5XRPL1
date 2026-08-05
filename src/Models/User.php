@@ -75,4 +75,199 @@ abstract class User
         $this->username = '';
         $this->password = '';
     }
+
+    // ------------------------------------------------------------
+    // CRUD akun kasir (tabel users, role 'kasir').
+    // Pola mengikuti Kategori/Produk: model memegang CRUD tabelnya.
+    // ------------------------------------------------------------
+
+    /**
+     * Mengambil semua akun kasir, diurutkan berdasarkan nama.
+     *
+     * @return Kasir[]
+     */
+    public static function daftarKasir(): array
+    {
+        $rows = Database::connect()->query(
+            "SELECT id, nama, username, password, role FROM users WHERE role = 'kasir' ORDER BY nama"
+        )->fetchAll();
+
+        return array_map(static fn (array $row): Kasir => new Kasir($row), $rows);
+    }
+
+    public static function cariKasir(int $id): ?Kasir
+    {
+        $stmt = Database::connect()->prepare(
+            "SELECT id, nama, username, password, role FROM users WHERE id = :id AND role = 'kasir' LIMIT 1"
+        );
+        $stmt->execute([':id' => $id]);
+        $row = $stmt->fetch();
+
+        return $row === false ? null : new Kasir($row);
+    }
+
+    /**
+     * Cek apakah username sudah dipakai.
+     * Bila $kecualiId diberikan, username milik kasir tersebut diabaikan
+     * (dipakai saat edit supaya username sendiri tidak dianggap duplikat).
+     */
+    public static function usernameTerpakai(string $username, ?int $kecualiId = null): bool
+    {
+        if ($kecualiId !== null) {
+            $stmt = Database::connect()->prepare(
+                'SELECT COUNT(*) FROM users WHERE username = :username AND id <> :id'
+            );
+            $stmt->execute([':username' => $username, ':id' => $kecualiId]);
+        } else {
+            $stmt = Database::connect()->prepare(
+                'SELECT COUNT(*) FROM users WHERE username = :username'
+            );
+            $stmt->execute([':username' => $username]);
+        }
+
+        return (int) $stmt->fetchColumn() > 0;
+    }
+
+    /**
+     * Tambah akun kasir baru.
+     *
+     * @param array $data berisi nama, username, password
+     *
+     * @return int id kasir baru
+     *
+     * @throws \RuntimeException bila validasi gagal
+     */
+    public static function simpanKasir(array $data): int
+    {
+        $nama = trim((string) ($data['nama'] ?? ''));
+        $username = trim((string) ($data['username'] ?? ''));
+        $password = (string) ($data['password'] ?? '');
+
+        self::validasiDataKasir($nama, $username, $password, true);
+
+        $stmt = Database::connect()->prepare(
+            'INSERT INTO users (nama, username, password, role) VALUES (:nama, :username, :password, :kasir)'
+        );
+        $stmt->execute([
+            ':nama'     => $nama,
+            ':username' => $username,
+            ':password' => password_hash($password, PASSWORD_DEFAULT),
+            ':kasir'    => 'kasir',
+        ]);
+
+        return (int) Database::connect()->lastInsertId();
+    }
+
+    /**
+     * Perbarui nama/username kasir; password ikut diganti bila diisi.
+     *
+     * @param array $data berisi nama, username, dan (opsional) password baru
+     *
+     * @throws \RuntimeException bila validasi gagal atau kasir tidak ditemukan
+     */
+    public static function perbaruiKasir(int $id, array $data): void
+    {
+        $kasir = self::cariKasir($id);
+
+        if ($kasir === null) {
+            throw new \RuntimeException('Kasir tidak ditemukan.');
+        }
+
+        $nama = trim((string) ($data['nama'] ?? ''));
+        $username = trim((string) ($data['username'] ?? ''));
+        $password = (string) ($data['password'] ?? '');
+
+        self::validasiDataKasir($nama, $username, $password, false, $id);
+
+        $sql = 'UPDATE users SET nama = :nama, username = :username WHERE id = :id';
+        $params = [':nama' => $nama, ':username' => $username, ':id' => $id];
+
+        if ($password !== '') {
+            $sql = 'UPDATE users SET nama = :nama, username = :username, password = :password WHERE id = :id';
+            $params[':password'] = password_hash($password, PASSWORD_DEFAULT);
+        }
+
+        $stmt = Database::connect()->prepare($sql);
+        $stmt->execute($params);
+    }
+
+    /**
+     * Reset password kasir.
+     *
+     * @throws \RuntimeException bila password < 6 karakter atau kasir tidak ditemukan
+     */
+    public static function resetPasswordKasir(int $id, string $password): void
+    {
+        if (self::cariKasir($id) === null) {
+            throw new \RuntimeException('Kasir tidak ditemukan.');
+        }
+
+        if (strlen($password) < 6) {
+            throw new \RuntimeException('Password minimal 6 karakter.');
+        }
+
+        $stmt = Database::connect()->prepare(
+            'UPDATE users SET password = :password WHERE id = :id'
+        );
+        $stmt->execute([
+            ':password' => password_hash($password, PASSWORD_DEFAULT),
+            ':id'       => $id,
+        ]);
+    }
+
+    /**
+     * Hapus akun kasir. Ditolak bila kasir masih punya transaksi
+     * (FK transaksi.kasir_id ON DELETE RESTRICT), supaya tidak muncul
+     * error SQL mentah ke pengguna.
+     *
+     * @throws \RuntimeException bila kasir tidak ditemukan atau masih punya transaksi
+     */
+    public static function hapusKasir(int $id): void
+    {
+        if (self::cariKasir($id) === null) {
+            throw new \RuntimeException('Kasir tidak ditemukan.');
+        }
+
+        $stmt = Database::connect()->prepare(
+            'SELECT COUNT(*) FROM transaksi WHERE kasir_id = :id'
+        );
+        $stmt->execute([':id' => $id]);
+
+        if ((int) $stmt->fetchColumn() > 0) {
+            throw new \RuntimeException('Kasir tidak bisa dihapus, masih punya transaksi.');
+        }
+
+        $delete = Database::connect()->prepare('DELETE FROM users WHERE id = :id');
+        $delete->execute([':id' => $id]);
+    }
+
+    /**
+     * Validasi data kasir: nama tidak kosong, username unik,
+     * password minimal 6 karakter (wajib saat tambah, opsional saat edit).
+     *
+     * @throws \RuntimeException bila ada data yang tidak valid
+     */
+    private static function validasiDataKasir(
+        string $nama,
+        string $username,
+        string $password,
+        bool $wajibPassword,
+        ?int $kecualiId = null
+    ): void {
+        if (trim($nama) === '') {
+            throw new \RuntimeException('Nama kasir tidak boleh kosong.');
+        }
+        if (trim($username) === '') {
+            throw new \RuntimeException('Username tidak boleh kosong.');
+        }
+        if ($wajibPassword && strlen($password) < 6) {
+            throw new \RuntimeException('Password minimal 6 karakter.');
+        }
+        if (!$wajibPassword && $password !== '' && strlen($password) < 6) {
+            throw new \RuntimeException('Password minimal 6 karakter.');
+        }
+        if (self::usernameTerpakai($username, $kecualiId)) {
+            throw new \RuntimeException('Username sudah dipakai.');
+        }
+    }
 }
