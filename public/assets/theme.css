@@ -1,84 +1,131 @@
 /* ============================================================
-   Kasir Minimarket - Tema Minimalis SaaS
-   Palet brand: teal-emerald (segar & terpercaya) + amber (aksi)
-   Gaya: putih bersih, whitespace lega, typography tegas,
-   bayangan halus. Meng-override variabel Bootstrap 5.3.3.
+   KASIR MINIMARKET — GLOBAL DESIGN SYSTEM
+   ============================================================
+   - CSS Variables untuk Light Mode (:root) dan Dark Mode (.dark-mode)
+   - Komponen dasar seragam (tombol, input, border-radius, font)
+   - .font-num untuk angka (monospace ekstra tebal, dipakai POS)
+   - Dipakai semua halaman admin & kasir agar 100% sinkron visual
    ============================================================ */
 
+/* ---------- Design tokens: LIGHT MODE (default) ---------- */
 :root {
-    /* Brand utama: hijau teal yang segar & terpercaya */
-    --brand-primary: #0d9488;      /* teal-600 */
-    --brand-primary-dark: #0f766e; /* teal-700 */
-    --brand-primary-darker: #115e59;/* teal-800 */
-    --brand-primary-light: #ccfbf1; /* teal-100 */
-    --brand-primary-lighter: #f0fdfa;/* teal-50 */
+    /* Palet brand */
+    --brand-primary: #0d9488;
+    --brand-primary-dark: #0f766e;
+    --brand-primary-darker: #115e59;
+    --brand-primary-light: #ccfbf1;
+    --brand-primary-lighter: #f0fdfa;
+    --brand-accent: #f59e0b;
+    --brand-accent-dark: #d97706;
+    --brand-success: #16a34a;
+    --brand-success-dark: #15803d;
+    --brand-danger: #dc2626;
+    --brand-warning: #d97706;
+    --brand-info: #0891b2;
 
-    /* Aksen */
-    --brand-accent: #f59e0b;       /* amber-500 */
-    --brand-accent-dark: #d97706;  /* amber-600 */
-    --brand-success: #16a34a;      /* green-600 */
-    --brand-success-dark: #15803d; /* green-700 */
-    --brand-danger: #dc2626;       /* red-600 */
-    --brand-warning: #d97706;      /* amber-600 */
-    --brand-info: #0891b2;         /* cyan-600 */
+    /* Latar & permukaan (Light) */
+    --bg: #f8fafc;
+    --surface: #ffffff;
+    --surface-2: #f1f5f9;
+    --border: #e2e8f0;
+    --border-soft: #edf2f7;
+    --text: #0f172a;
+    --text-muted: #64748b;
 
-    /* Latar & permukaan (minimalis SaaS) */
-    --brand-bg: #f8fafc;           /* slate-50 - latar halaman */
-    --brand-surface: #ffffff;
-    --brand-border: #e2e8f0;       /* slate-200 - border tipis */
-    --brand-border-soft: #edf2f7;  /* slate-100 */
-    --brand-text: #0f172a;         /* slate-900 - teks utama */
-    --brand-text-muted: #64748b;   /* slate-500 - teks sekunder */
-
-    /* Bootstrap variable overrides */
-    --bs-body-bg: var(--brand-bg);
-    --bs-body-color: var(--brand-text);
-    --bs-border-color: var(--brand-border);
-
+    /* Bootstrap overrides (Light) */
+    --bs-body-bg: var(--bg);
+    --bs-body-color: var(--text);
+    --bs-border-color: var(--border);
     --bs-primary: var(--brand-primary);
     --bs-primary-rgb: 13, 148, 136;
-    --bs-primary-dark: var(--brand-primary-dark);
-    --bs-primary-darker: var(--brand-primary-darker);
-    --bs-primary-light: var(--brand-primary-light);
-    --bs-primary-lighter: var(--brand-primary-lighter);
-
     --bs-success: var(--brand-success);
     --bs-success-rgb: 22, 163, 74;
-    --bs-success-dark: var(--brand-success-dark);
-
     --bs-danger: var(--brand-danger);
     --bs-danger-rgb: 220, 38, 38;
-
     --bs-warning: var(--brand-warning);
     --bs-warning-rgb: 217, 119, 6;
-
     --bs-info: var(--brand-info);
     --bs-info-rgb: 8, 145, 178;
-
     --bs-link-color: var(--brand-primary);
     --bs-link-hover-color: var(--brand-primary-dark);
     --bs-link-decoration: none;
 
-    --bs-border-radius: 0.75rem;
-    --bs-border-radius-sm: 0.5rem;
-    --bs-border-radius-lg: 1rem;
+    /* Radius & font — komponen dasar seragam */
+    --radius: 0.625rem;
+    --radius-sm: 0.5rem;
+    --radius-lg: 0.875rem;
+    --bs-border-radius: var(--radius);
+    --bs-border-radius-sm: var(--radius-sm);
+    --bs-border-radius-lg: var(--radius-lg);
+
+    --font-base: "Segoe UI", system-ui, -apple-system, sans-serif;
+    --font-num: "Consolas", "SF Mono", "JetBrains Mono", "Courier New", monospace;
+    --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.06);
+    --shadow-hover: 0 0.5rem 1.25rem rgba(15, 23, 42, 0.12);
 }
 
+/* ---------- Design tokens: DARK MODE ---------- */
+.dark-mode {
+    --brand-primary-light: #134e4a;
+    --brand-primary-lighter: #0f3d39;
+
+    --bg: #0f172a;              /* slate-900 */
+    --surface: #1e293b;         /* slate-800 */
+    --surface-2: #334155;       /* slate-700 */
+    --border: #334155;
+    --border-soft: #273449;
+    --text: #e2e8f0;            /* slate-200 */
+    --text-muted: #94a3b8;      /* slate-400 */
+
+    --bs-body-bg: var(--bg);
+    --bs-body-color: var(--text);
+    --bs-border-color: var(--border);
+    --bs-link-color: #2dd4bf;
+    --bs-link-hover-color: #5eead4;
+
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-hover: 0 0.5rem 1.25rem rgba(0, 0, 0, 0.5);
+}
+
+/* ============================================================
+   BASIS
+   ============================================================ */
+html[data-theme] { color-scheme: light; }
+html[data-theme="dark"] { color-scheme: dark; }
+
 body {
-    background-color: var(--brand-bg);
-    color: var(--brand-text);
-    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    background-color: var(--bg);
+    color: var(--text);
+    font-family: var(--font-base);
     font-size: 0.95rem;
     -webkit-font-smoothing: antialiased;
+    transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 h1, h2, h3, h4, h5, h6 {
-    color: var(--brand-text);
+    color: var(--text);
     font-weight: 700;
     letter-spacing: -0.01em;
 }
 
-/* ---------- Navbar top ---------- */
+a {
+    color: var(--bs-link-color);
+}
+a:hover {
+    color: var(--bs-link-hover-color);
+}
+
+/* Angka: monospace ekstra tebal (dipakai POS / nominal) */
+.font-num {
+    font-family: var(--font-num);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+}
+
+/* ============================================================
+   NAVBAR
+   ============================================================ */
 .pos-navbar {
     background: linear-gradient(90deg, var(--brand-primary-darker) 0%, var(--brand-primary-dark) 55%, var(--brand-primary) 100%);
     box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
@@ -95,7 +142,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .pos-navbar .navbar-brand i {
     font-size: 1.4rem;
-    color: #a7f3d0; /* teal-200 */
+    color: #a7f3d0;
 }
 
 .pos-navbar .nav-link {
@@ -128,62 +175,53 @@ h1, h2, h3, h4, h5, h6 {
 .pos-navbar .navbar-toggler {
     border-color: rgba(255, 255, 255, 0.35);
 }
-
 .pos-navbar .navbar-toggler:focus {
     box-shadow: 0 0 0 0.15rem rgba(255, 255, 255, 0.25);
 }
-
 .pos-navbar .navbar-toggler-icon {
     background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%28255, 255, 255, 0.8%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
 }
 
-.pos-navbar .dropdown-menu {
-    border: 1px solid var(--brand-border);
-    box-shadow: 0 0.5rem 1.25rem rgba(15, 23, 42, 0.12);
-    border-radius: 0.75rem;
+.pos-navbar .navbar-text {
+    color: rgba(255, 255, 255, 0.9);
 }
 
-.pos-navbar .dropdown-item {
-    display: flex;
+/* Tombol toggle theme di navbar */
+.theme-toggle {
+    width: 2.25rem;
+    height: 2.25rem;
+    display: inline-flex;
     align-items: center;
-    gap: 0.5rem;
+    justify-content: center;
     border-radius: 0.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+    font-size: 1rem;
+    transition: background-color 0.15s ease;
+}
+.theme-toggle:hover {
+    background: rgba(255, 255, 255, 0.2);
 }
 
-.pos-navbar .dropdown-item i {
-    color: var(--brand-primary);
-}
-
-.pos-navbar .dropdown-item:hover,
-.pos-navbar .dropdown-item:focus {
-    background-color: var(--brand-primary-lighter);
-}
-
-.pos-navbar .dropdown-item.text-danger i {
-    color: var(--brand-danger);
-}
-
-.pos-navbar .dropdown-item.text-danger:hover,
-.pos-navbar .dropdown-item.text-danger:focus {
-    background-color: #fef2f2; /* red-50 */
-}
-
-/* ---------- Card ---------- */
+/* ============================================================
+   CARD
+   ============================================================ */
 .pos-card {
-    border: 1px solid var(--brand-border);
-    border-radius: var(--bs-border-radius-lg);
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.06);
-    background-color: var(--brand-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+    background-color: var(--surface);
     overflow: hidden;
-    transition: box-shadow 0.15s ease;
+    transition: box-shadow 0.15s ease, background-color 0.2s ease, border-color 0.2s ease;
 }
 
 .pos-card > .card-header {
-    background-color: var(--brand-surface);
-    border-bottom: 1px solid var(--brand-border-soft);
+    background-color: var(--surface);
+    border-bottom: 1px solid var(--border-soft);
     padding: 1rem 1.25rem;
     font-weight: 600;
-    color: var(--brand-text);
+    color: var(--text);
 }
 
 .pos-card > .card-header.bg-success {
@@ -195,18 +233,18 @@ h1, h2, h3, h4, h5, h6 {
 .pos-card > .card-body {
     padding: 1.25rem;
 }
-
 .pos-card > .card-body.p-0 {
     padding: 0;
 }
 
-/* ---------- Tombol ---------- */
+/* ============================================================
+   TOMBOL (seragam)
+   ============================================================ */
 .btn {
-    border-radius: 0.625rem;
+    border-radius: var(--radius);
     font-weight: 600;
     transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.05s ease;
 }
-
 .btn:active {
     transform: translateY(1px);
 }
@@ -215,14 +253,12 @@ h1, h2, h3, h4, h5, h6 {
     background-color: var(--brand-primary);
     border-color: var(--brand-primary);
 }
-
 .btn-primary:hover,
 .btn-primary:focus {
     background-color: var(--brand-primary-dark);
     border-color: var(--brand-primary-dark);
     box-shadow: 0 0.25rem 0.75rem rgba(13, 148, 136, 0.25);
 }
-
 .btn-primary:active,
 .btn-primary.active {
     background-color: var(--brand-primary-darker) !important;
@@ -233,7 +269,6 @@ h1, h2, h3, h4, h5, h6 {
     color: var(--brand-primary);
     border-color: var(--brand-primary);
 }
-
 .btn-outline-primary:hover,
 .btn-outline-primary:focus {
     background-color: var(--brand-primary);
@@ -245,7 +280,6 @@ h1, h2, h3, h4, h5, h6 {
     background-color: var(--brand-success);
     border-color: var(--brand-success);
 }
-
 .btn-success:hover,
 .btn-success:focus {
     background-color: var(--brand-success-dark);
@@ -253,18 +287,11 @@ h1, h2, h3, h4, h5, h6 {
     box-shadow: 0 0.25rem 0.75rem rgba(22, 163, 74, 0.25);
 }
 
-.btn-outline-success:hover,
-.btn-outline-success:focus {
-    background-color: var(--brand-success);
-    border-color: var(--brand-success);
-}
-
 .btn-warning {
     background-color: var(--brand-accent);
     border-color: var(--brand-accent);
     color: #ffffff;
 }
-
 .btn-warning:hover,
 .btn-warning:focus {
     background-color: var(--brand-accent-dark);
@@ -277,7 +304,6 @@ h1, h2, h3, h4, h5, h6 {
     color: var(--brand-accent-dark);
     border-color: var(--brand-accent);
 }
-
 .btn-outline-warning:hover,
 .btn-outline-warning:focus {
     background-color: var(--brand-accent);
@@ -290,167 +316,329 @@ h1, h2, h3, h4, h5, h6 {
     background-color: var(--brand-danger);
     border-color: var(--brand-danger);
 }
-
 .btn-outline-secondary:hover,
 .btn-outline-secondary:focus {
     background-color: #64748b;
     border-color: #64748b;
 }
 
-/* ---------- Form control ---------- */
-.form-control,
-.form-select {
-    border-radius: 0.625rem;
-    border-color: var(--brand-border);
-    padding: 0.5rem 0.75rem;
+.btn-outline-light {
+    border-color: rgba(255, 255, 255, 0.5);
+    color: #ffffff;
+}
+.btn-outline-light:hover,
+.btn-outline-light:focus {
+    background-color: #ffffff;
+    border-color: #ffffff;
+    color: var(--brand-primary-darker);
 }
 
+/* ============================================================
+   FORM CONTROL (seragam)
+   ============================================================ */
+.form-control,
+.form-select {
+    border-radius: var(--radius);
+    border-color: var(--border);
+    padding: 0.5rem 0.75rem;
+    background-color: var(--surface);
+    color: var(--text);
+}
 .form-control:focus,
 .form-select:focus {
     border-color: var(--brand-primary);
     box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.15);
+    background-color: var(--surface);
+    color: var(--text);
+}
+.form-control::placeholder {
+    color: var(--text-muted);
 }
 
 .form-check-input:checked {
     background-color: var(--brand-primary);
     border-color: var(--brand-primary);
 }
-
 .form-check-input:focus {
     border-color: var(--brand-primary);
     box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.15);
 }
 
-/* ---------- Tabel ---------- */
-.table {
-    --bs-table-hover-bg: var(--brand-primary-lighter);
+.form-label {
+    color: var(--text);
 }
 
+/* ============================================================
+   TABEL
+   ============================================================ */
+.table {
+    --bs-table-bg: transparent;
+    --bs-table-color: var(--text);
+    --bs-table-hover-bg: rgba(13, 148, 136, 0.06);
+    --bs-table-hover-color: var(--text);
+}
 .table thead th {
-    color: var(--brand-text-muted);
-    background-color: var(--brand-bg) !important;
-    border-bottom: 1px solid var(--brand-border);
+    color: var(--text-muted);
+    background-color: var(--surface-2) !important;
+    border-bottom: 1px solid var(--border);
     font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     font-weight: 600;
 }
-
 .table tbody tr:hover {
     background-color: rgba(13, 148, 136, 0.04);
 }
+.table td,
+.table th {
+    border-color: var(--border-soft);
+    color: var(--text);
+}
 
-/* ---------- Badge & alert ---------- */
+/* ============================================================
+   BADGE & ALERT
+   ============================================================ */
 .badge {
-    border-radius: 0.5rem;
+    border-radius: var(--radius-sm);
     font-weight: 600;
     padding: 0.4em 0.6em;
 }
+.badge.text-bg-light {
+    background-color: var(--surface-2) !important;
+    color: var(--text) !important;
+    border-color: var(--border) !important;
+}
 
 .alert {
-    border-radius: 0.75rem;
+    border-radius: var(--radius);
     border-left: 0.25rem solid;
     box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
-
 .alert-info {
     background-color: #e0f2fe;
     border-color: var(--brand-info);
     color: #155e75;
 }
-
+.dark-mode .alert-info {
+    background-color: rgba(8, 145, 178, 0.18);
+    color: #7dd3fc;
+}
 .alert-warning {
     background-color: #fef3c7;
     border-color: var(--brand-accent);
     color: #92400e;
 }
-
+.dark-mode .alert-warning {
+    background-color: rgba(217, 119, 6, 0.2);
+    color: #fcd34d;
+}
 .alert-danger {
     background-color: #fee2e2;
     border-color: var(--brand-danger);
     color: #991b1b;
 }
-
+.dark-mode .alert-danger {
+    background-color: rgba(220, 38, 38, 0.2);
+    color: #fca5a5;
+}
 .alert-success {
     background-color: #dcfce7;
     border-color: var(--brand-success);
     color: #166534;
 }
-
-/* ---------- Utilitas brand ---------- */
-.text-brand {
-    color: var(--brand-primary);
+.dark-mode .alert-success {
+    background-color: rgba(22, 163, 74, 0.2);
+    color: #86efac;
 }
 
-.text-brand-dark {
-    color: var(--brand-primary-darker);
+/* ============================================================
+   UTILITAS BRAND & LIST GROUP
+   ============================================================ */
+.text-brand { color: var(--brand-primary); }
+.text-brand-dark { color: var(--brand-primary-darker); }
+.bg-brand-soft { background-color: var(--brand-primary-lighter); }
+
+.stok-menipis { color: var(--brand-warning); font-weight: 600; }
+.stok-habis { color: var(--brand-danger); font-weight: 600; }
+.total-besar { color: var(--brand-primary-darker); }
+.dark-mode .total-besar { color: #2dd4bf; }
+.summary-total { color: var(--brand-primary-dark); }
+.dark-mode .summary-total { color: #2dd4bf; }
+
+.list-group-item {
+    border-color: var(--border-soft);
+    padding: 0.75rem 1rem;
+    background-color: var(--surface);
+    color: var(--text);
 }
 
-.bg-brand-soft {
-    background-color: var(--brand-primary-lighter);
-}
+.text-muted { color: var(--text-muted) !important; }
 
-.stok-menipis {
-    color: var(--brand-warning);
-    font-weight: 600;
-}
-
-.stok-habis {
-    color: var(--brand-danger);
-    font-weight: 600;
-}
-
-.total-besar {
-    color: var(--brand-primary-darker);
-}
-
-/* Ringkasan (sidebar transaksi) */
-.summary-total {
-    color: var(--brand-primary-dark);
-}
-
-/* Link umum */
-a {
-    color: var(--brand-primary);
-}
-
-a:hover {
-    color: var(--brand-primary-dark);
-}
-
-/* ---------- Komponen dashboard ---------- */
+/* ============================================================
+   KOMPONEN DASHBOARD
+   ============================================================ */
 .stat-card .stat-icon {
     width: 3rem;
     height: 3rem;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border-radius: 0.75rem;
+    border-radius: var(--radius);
     font-size: 1.4rem;
 }
-
 .stat-card .stat-nilai {
     font-size: 1.75rem;
     font-weight: 700;
     letter-spacing: -0.02em;
     line-height: 1.1;
 }
-
 .stat-card .stat-label {
-    color: var(--brand-text-muted);
+    color: var(--text-muted);
     font-size: 0.8125rem;
     font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.04em;
 }
-
 .chart-container {
     position: relative;
     height: 300px;
 }
 
-/* List group minimalis */
-.list-group-item {
-    border-color: var(--brand-border-soft);
-    padding: 0.75rem 1rem;
+/* ============================================================
+   KIOSK MODE (POS transaksi) — split screen 70/30
+   ============================================================ */
+.kiosk-body {
+    overflow: hidden;
+    height: 100vh;
+}
+.kiosk-body .kiosk-wrapper {
+    display: flex;
+    height: 100vh;
+}
+.kiosk-body .kiosk-kiri {
+    flex: 0 0 70%;
+    max-width: 70%;
+    overflow-y: auto;
+    padding: 1rem 1.25rem;
+    background-color: var(--bg);
+}
+.kiosk-body .kiosk-kanan {
+    flex: 0 0 30%;
+    max-width: 30%;
+    display: flex;
+    flex-direction: column;
+    background-color: var(--surface);
+    border-left: 1px solid var(--border);
+    padding: 1rem;
+    overflow-y: auto;
+}
+/* Header panel kanan: nama kasir + logout */
+.kiosk-kanan .kiosk-userbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding-bottom: 0.75rem;
+    margin-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border-soft);
+}
+.kiosk-kanan .kiosk-userbar .kiosk-user {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    color: var(--text);
+    min-width: 0;
+}
+.kiosk-kanan .kiosk-userbar .kiosk-user i {
+    font-size: 1.4rem;
+    color: var(--brand-primary);
+}
+.kiosk-kanan .kiosk-userbar .kiosk-user span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Numpad */
+.kiosk-numpad .numpad-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+}
+.kiosk-numpad .numpad-grid button {
+    font-family: var(--font-num);
+    font-weight: 700;
+    font-size: 1.25rem;
+    padding: 0.75rem 0;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background-color: var(--surface-2);
+    color: var(--text);
+    transition: background-color 0.1s ease, transform 0.05s ease;
+}
+.kiosk-numpad .numpad-grid button:hover {
+    background-color: var(--brand-primary-light);
+}
+.kiosk-numpad .numpad-grid button:active {
+    transform: scale(0.95);
+}
+.kiosk-numpad .numpad-grid button.numpad-aksi {
+    background-color: var(--brand-accent);
+    border-color: var(--brand-accent);
+    color: #ffffff;
+}
+.kiosk-numpad .numpad-grid button.numpad-hapus {
+    background-color: var(--brand-danger);
+    border-color: var(--brand-danger);
+    color: #ffffff;
+}
+
+/* Ringkasan kiosk */
+.kiosk-ringkasan .kiosk-total-label {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+.kiosk-ringkasan .kiosk-total-nilai {
+    font-family: var(--font-num);
+    font-weight: 800;
+    font-size: 1.9rem;
+    line-height: 1.1;
+    color: var(--brand-primary-dark);
+}
+.dark-mode .kiosk-ringkasan .kiosk-total-nilai {
+    color: #2dd4bf;
+}
+.kiosk-ringkasan .kiosk-sub {
+    font-family: var(--font-num);
+    font-weight: 600;
+}
+
+/* Kartu produk kiosk */
+.kiosk-produk {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.6rem;
+    background-color: var(--surface);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.kiosk-produk:hover {
+    border-color: var(--brand-primary);
+    box-shadow: var(--shadow-hover);
+}
+.kiosk-produk .kiosk-produk-nama {
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: var(--text);
+}
+.kiosk-produk .kiosk-produk-harga {
+    font-family: var(--font-num);
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: var(--brand-primary-dark);
+}
+.dark-mode .kiosk-produk .kiosk-produk-harga {
+    color: #2dd4bf;
 }

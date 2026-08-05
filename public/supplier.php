@@ -200,6 +200,9 @@ $editSupplier = $editSupplierId > 0 ? Supplier::cari($editSupplierId) : null;
                 </li>
             </ul>
             <div class="d-flex align-items-center gap-2">
+                <button type="button" class="theme-toggle" id="toggle-theme" title="Ganti mode terang/gelap">
+                    <i class="bi bi-circle-half"></i>
+                </button>
                 <span class="navbar-text text-white small me-2 d-none d-lg-inline">
                     <i class="bi bi-person-circle me-1"></i><?= htmlspecialchars($nama) ?>
                 </span>
@@ -338,5 +341,6 @@ $editSupplier = $editSupplierId > 0 ? Supplier::cari($editSupplierId) : null;
     </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="assets/theme.js"></script>
 </body>
 </html>
