@@ -614,6 +614,44 @@ assertTrue(
     'diskon nominal bisa dicari berdasarkan kode'
 );
 
+echo "\n== 6c. CRUD diskon ==\n";
+
+// Tambah diskon sukses.
+$diskonBaru = new Diskon(['kode' => 'MURAH50', 'jenis' => 'persen', 'nilai' => 50]);
+$diskonBaruId = $diskonBaru->simpan();
+assertTrue($diskonBaruId > 0, 'tambah diskon sukses');
+
+// Edit diskon.
+$diskonBaru->setNilai(25);
+$diskonBaru->perbarui();
+$diskonSetelahEdit = Diskon::cari($diskonBaruId);
+assertTrue(
+    $diskonSetelahEdit !== null && $diskonSetelahEdit->getNilai() === 25.0,
+    'diskon bisa diperbarui (nilai)'
+);
+
+// Validasi: kode kosong ditolak.
+assertThrows(
+    fn () => (new Diskon(['kode' => '', 'jenis' => 'persen', 'nilai' => 10]))->simpan(),
+    'diskon dengan kode kosong ditolak'
+);
+
+// Validasi: nilai <= 0 ditolak.
+assertThrows(
+    fn () => (new Diskon(['kode' => 'NOL', 'jenis' => 'nominal', 'nilai' => 0]))->simpan(),
+    'diskon dengan nilai 0 ditolak'
+);
+
+// Validasi: persen > 100 ditolak.
+assertThrows(
+    fn () => (new Diskon(['kode' => 'BESAR', 'jenis' => 'persen', 'nilai' => 150]))->simpan(),
+    'diskon persen > 100 ditolak'
+);
+
+// Hapus diskon sukses.
+$diskonBaru->hapus();
+assertTrue(Diskon::cari($diskonBaruId) === null, 'diskon bisa dihapus');
+
 echo "\n== 7. Login & logout ==\n";
 
 $stmt = $pdo->prepare('INSERT INTO users (nama, username, password, role) VALUES (:nama, :username, :password, :role)');

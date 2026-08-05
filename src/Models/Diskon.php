@@ -81,6 +81,8 @@ class Diskon
 
     public function simpan(): int
     {
+        $this->validasi();
+
         $pdo = Database::connect();
         $stmt = $pdo->prepare('INSERT INTO diskon (kode, jenis, nilai) VALUES (:kode, :jenis, :nilai)');
         $stmt->execute([
@@ -96,6 +98,8 @@ class Diskon
 
     public function perbarui(): void
     {
+        $this->validasi();
+
         $stmt = Database::connect()->prepare(
             'UPDATE diskon SET kode = :kode, jenis = :jenis, nilai = :nilai WHERE id = :id'
         );
@@ -111,6 +115,28 @@ class Diskon
     {
         $stmt = Database::connect()->prepare('DELETE FROM diskon WHERE id = :id');
         $stmt->execute([':id' => $this->id]);
+    }
+
+    /**
+     * Validasi data diskon: kode tidak kosong, jenis valid,
+     * nilai > 0, dan diskon persen maksimal 100%.
+     *
+     * @throws \RuntimeException bila ada data yang tidak valid
+     */
+    private function validasi(): void
+    {
+        if (trim($this->kode) === '') {
+            throw new \RuntimeException('Kode diskon tidak boleh kosong.');
+        }
+        if (!in_array($this->jenis, ['persen', 'nominal'], true)) {
+            throw new \RuntimeException('Jenis diskon tidak valid.');
+        }
+        if ($this->nilai <= 0) {
+            throw new \RuntimeException('Nilai diskon harus lebih dari 0.');
+        }
+        if ($this->jenis === 'persen' && $this->nilai > 100) {
+            throw new \RuntimeException('Diskon persen maksimal 100%.');
+        }
     }
 
     /**

@@ -193,6 +193,9 @@ $editSupplier = $editSupplierId > 0 ? Supplier::cari($editSupplierId) : null;
                     <a class="nav-link" href="retur.php"><i class="bi bi-arrow-counterclockwise"></i> Retur</a>
                 </li>
                 <li class="nav-item">
+                    <a class="nav-link" href="diskon.php"><i class="bi bi-tags"></i> Diskon</a>
+                </li>
+                <li class="nav-item">
                     <a class="nav-link" href="user.php"><i class="bi bi-people"></i> Kelola Kasir</a>
                 </li>
             </ul>
