@@ -53,6 +53,13 @@ unset($_SESSION['pesan']);
 $pesanTipe = $_SESSION['pesan_tipe'] ?? 'info';
 unset($_SESSION['pesan_tipe']);
 
+// Permintaan AJAX: semua halaman dikirim via fetch tanpa reload.
+// Server membedakan lewat header X-Requested-With supaya responsnya
+// berupa JSON (fragment HTML) alih-alih redirect HTTP.
+$adalahAjax = strtolower((string) ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'fetch';
+// Untuk mode non-AJAX (fallback), flash message tetap dikirim via session + redirect.
+$modeNonAjax = !$adalahAjax;
+
 if (!isset($_SESSION['keranjang'])) {
     $_SESSION['keranjang'] = [];
 }
@@ -81,11 +88,244 @@ function formatRupiah(float $jumlah): string
     return 'Rp ' . number_format($jumlah, 0, ',', '.');
 }
 
+/**
+ * Gabungan fragment keranjang (kiri) + ringkasan (kanan).
+ * Dipakai respons AJAX supaya halaman bisa diperbarui tanpa reload.
+ */
+function renderFragmentKeranjang(): string
+{
+    return renderFragmentKeranjangKiri() . renderFragmentKeranjangKanan();
+}
+
+/**
+ * Render card keranjang (kolom kiri) dari session.
+ */
+function renderFragmentKeranjangKiri(): string
+{
+    $keranjang = $_SESSION['keranjang'] ?? [];
+
+    ob_start();
+    ?>
+    <!-- Keranjang -->
+    <div class="card pos-card mb-4">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <span>Keranjang</span>
+            <span class="text-muted small"><?= count($keranjang) ?> item</span>
+        </div>
+        <div class="card-body p-0">
+            <?php if ($keranjang === []): ?>
+                <div class="p-4 text-center text-muted">Keranjang masih kosong.</div>
+            <?php else: ?>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Produk</th>
+                                <th class="text-center">Qty</th>
+                                <th class="text-end">Harga</th>
+                                <th class="text-end">Subtotal</th>
+                                <th class="text-center">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($keranjang as $item): ?>
+                                <tr>
+                                    <td><?= htmlspecialchars($item['nama']) ?></td>
+                                    <td class="text-center"><?= $item['qty'] ?></td>
+                                    <td class="text-end"><?= formatRupiah($item['harga']) ?></td>
+                                    <td class="text-end"><?= formatRupiah($item['subtotal']) ?></td>
+                                    <td class="text-center">
+                                        <form method="post" data-aksi="hapus_item" class="d-inline">
+                                            <input type="hidden" name="aksi" value="hapus_item">
+                                            <input type="hidden" name="produk_id" value="<?= $item['produk_id'] ?>">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Hapus dari keranjang"><i class="bi bi-x-circle me-1"></i>Hapus</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
+    <?php
+    return (string) ob_get_clean();
+}
+
+/**
+ * Render card ringkasan (kolom kanan) dari session.
+ */
+function renderFragmentKeranjangKanan(): string
+{
+    $keranjang = $_SESSION['keranjang'] ?? [];
+    $subtotal = 0.0;
+
+    foreach ($keranjang as $item) {
+        $subtotal += $item['subtotal'];
+    }
+
+    $diskonId = $_SESSION['diskon_id'] ?? null;
+    $diskon = $diskonId !== null ? Diskon::cari((int) $diskonId) : null;
+    $potongan = 0.0;
+
+    if ($diskon !== null) {
+        $potongan = $subtotal - $diskon->terapkan($subtotal);
+    }
+
+    $total = max(0.0, $subtotal - $potongan);
+    $jumlahBayar = (float) ($_POST['jumlah_dibayar'] ?? 0);
+    $kembalian = $jumlahBayar - $total;
+
+    ob_start();
+    ?>
+    <!-- Ringkasan -->
+    <div class="card pos-card ringkasan">
+        <div class="card-header bg-white"><strong>Ringkasan</strong></div>
+        <div class="card-body">
+            <dl class="row mb-2">
+                <dt class="col-6 text-muted fw-normal">Subtotal</dt>
+                <dd class="col-6 text-end mb-0"><?= formatRupiah($subtotal) ?></dd>
+            </dl>
+
+            <form method="post" data-aksi="diskon" class="row g-2 mb-3">
+                <input type="hidden" name="aksi" value="diskon">
+                <div class="col-8">
+                    <input
+                        type="text"
+                        name="kode_diskon"
+                        class="form-control form-control-sm"
+                        placeholder="Kode diskon"
+                        value="<?= htmlspecialchars($diskon !== null ? $diskon->getKode() : '') ?>"
+                        aria-label="Kode diskon"
+                    >
+                </div>
+                <div class="col-4">
+                    <button type="submit" class="btn btn-sm btn-outline-primary w-100"><i class="bi bi-tag me-1"></i>Terapkan</button>
+                </div>
+                <?php if ($diskon !== null): ?>
+                    <div class="col-12 small text-success">
+                        Diskon <?= $diskon->getKode() !== '' ? $diskon->getKode() . ' ' : '' ?>
+                        (<?= $diskon->getJenis() === 'persen' ? $diskon->getNilai() . '%' : formatRupiah($diskon->getNilai()) ?>)
+                        terpasang (-<?= formatRupiah($potongan) ?>)
+                    </div>
+                <?php endif; ?>
+                <?php $diskonSemuaR = Diskon::semua(); ?>
+                <?php if ($diskonSemuaR !== []): ?>
+                    <div class="col-12 small text-muted">
+                        Kode valid:
+                        <?php foreach ($diskonSemuaR as $d): ?>
+                            <span class="badge text-bg-light border"><?= htmlspecialchars($d->getKode()) ?></span>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+            </form>
+
+            <hr>
+
+            <div class="d-flex justify-content-between align-items-baseline mb-3">
+                <span class="text-muted">Total</span>
+                <span class="summary-total"><?= formatRupiah($total) ?></span>
+            </div>
+
+            <form method="post" id="form-bayar" data-aksi="bayar">
+                <input type="hidden" name="aksi" value="bayar">
+                <span id="total-json" class="d-none"><?= $total ?></span>
+
+                <div class="mb-3">
+                    <label class="form-label">Metode pembayaran</label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="metode" value="tunai" id="metode-tunai" checked>
+                        <label class="form-check-label" for="metode-tunai">Tunai</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="metode" value="non_tunai" id="metode-nontunai">
+                        <label class="form-check-label" for="metode-nontunai">Non-tunai (QRIS / EDC)</label>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="jumlah-dibayar" class="form-label">Jumlah dibayar</label>
+                    <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        id="jumlah-dibayar"
+                        name="jumlah_dibayar"
+                        class="form-control"
+                        value="<?= $total > 0 ? (int) ceil($total) : 0 ?>"
+                        inputmode="decimal"
+                    >
+                </div>
+
+                <div class="d-flex justify-content-between align-items-baseline mb-4">
+                    <span class="text-muted">Kembalian</span>
+                    <span class="fw-semibold" id="kembalian"><?= formatRupiah(max(0.0, $kembalian)) ?></span>
+                </div>
+
+                <div class="d-grid gap-2">
+                    <button type="submit" class="btn btn-success btn-lg" <?= $keranjang === [] ? 'disabled data-kosong' : '' ?>>
+                        <i class="bi bi-check2-circle me-1"></i>Proses Pembayaran
+                    </button>
+                    <button type="submit" class="btn btn-outline-danger" form="form-batalkan" data-aksi="batalkan" <?= $keranjang === [] ? 'disabled' : '' ?>>
+                        <i class="bi bi-x-lg me-1"></i>Batalkan
+                    </button>
+                </div>
+            </form>
+            <form method="post" id="form-batalkan" class="d-none">
+                <input type="hidden" name="aksi" value="batalkan">
+            </form>
+        </div>
+    </div>
+    <?php
+    return (string) ob_get_clean();
+}
+
+/**
+ * Kirim respons: untuk AJAX kirim JSON (fragment + flash), untuk non-AJAX
+ * simpan flash di session lalu redirect (perilaku lama).
+ */
+function kirimRespons(string $pesan, string $tipe, string $fragment, array $data = []): never
+{
+    global $adalahAjax, $modeNonAjax;
+
+    if ($modeNonAjax) {
+        $_SESSION['pesan'] = $pesan;
+        $_SESSION['pesan_tipe'] = $tipe;
+        header('Location: transaksi.php');
+        exit;
+    }
+
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode([
+        'pesan'    => $pesan,
+        'tipe'     => $tipe,
+        'fragment' => $fragment,
+        'data'     => $data,
+    ]);
+    exit;
+}
+
+/** Redirect (non-AJAX) atau kirim JSON (AJAX) dengan pesan flash. */
 function redirectSelf(string $pesan, string $tipe = 'info'): never
 {
-    $_SESSION['pesan'] = $pesan;
-    $_SESSION['pesan_tipe'] = $tipe;
-    header('Location: transaksi.php');
+    global $adalahAjax, $modeNonAjax;
+
+    if ($modeNonAjax) {
+        $_SESSION['pesan'] = $pesan;
+        $_SESSION['pesan_tipe'] = $tipe;
+        header('Location: transaksi.php');
+        exit;
+    }
+
+    // AJAX: kirim fragment keranjang + ringkasan terkini (sudah berubah
+    // di session oleh aksi yang memanggil redirectSelf ini).
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode([
+        'pesan'    => $pesan,
+        'tipe'     => $tipe,
+        'fragment' => renderFragmentKeranjang(),
+    ]);
     exit;
 }
 
@@ -238,7 +478,22 @@ function aksiBayar(string $metode, float $jumlahDibayar, int $kasirId, string $n
     );
     $_SESSION['struk'] = $struk;
 
-    redirectSelf('Pembayaran berhasil. Struk siap dicetak.', 'success');
+    // AJAX: kirim struk + fragment keranjang kosong supaya UI langsung
+    // menampilkan struk tanpa reload. Non-AJAX: redirect seperti biasa.
+    global $adalahAjax, $modeNonAjax;
+
+    if ($modeNonAjax) {
+        redirectSelf('Pembayaran berhasil. Struk siap dicetak.', 'success');
+    }
+
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode([
+        'pesan'    => 'Pembayaran berhasil. Struk siap dicetak.',
+        'tipe'     => 'success',
+        'struk'    => $struk,
+        'fragment' => renderFragmentKeranjang(),
+    ]);
+    exit;
 }
 
 /** Batalkan seluruh keranjang + diskon. */
@@ -296,7 +551,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         case 'hapus_struk':
             unset($_SESSION['struk']);
-            break;
+
+            if ($adalahAjax) {
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['pesan' => '', 'tipe' => 'info', 'hapus_struk' => true]);
+                exit;
+            }
+
+            header('Location: transaksi.php');
+            exit;
     }
 }
 
@@ -408,15 +671,13 @@ $produkSemua = Produk::semua();
         <span class="text-muted small">Kasir: <?= htmlspecialchars($namaUser) ?></span>
     </div>
 
-    <?php if ($pesan !== ''): ?>
-        <div class="alert alert-<?= htmlspecialchars($pesanTipe) ?> alert-dismissible fade show" role="alert">
-            <?= htmlspecialchars($pesan) ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Tutup"></button>
-        </div>
-    <?php endif; ?>
+    <div id="flash-pesan" class="alert alert-<?= htmlspecialchars($pesanTipe) ?> alert-dismissible fade show <?= $pesan === '' ? 'd-none' : '' ?>" role="alert">
+        <?= htmlspecialchars($pesan) ?>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Tutup"></button>
+    </div>
 
     <?php if ($struk !== ''): ?>
-        <div class="card pos-card mb-4">
+        <div class="card pos-card mb-4" id="area-struk">
             <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
                 <span>Struk terakhir</span>
                 <button type="button" class="btn-close btn-close-white" id="tutup-struk" aria-label="Tutup"></button>
@@ -425,21 +686,16 @@ $produkSemua = Produk::semua();
                 <pre class="mb-0"><?= htmlspecialchars($struk) ?></pre>
             </div>
         </div>
-        <script>
-            document.getElementById('tutup-struk').addEventListener('click', function () {
-                // Hapus struk dari session (POST), lalu tutup card tanpa reload penuh.
-                fetch('transaksi.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: 'aksi=hapus_struk'
-                }).then(function () {
-                    var card = this.closest('.card');
-                    if (card) {
-                        card.remove();
-                    }
-                }.bind(this));
-            });
-        </script>
+    <?php else: ?>
+        <div class="card pos-card mb-4 d-none" id="area-struk">
+            <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                <span>Struk terakhir</span>
+                <button type="button" class="btn-close btn-close-white" id="tutup-struk" aria-label="Tutup"></button>
+            </div>
+            <div class="card-body">
+                <pre class="mb-0"></pre>
+            </div>
+        </div>
     <?php endif; ?>
 
     <div class="row g-4">
@@ -477,7 +733,7 @@ $produkSemua = Produk::semua();
                                             stok <?= $produkDitemukan->getStok() ?>
                                         </span>
                                     </div>
-                                    <form method="post" class="d-flex gap-2">
+                                    <form method="post" class="d-flex gap-2" data-aksi="tambah_item">
                                         <input type="hidden" name="aksi" value="tambah_item">
                                         <input type="hidden" name="produk_id" value="<?= $produkDitemukan->getId() ?>">
                                         <input
@@ -506,48 +762,7 @@ $produkSemua = Produk::semua();
                 </div>
             </div>
 
-            <div class="card pos-card mb-4">
-                <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                    <span>Keranjang</span>
-                    <span class="text-muted small"><?= count($keranjang) ?> item</span>
-                </div>
-                <div class="card-body p-0">
-                    <?php if ($keranjang === []): ?>
-                        <div class="p-4 text-center text-muted">Keranjang masih kosong.</div>
-                    <?php else: ?>
-                        <div class="table-responsive">
-                            <table class="table table-hover align-middle mb-0">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>Produk</th>
-                                        <th class="text-center">Qty</th>
-                                        <th class="text-end">Harga</th>
-                                        <th class="text-end">Subtotal</th>
-                                        <th class="text-center">Aksi</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php foreach ($keranjang as $item): ?>
-                                        <tr>
-                                            <td><?= htmlspecialchars($item['nama']) ?></td>
-                                            <td class="text-center"><?= $item['qty'] ?></td>
-                                            <td class="text-end"><?= formatRupiah($item['harga']) ?></td>
-                                            <td class="text-end"><?= formatRupiah($item['subtotal']) ?></td>
-                                            <td class="text-center">
-                                                <form method="post" class="d-inline">
-                                                    <input type="hidden" name="aksi" value="hapus_item">
-                                                    <input type="hidden" name="produk_id" value="<?= $item['produk_id'] ?>">
-                                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Hapus dari keranjang"><i class="bi bi-x-circle me-1"></i>Hapus</button>
-                                                </form>
-                                            </td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    <?php endif; ?>
-                </div>
-            </div>
+            <div id="fragmen-keranjang-kiri"><?= renderFragmentKeranjangKiri() ?></div>
 
             <div class="card pos-card">
                 <div class="card-header bg-white">Produk Lain</div>
@@ -566,7 +781,7 @@ $produkSemua = Produk::semua();
                                         <div class="small <?= $p->getStok() > 0 ? 'text-success' : 'text-danger' ?>">
                                             stok <?= $p->getStok() ?>
                                         </div>
-                                        <form method="post" class="d-flex gap-1 mt-auto">
+                                        <form method="post" class="d-flex gap-1 mt-auto" data-aksi="tambah_item">
                                             <input type="hidden" name="aksi" value="tambah_item">
                                             <input type="hidden" name="produk_id" value="<?= $p->getId() ?>">
                                             <input
@@ -597,143 +812,148 @@ $produkSemua = Produk::semua();
 
         <!-- Kolom kanan: ringkasan -->
         <div class="col-lg-4">
-            <div class="card pos-card ringkasan">
-                <div class="card-header bg-white"><strong>Ringkasan</strong></div>
-                <div class="card-body">
-                    <dl class="row mb-2">
-                        <dt class="col-6 text-muted fw-normal">Subtotal</dt>
-                        <dd class="col-6 text-end mb-0"><?= formatRupiah($subtotal) ?></dd>
-                    </dl>
-
-                    <form method="post" class="row g-2 mb-3">
-                        <input type="hidden" name="aksi" value="diskon">
-                        <div class="col-8">
-                            <input
-                                type="text"
-                                name="kode_diskon"
-                                class="form-control form-control-sm"
-                                placeholder="Kode diskon"
-                                value="<?= htmlspecialchars($diskon !== null ? $diskon->getKode() : '') ?>"
-                                aria-label="Kode diskon"
-                            >
-                        </div>
-                        <div class="col-4">
-                            <button type="submit" class="btn btn-sm btn-outline-primary w-100"><i class="bi bi-tag me-1"></i>Terapkan</button>
-                        </div>
-                        <?php if ($diskon !== null): ?>
-                            <div class="col-12 small text-success">
-                                Diskon <?= $diskon->getKode() !== '' ? $diskon->getKode() . ' ' : '' ?>
-                                (<?= $diskon->getJenis() === 'persen' ? $diskon->getNilai() . '%' : formatRupiah($diskon->getNilai()) ?>)
-                                terpasang (-<?= formatRupiah($potongan) ?>)
-                            </div>
-                        <?php endif; ?>
-                        <?php if ($diskonSemua !== []): ?>
-                            <div class="col-12 small text-muted">
-                                Kode valid:
-                                <?php foreach ($diskonSemua as $d): ?>
-                                    <span class="badge text-bg-light border"><?= htmlspecialchars($d->getKode()) ?></span>
-                                <?php endforeach; ?>
-                            </div>
-                        <?php endif; ?>
-                    </form>
-
-                    <hr>
-
-                    <div class="d-flex justify-content-between align-items-baseline mb-3">
-                        <span class="text-muted">Total</span>
-                        <span class="summary-total"><?= formatRupiah($total) ?></span>
-                    </div>
-
-                    <form method="post" id="form-bayar">
-                        <input type="hidden" name="aksi" value="bayar">
-
-                        <div class="mb-3">
-                            <label class="form-label">Metode pembayaran</label>
-                            <div class="form-check">
-                                <input class="form-check-input" type="radio" name="metode" value="tunai" id="metode-tunai"
-                                       <?= $metode === 'tunai' ? 'checked' : '' ?>>
-                                <label class="form-check-label" for="metode-tunai">Tunai</label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="radio" name="metode" value="non_tunai" id="metode-nontunai"
-                                       <?= $metode === 'non_tunai' ? 'checked' : '' ?>>
-                                <label class="form-check-label" for="metode-nontunai">Non-tunai (QRIS / EDC)</label>
-                            </div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="jumlah-dibayar" class="form-label">Jumlah dibayar</label>
-                            <input
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                id="jumlah-dibayar"
-                                name="jumlah_dibayar"
-                                class="form-control"
-                                value="<?= $jumlahBayar > 0 ? $jumlahBayar : (int) ceil($total) ?>"
-                                inputmode="decimal"
-                            >
-                        </div>
-
-                        <div class="d-flex justify-content-between align-items-baseline mb-4">
-                            <span class="text-muted">Kembalian</span>
-                            <span class="fw-semibold <?= $kembalian < 0 ? 'text-danger' : '' ?>" id="kembalian">
-                                <?= $kembalian < 0 ? 'Kurang ' . formatRupiah(abs($kembalian)) : formatRupiah($kembalian) ?>
-                            </span>
-                        </div>
-
-                        <div class="d-grid gap-2">
-                            <button type="submit" class="btn btn-success btn-lg" <?= $keranjang === [] ? 'disabled data-kosong' : '' ?>>
-                                <i class="bi bi-check2-circle me-1"></i>Proses Pembayaran
-                            </button>
-                            <button type="submit" class="btn btn-outline-danger" form="form-batalkan" <?= $keranjang === [] ? 'disabled' : '' ?>>
-                                <i class="bi bi-x-lg me-1"></i>Batalkan
-                            </button>
-                        </div>
-                    </form>
-                    <form method="post" id="form-batalkan" class="d-none">
-                        <input type="hidden" name="aksi" value="batalkan">
-                    </form>
-                </div>
-            </div>
+            <div id="fragmen-keranjang-kanan"><?= renderFragmentKeranjangKanan() ?></div>
         </div>
     </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-    // Hitung kembalian di sisi klien saat jumlah dibayar berubah.
-    // Bila jumlah dibayar kurang dari total, tampilkan "Kurang Rp X"
-    // dan nonaktifkan tombol proses pembayaran.
+    // Transaksi tanpa reload: semua form data-aksi dikirim via fetch,
+    // server mengembalikan JSON {fragment, struk?, pesan, tipe},
+    // lalu UI diperbarui langsung tanpa memuat ulang halaman.
     (function () {
-        var total = <?= json_encode($total) ?>;
-        var input = document.getElementById('jumlah-dibayar');
-        var kembalian = document.getElementById('kembalian');
-        var tombolBayar = document.querySelector('#form-bayar button[type="submit"]');
+        'use strict';
 
-        function fmt(n) {
-            return 'Rp ' + n.toLocaleString('id-ID', {
+        var flash = document.getElementById('flash-pesan');
+        var fragKiri = document.getElementById('fragmen-keranjang-kiri');
+        var fragKanan = document.getElementById('fragmen-keranjang-kanan');
+
+        function rupiah(n) {
+            return 'Rp ' + Number(n).toLocaleString('id-ID', {
                 minimumFractionDigits: 0,
                 maximumFractionDigits: 0
             });
         }
 
-        function hitung() {
-            var bayar = parseFloat(input.value) || 0;
-            var selisih = bayar - total;
-
-            if (selisih < 0) {
-                kembalian.textContent = 'Kurang ' + fmt(Math.abs(selisih));
-                kembalian.classList.add('text-danger');
-                if (tombolBayar) tombolBayar.disabled = true;
-            } else {
-                kembalian.textContent = fmt(selisih);
-                kembalian.classList.remove('text-danger');
-                if (tombolBayar && !tombolBayar.dataset.kosong) tombolBayar.disabled = false;
-            }
+        function tampilkanFlash(pesan, tipe) {
+            if (!flash || !pesan) return;
+            flash.className = 'alert alert-' + (tipe || 'info') + ' alert-dismissible fade show';
+            flash.innerHTML = pesan + '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Tutup"></button>';
+            flash.classList.remove('d-none');
         }
-        input.addEventListener('input', hitung);
-        hitung();
+
+        function tampilkanStruk(teks) {
+            var area = document.getElementById('area-struk');
+            if (!area) return;
+            var pre = area.querySelector('pre');
+            if (pre) pre.textContent = teks;
+            area.classList.remove('d-none');
+        }
+
+        // Re-init kembalian live setelah fragment ringkasan diganti.
+        function initKembalian() {
+            var totalEl = document.getElementById('total-json');
+            if (!totalEl) return;
+            var total = parseFloat(totalEl.textContent) || 0;
+            var input = document.getElementById('jumlah-dibayar');
+            var kembalian = document.getElementById('kembalian');
+            var tombol = document.querySelector('#form-bayar button[type="submit"]');
+            if (!input || !kembalian) return;
+
+            function hitung() {
+                var bayar = parseFloat(input.value) || 0;
+                var selisih = bayar - total;
+                if (selisih < 0) {
+                    kembalian.textContent = 'Kurang ' + rupiah(Math.abs(selisih));
+                    kembalian.classList.add('text-danger');
+                    if (tombol) tombol.disabled = true;
+                } else {
+                    kembalian.textContent = rupiah(selisih);
+                    kembalian.classList.remove('text-danger');
+                    if (tombol && !tombol.dataset.kosong) tombol.disabled = false;
+                }
+            }
+            input.addEventListener('input', hitung);
+            hitung();
+        }
+
+        function gantiFragment(fragment) {
+            // Fragment berisi card keranjang (kiri) + card ringkasan (kanan).
+            if (!fragment || !fragKiri || !fragKanan) return;
+            var tmp = document.createElement('div');
+            tmp.innerHTML = fragment;
+
+            var kiri = tmp.querySelector('.card.pos-card.mb-4');
+            var kanan = tmp.querySelector('.card.pos-card.ringkasan');
+
+            if (kiri) {
+                fragKiri.innerHTML = '';
+                fragKiri.appendChild(kiri);
+            }
+            if (kanan) {
+                fragKanan.innerHTML = '';
+                fragKanan.appendChild(kanan);
+            }
+
+            initKembalian();
+        }
+
+        document.addEventListener('submit', function (e) {
+            var form = e.target;
+            var aksi = form.getAttribute('data-aksi');
+            if (!aksi) return; // form biasa (mis. pencarian GET) tetap normal
+
+            e.preventDefault();
+            var data = new FormData(form);
+            data.set('aksi', aksi);
+
+            fetch('transaksi.php', {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'fetch' },
+                body: data
+            })
+                .then(function (r) {
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    return r.json();
+                })
+                .then(function (res) {
+                    tampilkanFlash(res.pesan, res.tipe);
+                    if (res.struk) {
+                        tampilkanStruk(res.struk);
+                    }
+                    if (res.fragment) {
+                        gantiFragment(res.fragment);
+                    } else if (res.hapus_struk) {
+                        var area = document.getElementById('area-struk');
+                        if (area) area.classList.add('d-none');
+                    }
+                })
+                .catch(function (err) {
+                    tampilkanFlash('Terjadi kesalahan: ' + err.message, 'danger');
+                });
+        });
+
+        // Tutup struk via AJAX tanpa reload.
+        var tutupStruk = document.getElementById('tutup-struk');
+        if (tutupStruk) {
+            tutupStruk.addEventListener('click', function () {
+                fetch('transaksi.php', {
+                    method: 'POST',
+                    headers: { 'X-Requested-With': 'fetch', 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: 'aksi=hapus_struk'
+                })
+                    .then(function (r) { return r.json(); })
+                    .then(function (res) {
+                        if (res.hapus_struk) {
+                            var area = document.getElementById('area-struk');
+                            if (area) area.classList.add('d-none');
+                        }
+                    });
+            });
+        }
+
+        initKembalian();
     })();
 </script>
 </body>
