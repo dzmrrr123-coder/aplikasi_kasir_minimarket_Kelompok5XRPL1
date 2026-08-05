@@ -8,6 +8,10 @@ declare(strict_types=1);
  * alih-alih daftar class per class.
  */
 
+// Timezone aplikasi: WIB (Asia/Jakarta). Dipakai semua halaman & model
+// supaya jam di database (DateTime) konsisten dengan jam lokal.
+date_default_timezone_set('Asia/Jakarta');
+
 spl_autoload_register(static function (string $class): void {
     $prefix = 'App\\';
 
