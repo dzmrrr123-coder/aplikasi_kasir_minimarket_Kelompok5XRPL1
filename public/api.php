@@ -51,6 +51,22 @@ $params = array_merge($_GET, $_POST);
 $aksi = (string) ($params['aksi'] ?? '');
 unset($params['aksi']);
 
+// Normalisasi parameter DataTables server-side:
+// - search[value] dikirim sebagai array -> ambil string-nya
+// - start/length/draw dijamin int
+if (isset($params['search']) && is_array($params['search'])) {
+    $params['search'] = (string) ($params['search']['value'] ?? '');
+}
+if (isset($params['start'])) {
+    $params['start'] = (int) $params['start'];
+}
+if (isset($params['length'])) {
+    $params['length'] = (int) $params['length'];
+}
+if (isset($params['draw'])) {
+    $params['draw'] = (int) $params['draw'];
+}
+
 $dashboard = new DashboardController();
 $laporan = new LaporanController();
 $retur = new ReturController();
