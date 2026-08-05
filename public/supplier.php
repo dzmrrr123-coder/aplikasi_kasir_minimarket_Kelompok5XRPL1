@@ -130,27 +130,55 @@ $editSupplier = $editSupplierId > 0 ? Supplier::cari($editSupplierId) : null;
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Supplier - Kasir Minimarket</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body { background-color: #f4f6f8; }
-        .pos-card { border: 0; border-radius: .75rem; box-shadow: 0 .125rem .375rem rgba(16,24,40,.06); }
-    </style>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="assets/theme.css" rel="stylesheet">
 </head>
-<body class="bg-light">
+<body>
+<nav class="navbar navbar-expand-lg pos-navbar mb-4 sticky-top">
+    <div class="container">
+        <a class="navbar-brand" href="admin.php"><i class="bi bi-shop"></i> Kasir Minimarket</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav-supplier"
+                aria-controls="nav-supplier" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="nav-supplier">
+            <ul class="navbar-nav me-auto">
+                <li class="nav-item">
+                    <a class="nav-link" href="admin.php"><i class="bi bi-speedometer2"></i> Admin</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="transaksi.php"><i class="bi bi-cash-register"></i> Kasir</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="laporan.php"><i class="bi bi-bar-chart-line"></i> Laporan</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link active" href="supplier.php"><i class="bi bi-truck"></i> Supplier</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="retur.php"><i class="bi bi-arrow-counterclockwise"></i> Retur</a>
+                </li>
+            </ul>
+            <div class="d-flex align-items-center gap-2">
+                <span class="navbar-text text-white small me-2 d-none d-lg-inline">
+                    <i class="bi bi-person-circle me-1"></i><?= htmlspecialchars($nama) ?>
+                </span>
+                <form method="post" class="d-inline">
+                    <input type="hidden" name="aksi" value="logout">
+                    <button type="submit" class="btn btn-outline-light btn-sm">
+                        <i class="bi bi-box-arrow-right me-1"></i>Logout
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</nav>
 <div class="container py-4">
 
-    <header class="d-flex flex-wrap align-items-center justify-content-between mb-4 gap-2">
-        <div>
-            <h1 class="h3 mb-0">Kelola Supplier</h1>
-            <span class="text-muted small">Admin: <?= htmlspecialchars($nama) ?></span>
-        </div>
-        <div class="d-flex gap-2">
-            <a href="admin.php" class="btn btn-outline-secondary btn-sm">Kembali ke Admin</a>
-            <form method="post" class="d-inline">
-                <input type="hidden" name="aksi" value="logout">
-                <button type="submit" class="btn btn-outline-danger btn-sm">Logout</button>
-            </form>
-        </div>
-    </header>
+    <div class="mb-4">
+        <h1 class="h3 mb-1">Kelola Supplier</h1>
+        <span class="text-muted small">Admin: <?= htmlspecialchars($nama) ?></span>
+    </div>
 
     <?php if ($pesan !== ''): ?>
         <div class="alert alert-info alert-dismissible fade show" role="alert">
@@ -204,10 +232,11 @@ $editSupplier = $editSupplierId > 0 ? Supplier::cari($editSupplierId) : null;
                         </div>
                         <div class="col-12 d-flex gap-2">
                             <button type="submit" class="btn btn-primary">
+                                <i class="bi <?= $editSupplier !== null ? 'bi-pencil-square' : 'bi-plus-circle' ?> me-1"></i>
                                 <?= $editSupplier !== null ? 'Simpan Perubahan' : 'Tambah Supplier' ?>
                             </button>
                             <?php if ($editSupplier !== null): ?>
-                                <a href="supplier.php" class="btn btn-outline-secondary">Batal</a>
+                                <a href="supplier.php" class="btn btn-outline-secondary"><i class="bi bi-x-lg me-1"></i>Batal</a>
                             <?php endif; ?>
                         </div>
                     </form>
@@ -247,13 +276,13 @@ $editSupplier = $editSupplierId > 0 ? Supplier::cari($editSupplierId) : null;
                                                     <form method="post" class="d-inline">
                                                         <input type="hidden" name="aksi" value="edit_supplier">
                                                         <input type="hidden" name="supplier_id" value="<?= $s->getId() ?>">
-                                                        <button type="submit" class="btn btn-sm btn-outline-primary" title="Edit">Edit</button>
+                                                        <button type="submit" class="btn btn-sm btn-outline-primary" title="Edit"><i class="bi bi-pencil me-1"></i>Edit</button>
                                                     </form>
                                                     <form method="post" class="d-inline"
                                                           onsubmit="return confirm('Hapus supplier ini?');">
                                                         <input type="hidden" name="aksi" value="hapus_supplier">
                                                         <input type="hidden" name="supplier_id" value="<?= $s->getId() ?>">
-                                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Hapus">Hapus</button>
+                                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Hapus"><i class="bi bi-trash me-1"></i>Hapus</button>
                                                     </form>
                                                 </span>
                                             </td>
@@ -268,5 +297,6 @@ $editSupplier = $editSupplierId > 0 ? Supplier::cari($editSupplierId) : null;
         </div>
     </div>
 </div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

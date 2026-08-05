@@ -289,6 +289,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         case 'batalkan':
             aksiBatalkan();
             break;
+
+        case 'hapus_struk':
+            unset($_SESSION['struk']);
+            break;
     }
 }
 
@@ -331,9 +335,9 @@ $produkSemua = Produk::semua();
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Transaksi Penjualan - Kasir Minimarket</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="assets/theme.css" rel="stylesheet">
     <style>
-        body { background-color: #f4f6f8; }
-        .pos-card { border: 0; border-radius: .75rem; box-shadow: 0 .125rem .375rem rgba(16,24,40,.06); }
         .qty-input { max-width: 4.5rem; }
         .summary-total { font-size: 1.75rem; font-weight: 700; }
         .hasil-cari { min-height: 4.5rem; }
@@ -342,22 +346,54 @@ $produkSemua = Produk::semua();
         }
     </style>
 </head>
-<body class="bg-light">
+<body>
+<nav class="navbar navbar-expand-lg pos-navbar mb-4 sticky-top">
+    <div class="container">
+        <a class="navbar-brand" href="transaksi.php"><i class="bi bi-shop"></i> Kasir Minimarket</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav-kasir"
+                aria-controls="nav-kasir" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="nav-kasir">
+            <ul class="navbar-nav me-auto">
+                <li class="nav-item">
+                    <a class="nav-link active" href="transaksi.php"><i class="bi bi-cash-register"></i> Kasir</a>
+                </li>
+                <?php if (($_SESSION['role'] ?? '') === 'admin'): ?>
+                    <li class="nav-item">
+                        <a class="nav-link" href="admin.php"><i class="bi bi-speedometer2"></i> Admin</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="laporan.php"><i class="bi bi-bar-chart-line"></i> Laporan</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="supplier.php"><i class="bi bi-truck"></i> Supplier</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="retur.php"><i class="bi bi-arrow-counterclockwise"></i> Retur</a>
+                    </li>
+                <?php endif; ?>
+            </ul>
+            <div class="d-flex align-items-center gap-2">
+                <span class="navbar-text text-white small me-2 d-none d-lg-inline">
+                    <i class="bi bi-person-circle me-1"></i><?= htmlspecialchars($namaUser) ?>
+                </span>
+                <form method="post" class="d-inline">
+                    <input type="hidden" name="aksi" value="logout">
+                    <button type="submit" class="btn btn-outline-light btn-sm">
+                        <i class="bi bi-box-arrow-right me-1"></i>Logout
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</nav>
 <div class="container py-4">
 
-    <header class="d-flex flex-wrap align-items-center justify-content-between mb-4 gap-2">
-        <div>
-            <h1 class="h3 mb-0">Transaksi Penjualan</h1>
-            <span class="text-muted small">Kasir: <?= htmlspecialchars($namaUser) ?></span>
-        </div>
-        <div class="d-flex gap-2">
-            <a href="index.php" class="btn btn-outline-secondary btn-sm">Kembali ke Beranda</a>
-            <form method="post" class="d-inline">
-                <input type="hidden" name="aksi" value="logout">
-                <button type="submit" class="btn btn-outline-danger btn-sm">Logout</button>
-            </form>
-        </div>
-    </header>
+    <div class="mb-4">
+        <h1 class="h3 mb-1">Transaksi Penjualan</h1>
+        <span class="text-muted small">Kasir: <?= htmlspecialchars($namaUser) ?></span>
+    </div>
 
     <?php if ($pesan !== ''): ?>
         <div class="alert alert-info alert-dismissible fade show" role="alert">
@@ -378,11 +414,17 @@ $produkSemua = Produk::semua();
         </div>
         <script>
             document.getElementById('tutup-struk').addEventListener('click', function () {
+                // Hapus struk dari session (POST), lalu tutup card tanpa reload penuh.
                 fetch('transaksi.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                     body: 'aksi=hapus_struk'
-                }).then(function () { location.reload(); });
+                }).then(function () {
+                    var card = this.closest('.card');
+                    if (card) {
+                        card.remove();
+                    }
+                }.bind(this));
             });
         </script>
     <?php endif; ?>
@@ -405,7 +447,7 @@ $produkSemua = Produk::semua();
                             >
                         </div>
                         <div class="col-auto">
-                            <button type="submit" class="btn btn-primary">Cari</button>
+                            <button type="submit" class="btn btn-primary"><i class="bi bi-search me-1"></i>Cari</button>
                         </div>
                     </form>
 
@@ -439,7 +481,7 @@ $produkSemua = Produk::semua();
                                             class="btn btn-success"
                                             <?= $produkDitemukan->getStok() < 1 ? 'disabled' : '' ?>
                                         >
-                                            Tambah
+                                            <i class="bi bi-cart-plus me-1"></i>Tambah
                                         </button>
                                     </form>
                                 </div>
@@ -482,7 +524,7 @@ $produkSemua = Produk::semua();
                                                 <form method="post" class="d-inline">
                                                     <input type="hidden" name="aksi" value="hapus_item">
                                                     <input type="hidden" name="produk_id" value="<?= $item['produk_id'] ?>">
-                                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Hapus dari keranjang">Hapus</button>
+                                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Hapus dari keranjang"><i class="bi bi-x-circle me-1"></i>Hapus</button>
                                                 </form>
                                             </td>
                                         </tr>
@@ -528,7 +570,7 @@ $produkSemua = Produk::semua();
                                                 class="btn btn-sm btn-success flex-shrink-0"
                                                 <?= $p->getStok() < 1 ? 'disabled' : '' ?>
                                             >
-                                                Tambah
+                                                <i class="bi bi-cart-plus me-1"></i>Tambah
                                             </button>
                                         </form>
                                     </div>
@@ -563,7 +605,7 @@ $produkSemua = Produk::semua();
                             >
                         </div>
                         <div class="col-4">
-                            <button type="submit" class="btn btn-sm btn-outline-primary w-100">Terapkan</button>
+                            <button type="submit" class="btn btn-sm btn-outline-primary w-100"><i class="bi bi-tag me-1"></i>Terapkan</button>
                         </div>
                         <?php if ($diskon !== null): ?>
                             <div class="col-12 small text-success">
@@ -618,10 +660,10 @@ $produkSemua = Produk::semua();
 
                         <div class="d-grid gap-2">
                             <button type="submit" class="btn btn-success btn-lg" <?= $keranjang === [] ? 'disabled' : '' ?>>
-                                Proses Pembayaran
+                                <i class="bi bi-check2-circle me-1"></i>Proses Pembayaran
                             </button>
                             <button type="submit" class="btn btn-outline-danger" form="form-batalkan" <?= $keranjang === [] ? 'disabled' : '' ?>>
-                                Batalkan
+                                <i class="bi bi-x-lg me-1"></i>Batalkan
                             </button>
                         </div>
                     </form>

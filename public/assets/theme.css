@@ -1,0 +1,390 @@
+/* ============================================================
+   Kasir Minimarket - Tema Custom
+   Palet brand: teal-emerald (segar & terpercaya) + amber (aksi)
+   Meng-override variabel Bootstrap 5.3.3. Murni styling.
+   ============================================================ */
+
+:root {
+    /* Brand utama: hijau teal yang segar & terpercaya */
+    --brand-primary: #0d9488;      /* teal-600 */
+    --brand-primary-dark: #0f766e; /* teal-700 */
+    --brand-primary-darker: #115e59;/* teal-800 */
+    --brand-primary-light: #ccfbf1; /* teal-100 */
+    --brand-primary-lighter: #f0fdfa;/* teal-50 */
+
+    /* Aksen */
+    --brand-accent: #f59e0b;       /* amber-500 (retur/aksi penting) */
+    --brand-accent-dark: #d97706;  /* amber-600 */
+    --brand-success: #16a34a;      /* green-600 (tambah/proses) */
+    --brand-success-dark: #15803d; /* green-700 */
+    --brand-danger: #dc2626;       /* red-600 */
+    --brand-warning: #d97706;      /* amber-600 */
+    --brand-info: #0891b2;         /* cyan-600 */
+
+    /* Latar & permukaan */
+    --brand-bg: #f0fdfa;           /* teal-50 - latar halaman */
+    --brand-bg-soft: #f8fafc;      /* slate-50 */
+    --brand-surface: #ffffff;
+    --brand-border: #d1fae5;       /* teal-100 untuk border lembut */
+    --brand-text: #134e4a;         /* teal-900 - teks utama */
+    --brand-text-muted: #5b6b6a;   /* abu-abu kehijauan */
+
+    /* Bootstrap variable overrides */
+    --bs-body-bg: var(--brand-bg);
+    --bs-body-color: var(--brand-text);
+    --bs-border-color: #e2e8f0;
+
+    --bs-primary: var(--brand-primary);
+    --bs-primary-rgb: 13, 148, 136;
+    --bs-primary-dark: var(--brand-primary-dark);
+    --bs-primary-darker: var(--brand-primary-darker);
+    --bs-primary-light: var(--brand-primary-light);
+    --bs-primary-lighter: var(--brand-primary-lighter);
+
+    --bs-success: var(--brand-success);
+    --bs-success-rgb: 22, 163, 74;
+    --bs-success-dark: var(--brand-success-dark);
+
+    --bs-danger: var(--brand-danger);
+    --bs-danger-rgb: 220, 38, 38;
+
+    --bs-warning: var(--brand-warning);
+    --bs-warning-rgb: 217, 119, 6;
+
+    --bs-info: var(--brand-info);
+    --bs-info-rgb: 8, 145, 178;
+
+    --bs-link-color: var(--brand-primary);
+    --bs-link-hover-color: var(--brand-primary-dark);
+    --bs-link-decoration: none;
+
+    --bs-border-radius: 0.625rem;
+    --bs-border-radius-sm: 0.5rem;
+    --bs-border-radius-lg: 0.875rem;
+}
+
+body {
+    background-color: var(--brand-bg);
+    color: var(--brand-text);
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+/* ---------- Navbar top ---------- */
+.pos-navbar {
+    background: linear-gradient(90deg, var(--brand-primary-darker) 0%, var(--brand-primary-dark) 45%, var(--brand-primary) 100%);
+    box-shadow: 0 0.125rem 0.5rem rgba(19, 78, 74, 0.18);
+}
+
+.pos-navbar .navbar-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 700;
+    color: #ffffff;
+}
+
+.pos-navbar .navbar-brand i {
+    font-size: 1.5rem;
+    color: #a7f3d0; /* teal-200 */
+}
+
+.pos-navbar .nav-link {
+    color: #ccfbf1;
+    border-radius: 0.5rem;
+    padding: 0.4rem 0.75rem;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+}
+
+.pos-navbar .nav-link:hover,
+.pos-navbar .nav-link:focus {
+    color: #ffffff;
+    background-color: rgba(255, 255, 255, 0.12);
+}
+
+.pos-navbar .nav-link.active {
+    color: var(--brand-primary-darker);
+    background-color: #ffffff;
+}
+
+.pos-navbar .nav-link i {
+    font-size: 1.05rem;
+}
+
+.pos-navbar .navbar-toggler {
+    border-color: rgba(255, 255, 255, 0.35);
+}
+
+.pos-navbar .navbar-toggler:focus {
+    box-shadow: 0 0 0 0.15rem rgba(255, 255, 255, 0.25);
+}
+
+.pos-navbar .navbar-toggler-icon {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%28255, 255, 255, 0.8%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+}
+
+.pos-navbar .dropdown-menu {
+    border: 0;
+    box-shadow: 0 0.5rem 1.25rem rgba(19, 78, 74, 0.15);
+    border-radius: 0.625rem;
+}
+
+.pos-navbar .dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-radius: 0.4375rem;
+}
+
+.pos-navbar .dropdown-item i {
+    color: var(--brand-primary);
+}
+
+.pos-navbar .dropdown-item:hover,
+.pos-navbar .dropdown-item:focus {
+    background-color: var(--brand-primary-lighter);
+}
+
+.pos-navbar .dropdown-item.text-danger i {
+    color: var(--brand-danger);
+}
+
+.pos-navbar .dropdown-item.text-danger:hover,
+.pos-navbar .dropdown-item.text-danger:focus {
+    background-color: #fef2f2; /* red-50 */
+}
+
+/* ---------- Card ---------- */
+.pos-card {
+    border: 1px solid var(--brand-border);
+    border-radius: 0.875rem;
+    box-shadow: 0 0.125rem 0.375rem rgba(19, 78, 74, 0.06);
+    background-color: var(--brand-surface);
+    overflow: hidden;
+}
+
+.pos-card > .card-header {
+    background: linear-gradient(180deg, var(--brand-primary-lighter) 0%, #ffffff 100%);
+    border-bottom: 1px solid var(--brand-border);
+    padding: 0.875rem 1.25rem;
+    font-weight: 600;
+    color: var(--brand-primary-darker);
+}
+
+.pos-card > .card-header.bg-success {
+    background: linear-gradient(90deg, var(--brand-success-dark) 0%, var(--brand-success) 100%) !important;
+    color: #ffffff;
+    border-bottom: 0;
+}
+
+.pos-card > .card-body {
+    padding: 1.25rem;
+}
+
+.pos-card > .card-body.p-0 {
+    padding: 0;
+}
+
+/* ---------- Tombol ---------- */
+.btn {
+    border-radius: 0.5rem;
+    font-weight: 500;
+}
+
+.btn-primary {
+    background-color: var(--brand-primary);
+    border-color: var(--brand-primary);
+}
+
+.btn-primary:hover,
+.btn-primary:focus {
+    background-color: var(--brand-primary-dark);
+    border-color: var(--brand-primary-dark);
+}
+
+.btn-primary:active,
+.btn-primary.active {
+    background-color: var(--brand-primary-darker) !important;
+    border-color: var(--brand-primary-darker) !important;
+}
+
+.btn-outline-primary {
+    color: var(--brand-primary);
+    border-color: var(--brand-primary);
+}
+
+.btn-outline-primary:hover,
+.btn-outline-primary:focus {
+    background-color: var(--brand-primary);
+    border-color: var(--brand-primary);
+    color: #ffffff;
+}
+
+.btn-success {
+    background-color: var(--brand-success);
+    border-color: var(--brand-success);
+}
+
+.btn-success:hover,
+.btn-success:focus {
+    background-color: var(--brand-success-dark);
+    border-color: var(--brand-success-dark);
+}
+
+.btn-outline-success:hover,
+.btn-outline-success:focus {
+    background-color: var(--brand-success);
+    border-color: var(--brand-success);
+}
+
+.btn-warning {
+    background-color: var(--brand-accent);
+    border-color: var(--brand-accent);
+    color: #ffffff;
+}
+
+.btn-warning:hover,
+.btn-warning:focus {
+    background-color: var(--brand-accent-dark);
+    border-color: var(--brand-accent-dark);
+    color: #ffffff;
+}
+
+.btn-outline-warning {
+    color: var(--brand-accent-dark);
+    border-color: var(--brand-accent);
+}
+
+.btn-outline-warning:hover,
+.btn-outline-warning:focus {
+    background-color: var(--brand-accent);
+    border-color: var(--brand-accent);
+    color: #ffffff;
+}
+
+.btn-outline-danger:hover,
+.btn-outline-danger:focus {
+    background-color: var(--brand-danger);
+    border-color: var(--brand-danger);
+}
+
+.btn-outline-secondary:hover,
+.btn-outline-secondary:focus {
+    background-color: #64748b;
+    border-color: #64748b;
+}
+
+/* ---------- Form control ---------- */
+.form-control,
+.form-select {
+    border-radius: 0.5rem;
+    border-color: #d6e3e1;
+}
+
+.form-control:focus,
+.form-select:focus {
+    border-color: var(--brand-primary);
+    box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.18);
+}
+
+.form-check-input:checked {
+    background-color: var(--brand-primary);
+    border-color: var(--brand-primary);
+}
+
+.form-check-input:focus {
+    border-color: var(--brand-primary);
+    box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.18);
+}
+
+/* ---------- Tabel ---------- */
+.table thead th {
+    color: var(--brand-primary-darker);
+    background-color: var(--brand-primary-lighter) !important;
+    border-bottom: 1px solid var(--brand-border);
+    font-size: 0.8125rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.table tbody tr:hover {
+    background-color: rgba(13, 148, 136, 0.05);
+}
+
+/* ---------- Badge & alert ---------- */
+.badge {
+    border-radius: 0.375rem;
+    font-weight: 600;
+}
+
+.alert {
+    border-radius: 0.625rem;
+    border-left: 0.3125rem solid;
+}
+
+.alert-info {
+    background-color: #e0f2fe;
+    border-color: var(--brand-info);
+    color: #155e75;
+}
+
+.alert-warning {
+    background-color: #fef3c7;
+    border-color: var(--brand-accent);
+    color: #92400e;
+}
+
+.alert-danger {
+    background-color: #fee2e2;
+    border-color: var(--brand-danger);
+    color: #991b1b;
+}
+
+.alert-success {
+    background-color: #dcfce7;
+    border-color: var(--brand-success);
+    color: #166534;
+}
+
+/* ---------- Utilitas brand ---------- */
+.text-brand {
+    color: var(--brand-primary);
+}
+
+.text-brand-dark {
+    color: var(--brand-primary-darker);
+}
+
+.bg-brand-soft {
+    background-color: var(--brand-primary-lighter);
+}
+
+.stok-menipis {
+    color: var(--brand-warning);
+    font-weight: 600;
+}
+
+.stok-habis {
+    color: var(--brand-danger);
+    font-weight: 600;
+}
+
+.total-besar {
+    color: var(--brand-primary-darker);
+}
+
+/* Ringkasan (sidebar transaksi) */
+.summary-total {
+    color: var(--brand-primary-dark);
+}
+
+/* Link umum */
+a {
+    color: var(--brand-primary);
+}
+
+a:hover {
+    color: var(--brand-primary-dark);
+}

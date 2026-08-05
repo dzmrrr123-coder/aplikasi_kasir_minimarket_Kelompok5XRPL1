@@ -38,18 +38,17 @@ if ($_SESSION['role'] !== 'admin') {
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>Akses Ditolak - Kasir Minimarket</title>
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-        <style>
-            body { background-color: #f4f6f8; }
-            .pos-card { border: 0; border-radius: .75rem; box-shadow: 0 .125rem .375rem rgba(16,24,40,.06); }
-        </style>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+        <link href="assets/theme.css" rel="stylesheet">
     </head>
-    <body class="bg-light">
-    <div class="container py-4">
+    <body class="d-flex align-items-center" style="min-height: 100vh;">
+    <div class="container">
         <div class="card pos-card mx-auto" style="max-width: 480px;">
             <div class="card-body text-center p-4">
+                <span class="badge text-bg-danger mb-3"><i class="bi bi-shield-exclamation me-1"></i>403</span>
                 <h1 class="h4 mb-3">Akses Ditolak</h1>
                 <p class="mb-4">Anda tidak memiliki akses ke halaman ini.</p>
-                <a href="transaksi.php" class="btn btn-primary">Kembali ke Kasir</a>
+                <a href="transaksi.php" class="btn btn-primary"><i class="bi bi-cash-register me-1"></i>Kembali ke Kasir</a>
             </div>
         </div>
     </div>
@@ -107,28 +106,58 @@ function formatRupiah(float $jumlah): string
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Laporan Penjualan - Kasir Minimarket</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="assets/theme.css" rel="stylesheet">
     <style>
-        body { background-color: #f4f6f8; }
-        .pos-card { border: 0; border-radius: .75rem; box-shadow: 0 .125rem .375rem rgba(16,24,40,.06); }
         .total-besar { font-size: 1.5rem; font-weight: 700; }
     </style>
 </head>
-<body class="bg-light">
+<body>
+<nav class="navbar navbar-expand-lg pos-navbar mb-4 sticky-top">
+    <div class="container">
+        <a class="navbar-brand" href="admin.php"><i class="bi bi-shop"></i> Kasir Minimarket</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav-laporan"
+                aria-controls="nav-laporan" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="nav-laporan">
+            <ul class="navbar-nav me-auto">
+                <li class="nav-item">
+                    <a class="nav-link" href="admin.php"><i class="bi bi-speedometer2"></i> Admin</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="transaksi.php"><i class="bi bi-cash-register"></i> Kasir</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link active" href="laporan.php"><i class="bi bi-bar-chart-line"></i> Laporan</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="supplier.php"><i class="bi bi-truck"></i> Supplier</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="retur.php"><i class="bi bi-arrow-counterclockwise"></i> Retur</a>
+                </li>
+            </ul>
+            <div class="d-flex align-items-center gap-2">
+                <span class="navbar-text text-white small me-2 d-none d-lg-inline">
+                    <i class="bi bi-person-circle me-1"></i><?= htmlspecialchars($nama) ?>
+                </span>
+                <form method="post" class="d-inline">
+                    <input type="hidden" name="aksi" value="logout">
+                    <button type="submit" class="btn btn-outline-light btn-sm">
+                        <i class="bi bi-box-arrow-right me-1"></i>Logout
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</nav>
 <div class="container py-4">
 
-    <header class="d-flex flex-wrap align-items-center justify-content-between mb-4 gap-2">
-        <div>
-            <h1 class="h3 mb-0">Laporan Penjualan</h1>
-            <span class="text-muted small">Admin: <?= htmlspecialchars($nama) ?></span>
-        </div>
-        <div class="d-flex gap-2">
-            <a href="admin.php" class="btn btn-outline-secondary btn-sm">Kembali ke Admin</a>
-            <form method="post" class="d-inline">
-                <input type="hidden" name="aksi" value="logout">
-                <button type="submit" class="btn btn-outline-danger btn-sm">Logout</button>
-            </form>
-        </div>
-    </header>
+    <div class="mb-4">
+        <h1 class="h3 mb-1">Laporan Penjualan</h1>
+        <span class="text-muted small">Admin: <?= htmlspecialchars($nama) ?></span>
+    </div>
 
     <div class="card pos-card mb-4">
         <div class="card-header bg-white"><strong>Filter Periode</strong></div>
@@ -157,7 +186,7 @@ function formatRupiah(float $jumlah): string
                     >
                 </div>
                 <div class="col-md-auto">
-                    <button type="submit" class="btn btn-primary">Tampilkan</button>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-funnel me-1"></i>Tampilkan</button>
                 </div>
             </form>
         </div>
@@ -227,5 +256,6 @@ function formatRupiah(float $jumlah): string
     </div>
 
 </div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

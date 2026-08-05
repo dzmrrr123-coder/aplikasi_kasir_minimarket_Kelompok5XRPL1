@@ -74,24 +74,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Login - Kasir Minimarket</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="assets/theme.css" rel="stylesheet">
     <style>
-        body {
-            background-color: #f4f6f8;
-        }
         .login-card {
-            max-width: 400px;
+            max-width: 420px;
             border: 0;
-            border-radius: .75rem;
-            box-shadow: 0 .125rem .375rem rgba(16, 24, 40, .06);
+        }
+        .login-brand-icon {
+            width: 3.5rem;
+            height: 3.5rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-primary-darker) 100%);
+            color: #fff;
+            border-radius: 1rem;
+            font-size: 1.75rem;
+            box-shadow: 0 0.25rem 0.75rem rgba(13, 148, 136, 0.35);
         }
     </style>
 </head>
-<body class="bg-light d-flex align-items-center" style="min-height: 100vh;">
+<body class="d-flex align-items-center" style="min-height: 100vh;">
     <div class="container">
-        <div class="card login-card mx-auto">
+        <div class="card pos-card login-card mx-auto">
             <div class="card-body p-4 p-md-5">
-                <h1 class="h4 mb-1">Kasir Minimarket</h1>
-                <p class="text-muted mb-4">Masuk untuk mulai bertransaksi.</p>
+                <div class="text-center mb-4">
+                    <span class="login-brand-icon"><i class="bi bi-shop"></i></span>
+                    <h1 class="h4 mt-3 mb-1">Kasir Minimarket</h1>
+                    <p class="text-muted mb-0">Masuk untuk mulai bertransaksi.</p>
+                </div>
 
                 <?php if ($error !== ''): ?>
                     <div class="alert alert-danger py-2" role="alert">
@@ -124,11 +136,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             required
                         >
                     </div>
-                    <button type="submit" class="btn btn-primary w-100">Masuk</button>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-box-arrow-in-right me-1"></i> Masuk
+                    </button>
                 </form>
 
                 <p class="text-muted small mt-4 mb-0 text-center">
-                    Akun dibuat langsung di tabel <code>users</code>.
+                    <i class="bi bi-shield-lock me-1"></i> Akun dibuat langsung di tabel <code>users</code>.
                 </p>
             </div>
         </div>

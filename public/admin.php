@@ -250,33 +250,58 @@ $stokMenipis = array_values(array_filter(
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Admin - Kasir Minimarket</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="assets/theme.css" rel="stylesheet">
     <style>
-        body { background-color: #f4f6f8; }
-        .pos-card { border: 0; border-radius: .75rem; box-shadow: 0 .125rem .375rem rgba(16,24,40,.06); }
-        .stok-menipis { color: #b45309; font-weight: 600; }
-        .stok-habis { color: #b91c1c; font-weight: 600; }
         .table-produk td { vertical-align: middle; }
     </style>
 </head>
-<body class="bg-light">
+<body>
+<nav class="navbar navbar-expand-lg pos-navbar mb-4 sticky-top">
+    <div class="container">
+        <a class="navbar-brand" href="admin.php"><i class="bi bi-shop"></i> Kasir Minimarket</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav-admin"
+                aria-controls="nav-admin" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="nav-admin">
+            <ul class="navbar-nav me-auto">
+                <li class="nav-item">
+                    <a class="nav-link active" href="admin.php"><i class="bi bi-speedometer2"></i> Admin</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="transaksi.php"><i class="bi bi-cash-register"></i> Kasir</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="laporan.php"><i class="bi bi-bar-chart-line"></i> Laporan</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="supplier.php"><i class="bi bi-truck"></i> Supplier</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="retur.php"><i class="bi bi-arrow-counterclockwise"></i> Retur</a>
+                </li>
+            </ul>
+            <div class="d-flex align-items-center gap-2">
+                <span class="navbar-text text-white small me-2 d-none d-lg-inline">
+                    <i class="bi bi-person-circle me-1"></i><?= htmlspecialchars($nama) ?>
+                </span>
+                <form method="post" class="d-inline">
+                    <input type="hidden" name="aksi" value="logout">
+                    <button type="submit" class="btn btn-outline-light btn-sm">
+                        <i class="bi bi-box-arrow-right me-1"></i>Logout
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</nav>
 <div class="container py-4">
 
-    <header class="d-flex flex-wrap align-items-center justify-content-between mb-4 gap-2">
-        <div>
-            <h1 class="h3 mb-0">Halaman Admin</h1>
-            <span class="text-muted small">Admin: <?= htmlspecialchars($nama) ?></span>
-        </div>
-        <div class="d-flex gap-2">
-            <a href="transaksi.php" class="btn btn-outline-primary btn-sm">Buka Kasir</a>
-            <a href="laporan.php" class="btn btn-outline-primary btn-sm">Laporan Penjualan</a>
-            <a href="supplier.php" class="btn btn-outline-primary btn-sm">Supplier</a>
-            <a href="retur.php" class="btn btn-outline-primary btn-sm">Retur Barang</a>
-            <form method="post" class="d-inline">
-                <input type="hidden" name="aksi" value="logout">
-                <button type="submit" class="btn btn-outline-danger btn-sm">Logout</button>
-            </form>
-        </div>
-    </header>
+    <div class="mb-4">
+        <h1 class="h3 mb-1">Halaman Admin</h1>
+        <span class="text-muted small">Admin: <?= htmlspecialchars($nama) ?></span>
+    </div>
 
     <?php if ($pesan !== ''): ?>
         <div class="alert alert-info alert-dismissible fade show" role="alert">
@@ -344,13 +369,13 @@ $stokMenipis = array_values(array_filter(
                                         <form method="post" class="d-inline">
                                             <input type="hidden" name="aksi" value="edit_kategori">
                                             <input type="hidden" name="kategori_id" value="<?= $k->getId() ?>">
-                                            <button type="submit" class="btn btn-sm btn-outline-primary" title="Edit">Edit</button>
+                                            <button type="submit" class="btn btn-sm btn-outline-primary" title="Edit"><i class="bi bi-pencil"></i></button>
                                         </form>
                                         <form method="post" class="d-inline"
                                               onsubmit="return confirm('Hapus kategori ini?');">
                                             <input type="hidden" name="aksi" value="hapus_kategori">
                                             <input type="hidden" name="kategori_id" value="<?= $k->getId() ?>">
-                                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Hapus">Hapus</button>
+                                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Hapus"><i class="bi bi-trash"></i></button>
                                         </form>
                                     </span>
                                 </li>
@@ -524,13 +549,13 @@ $stokMenipis = array_values(array_filter(
                                                     <form method="post" class="d-inline">
                                                         <input type="hidden" name="aksi" value="edit_produk">
                                                         <input type="hidden" name="produk_id" value="<?= $p->getId() ?>">
-                                                        <button type="submit" class="btn btn-sm btn-outline-primary" title="Edit">Edit</button>
+                                                        <button type="submit" class="btn btn-sm btn-outline-primary" title="Edit"><i class="bi bi-pencil me-1"></i>Edit</button>
                                                     </form>
                                                     <form method="post" class="d-inline"
                                                           onsubmit="return confirm('Hapus produk ini?');">
                                                         <input type="hidden" name="aksi" value="hapus_produk">
                                                         <input type="hidden" name="produk_id" value="<?= $p->getId() ?>">
-                                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Hapus">Hapus</button>
+                                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Hapus"><i class="bi bi-trash me-1"></i>Hapus</button>
                                                     </form>
                                                 </span>
                                             </td>
@@ -545,5 +570,6 @@ $stokMenipis = array_values(array_filter(
         </div>
     </div>
 </div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
