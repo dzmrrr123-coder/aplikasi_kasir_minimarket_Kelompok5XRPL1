@@ -6,7 +6,7 @@ namespace App\Models;
 
 use App\Database\Database;
 
-class Supplier
+class Supplier implements DataReporter
 {
     private string $id = '';
     private string $nama = '';
@@ -123,5 +123,83 @@ class Supplier
         $row = $stmt->fetch();
 
         return $row === false ? null : new self($row);
+    }
+
+    // ------------------------------------------------------------
+    // DataReporter (Polimorfisme) — untuk Chart.js & DataTables
+    // ------------------------------------------------------------
+
+    /**
+     * Data grafik supplier: total jumlah supplier (satu titik data).
+     *
+     * @param array<string, mixed> $params
+     */
+    public function getAgregasiGrafik(array $params = []): array
+    {
+        $total = (int) Database::connect()->query('SELECT COUNT(*) FROM supplier')->fetchColumn();
+
+        return [
+            'labels' => ['Supplier'],
+            'series' => [
+                'label' => 'Jumlah Supplier',
+                'data'  => [$total],
+            ],
+        ];
+    }
+
+    /**
+     * Data tabel supplier (nama, kontak, alamat) dengan pencarian
+     * & pagination (DataTables server-side).
+     *
+     * @param array<string, mixed> $params search/start/length
+     */
+    public function getDataTabel(array $params = []): array
+    {
+        $cari = trim((string) ($params['search'] ?? ''));
+        $start = max(0, (int) ($params['start'] ?? 0));
+        $length = max(1, (int) ($params['length'] ?? 10));
+
+        $where = '';
+        $bind = [];
+
+        if ($cari !== '') {
+            $where = 'WHERE nama LIKE :cari OR kontak LIKE :cari OR alamat LIKE :cari';
+            $bind[':cari'] = '%' . $cari . '%';
+        }
+
+        $pdo = Database::connect();
+        $total = (int) $pdo->query('SELECT COUNT(*) FROM supplier')->fetchColumn();
+
+        $stmtFiltered = $pdo->prepare('SELECT COUNT(*) FROM supplier ' . $where);
+        $stmtFiltered->execute($bind);
+        $filtered = (int) $stmtFiltered->fetchColumn();
+
+        $stmt = $pdo->prepare(
+            'SELECT id, nama, kontak, alamat FROM supplier ' . $where . '
+             ORDER BY nama ASC
+             LIMIT :limit OFFSET :offset'
+        );
+
+        foreach ($bind as $kunci => $nilai) {
+            $stmt->bindValue($kunci, $nilai);
+        }
+        $stmt->bindValue(':limit', $length, \PDO::PARAM_INT);
+        $stmt->bindValue(':offset', $start, \PDO::PARAM_INT);
+        $stmt->execute();
+
+        $rows = array_map(static function (array $r): array {
+            return [
+                'id'     => (int) $r['id'],
+                'nama'   => $r['nama'],
+                'kontak' => $r['kontak'],
+                'alamat' => $r['alamat'],
+            ];
+        }, $stmt->fetchAll());
+
+        return [
+            'total'    => $total,
+            'filtered' => $filtered,
+            'rows'     => $rows,
+        ];
     }
 }

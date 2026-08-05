@@ -149,8 +149,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// ---- Data untuk tampilan ----
-$supplierSemua = Supplier::semua();
+// ---- Data untuk tampilan (view murni) ----
+// Tabel supplier diisi via DataTables server-side (api.php?aksi=supplier.tabel
+// → InventarisController → Supplier::getDataTabel), bukan di-render di view.
 $editSupplierId = (int) ($_SESSION['edit_supplier_id'] ?? 0);
 $editSupplier = $editSupplierId > 0 ? Supplier::cari($editSupplierId) : null;
 ?>
@@ -162,6 +163,7 @@ $editSupplier = $editSupplierId > 0 ? Supplier::cari($editSupplierId) : null;
     <title>Supplier - Kasir Minimarket</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="https://cdn.datatables.net/2.1.8/css/dataTables.bootstrap5.min.css" rel="stylesheet">
     <link href="assets/theme.css" rel="stylesheet">
 </head>
 <body>
@@ -292,55 +294,70 @@ $editSupplier = $editSupplierId > 0 ? Supplier::cari($editSupplierId) : null;
             <div class="card pos-card">
                 <div class="card-header bg-white d-flex justify-content-between align-items-center">
                     <span>Daftar Supplier</span>
-                    <span class="text-muted small"><?= count($supplierSemua) ?> supplier</span>
+                    <span class="text-muted small">DataTables</span>
                 </div>
                 <div class="card-body p-0">
-                    <?php if ($supplierSemua === []): ?>
-                        <div class="p-4 text-center text-muted">Belum ada supplier.</div>
-                    <?php else: ?>
-                        <div class="table-responsive">
-                            <table class="table table-hover align-middle mb-0">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>Nama</th>
-                                        <th>Kontak</th>
-                                        <th>Alamat</th>
-                                        <th class="text-center">Aksi</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php foreach ($supplierSemua as $s): ?>
-                                        <tr>
-                                            <td><?= htmlspecialchars($s->getNama()) ?></td>
-                                            <td><?= htmlspecialchars($s->getKontak()) ?></td>
-                                            <td><?= htmlspecialchars($s->getAlamat()) ?></td>
-                                            <td class="text-center">
-                                                <span class="d-inline-flex gap-1">
-                                                    <form method="post" class="d-inline">
-                                                        <input type="hidden" name="aksi" value="edit_supplier">
-                                                        <input type="hidden" name="supplier_id" value="<?= $s->getId() ?>">
-                                                        <button type="submit" class="btn btn-sm btn-outline-primary" title="Edit"><i class="bi bi-pencil me-1"></i>Edit</button>
-                                                    </form>
-                                                    <form method="post" class="d-inline"
-                                                          onsubmit="return confirm('Hapus supplier ini?');">
-                                                        <input type="hidden" name="aksi" value="hapus_supplier">
-                                                        <input type="hidden" name="supplier_id" value="<?= $s->getId() ?>">
-                                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Hapus"><i class="bi bi-trash me-1"></i>Hapus</button>
-                                                    </form>
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    <?php endif; ?>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0" id="tabel-supplier">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Nama</th>
+                                    <th>Kontak</th>
+                                    <th>Alamat</th>
+                                    <th class="text-center">Aksi</th>
+                                </tr>
+                            </thead>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.datatables.net/2.1.8/js/dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/2.1.8/js/dataTables.bootstrap5.min.js"></script>
 <script src="assets/theme.js"></script>
+<script>
+    // Tabel supplier via DataTables server-side (api.php → InventarisController → Supplier::getDataTabel).
+    (function () {
+        if (!window.jQuery || !window.DataTable) return;
+
+        jQuery('#tabel-supplier').DataTable({
+            serverSide: true,
+            ajax: { url: 'api.php?aksi=supplier.tabel', data: function (d) { d.draw = d.draw || 0; } },
+            pageLength: 10,
+            lengthChange: false,
+            order: [],
+            columns: [
+                { data: 'nama' },
+                { data: 'kontak' },
+                { data: 'alamat' },
+                {
+                    data: 'id',
+                    className: 'text-center',
+                    orderable: false,
+                    render: function (d) {
+                        return '<span class="d-inline-flex gap-1">' +
+                            '<form method="post" class="d-inline">' +
+                            '<input type="hidden" name="aksi" value="edit_supplier">' +
+                            '<input type="hidden" name="supplier_id" value="' + d + '">' +
+                            '<button type="submit" class="btn btn-sm btn-outline-primary" title="Edit"><i class="bi bi-pencil me-1"></i>Edit</button>' +
+                            '</form>' +
+                            '<form method="post" class="d-inline" onsubmit="return confirm(\'Hapus supplier ini?\');">' +
+                            '<input type="hidden" name="aksi" value="hapus_supplier">' +
+                            '<input type="hidden" name="supplier_id" value="' + d + '">' +
+                            '<button type="submit" class="btn btn-sm btn-outline-danger" title="Hapus"><i class="bi bi-trash me-1"></i>Hapus</button>' +
+                            '</form></span>';
+                    }
+                }
+            ],
+            language: {
+                url: 'https://cdn.datatables.net/plug-ins/2.1.8/i18n/id.json'
+            }
+        });
+    })();
+</script>
 </body>
 </html>

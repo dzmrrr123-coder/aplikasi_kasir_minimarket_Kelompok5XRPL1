@@ -710,6 +710,7 @@ $laporanReporter = new LaporanPenjualan();
 assertTrue($laporanReporter instanceof DataReporter, 'LaporanPenjualan implements DataReporter');
 assertTrue((new Produk()) instanceof DataReporter, 'Produk implements DataReporter');
 assertTrue((new ReturBarang()) instanceof DataReporter, 'ReturBarang implements DataReporter');
+assertTrue((new Supplier()) instanceof DataReporter, 'Supplier implements DataReporter');
 
 // ---- getAgregasiGrafik: data grafik lengkap ----
 $grafik = $laporanReporter->getAgregasiGrafik([
@@ -745,6 +746,13 @@ assertTrue(isset($tabelProduk['rows'][0]['kategori']), 'baris produk memuat kate
 // ---- getDataTabel Retur (search) ----
 $tabelRetur = (new ReturBarang())->getDataTabel(['search' => '', 'start' => 0, 'length' => 10]);
 assertTrue($tabelRetur['total'] >= 1, 'tabel retur punya total >= 1');
+
+// ---- getDataTabel Supplier ----
+$tabelSupplier = (new Supplier())->getDataTabel(['search' => '', 'start' => 0, 'length' => 10]);
+assertTrue($tabelSupplier['total'] >= 1, 'tabel supplier punya total >= 1');
+assertTrue(isset($tabelSupplier['rows'][0]['nama']), 'baris supplier memuat nama');
+$grafikSupplier = (new Supplier())->getAgregasiGrafik();
+assertTrue($grafikSupplier['labels'] === ['Supplier'], 'grafik supplier punya label Supplier');
 
 // ---- Controller PBO: dataTabelTransaksi mereturn array utk JSON ----
 $laporanCtrl = new \App\Controllers\LaporanController();

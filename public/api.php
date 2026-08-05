@@ -63,6 +63,10 @@ switch ($aksi) {
         $hasil = $inventaris->dataTabelProduk($params);
         break;
 
+    case 'supplier.tabel':
+        $hasil = $inventaris->dataTabelSupplier($params);
+        break;
+
     case 'dashboard.grafik':
         $hasil = $dashboard->grafikPenjualan($params);
         break;
@@ -106,7 +110,7 @@ switch ($aksi) {
 }
 
 // Aksi DataTables membungkus ke format server-side DataTables.
-if (in_array($aksi, ['produk.tabel', 'dashboard.terlaris', 'dashboard.transaksi', 'laporan.tabel', 'retur.tabel'], true)) {
+if (in_array($aksi, ['produk.tabel', 'supplier.tabel', 'dashboard.terlaris', 'dashboard.transaksi', 'laporan.tabel', 'retur.tabel'], true)) {
     echo json_encode([
         'draw'            => (int) ($params['draw'] ?? 0),
         'recordsTotal'    => $hasil['total'],
