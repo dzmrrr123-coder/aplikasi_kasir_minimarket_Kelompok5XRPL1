@@ -30,24 +30,63 @@ if (isset($_SESSION['member_id'])) {
 $error = '';
 $identitas = '';
 
+// Rate-limit login member: maksimal 5 percobaan gagal per 5 menit.
+// Disimpan per-IP di file temp (tidak bergantung sesi yang belum ada).
+// Mirror dari login.php — mencegah brute-force password member.
+$fileGagal = sys_get_temp_dir() . '/kasir-member-' . md5($_SERVER['REMOTE_ADDR'] ?? 'local') . '.txt';
+$percobaan = 0;
+$terkunciSampai = 0;
+
+if (is_file($fileGagal)) {
+    $data = @unserialize((string) file_get_contents($fileGagal));
+
+    if (is_array($data)) {
+        $percobaan = (int) ($data['percobaan'] ?? 0);
+        $terkunciSampai = (int) ($data['terkunci_sampai'] ?? 0);
+    }
+
+    // Reset percobaan kalau sudah lewat jendela 5 menit.
+    if ($terkunciSampai === 0 && time() - (int) ($data['waktu'] ?? 0) > 300) {
+        $percobaan = 0;
+    }
+}
+
+$terkunci = $terkunciSampai > time();
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_csrf();
     $identitas = trim((string) ($_POST['identitas'] ?? ''));
     $password = (string) ($_POST['password'] ?? '');
 
-    $member = Member::login($identitas, $password);
+    if ($terkunci) {
+        $sisa = (int) ceil(($terkunciSampai - time()) / 60);
+        $error = 'Terlalu banyak percobaan gagal. Coba lagi dalam ' . max(1, $sisa) . ' menit.';
+    } else {
+        $member = Member::login($identitas, $password);
 
-    if ($member !== null) {
-        session_regenerate_id(true);
-        $_SESSION['member_id']   = (int) $member->getId();
-        $_SESSION['member_nama'] = $member->getNama();
-        $_SESSION['member_nomor'] = $member->getNomorMember();
+        if ($member !== null) {
+            // Sukses: reset counter & bersihkan file rate-limit.
+            @unlink($fileGagal);
+            session_regenerate_id(true);
+            $_SESSION['member_id']   = (int) $member->getId();
+            $_SESSION['member_nama'] = $member->getNama();
+            $_SESSION['member_nomor'] = $member->getNomorMember();
 
-        header('Location: member_area.php');
-        exit;
+            header('Location: member_area.php');
+            exit;
+        }
+
+        $percobaan++;
+        $terkunciSampai = $percobaan >= 5 ? time() + 300 : 0;
+
+        @file_put_contents($fileGagal, serialize([
+            'percobaan'       => $percobaan,
+            'terkunci_sampai' => $terkunciSampai,
+            'waktu'           => time(),
+        ]));
+
+        $error = 'Nomor member / telepon atau password salah.';
     }
-
-    $error = 'Nomor member / telepon atau password salah.';
 }
 ?>
 <!DOCTYPE html>
