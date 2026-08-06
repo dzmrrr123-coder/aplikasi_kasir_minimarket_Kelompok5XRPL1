@@ -971,8 +971,8 @@ $produkSemua = Produk::semua();
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Transaksi Penjualan - Kasir Minimarket</title>
     <meta name="csrf-token" content="<?= htmlspecialchars(csrf_token()) ?>">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="assets/vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
+    <link href="assets/vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
     <link href="assets/theme.css" rel="stylesheet">
     <style>
         .qty-input { max-width: 4.5rem; }
@@ -1280,7 +1280,7 @@ $produkSemua = Produk::semua();
 </div><!-- /.kiosk-wrapper -->
 
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="assets/vendor/bootstrap/bootstrap.bundle.min.js"></script>
 <script>
     // Transaksi tanpa reload: semua form data-aksi dikirim via fetch,
     // server mengembalikan JSON {fragment, struk?, pesan, tipe},

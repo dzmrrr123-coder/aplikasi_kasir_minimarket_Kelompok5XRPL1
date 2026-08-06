@@ -33,8 +33,8 @@ if ($_SESSION['role'] !== 'admin') {
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>Akses Ditolak - Kasir Minimarket</title>
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+        <link href="assets/vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
+        <link href="assets/vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
         <link href="assets/theme.css" rel="stylesheet">
     </head>
     <body class="d-flex align-items-center" style="min-height: 100vh;">
@@ -163,9 +163,9 @@ $aktif = 'supplier';
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Supplier - Kasir Minimarket</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-    <link href="https://cdn.datatables.net/2.1.8/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+    <link href="assets/vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
+    <link href="assets/vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="assets/vendor/datatables/dataTables.bootstrap5.min.css" rel="stylesheet">
     <link href="assets/theme.css" rel="stylesheet">
 </head>
 <body>
@@ -266,10 +266,10 @@ $aktif = 'supplier';
         </div>
     </div>
 </div>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-<script src="https://cdn.datatables.net/2.1.8/js/dataTables.min.js"></script>
-<script src="https://cdn.datatables.net/2.1.8/js/dataTables.bootstrap5.min.js"></script>
+<script src="assets/vendor/bootstrap/bootstrap.bundle.min.js"></script>
+<script src="assets/vendor/jquery/jquery.min.js"></script>
+<script src="assets/vendor/datatables/dataTables.min.js"></script>
+<script src="assets/vendor/datatables/dataTables.bootstrap5.min.js"></script>
 <script src="assets/theme.js"></script>
 <script>
     // Tabel supplier via DataTables server-side (api.php → InventarisController → Supplier::getDataTabel).
@@ -306,7 +306,7 @@ $aktif = 'supplier';
                 }
             ],
             language: {
-                url: 'https://cdn.datatables.net/plug-ins/2.1.8/i18n/id.json'
+                url: 'assets/vendor/datatables/id.json'
             }
         });
     })();
