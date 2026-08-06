@@ -167,6 +167,39 @@ class ShiftKasir implements DataReporter
     }
 
     /**
+     * Riwayat transaksi kasir selama shift ini — dipakai saat tutup kas
+     * supaya kasir bisa mencocokkan uang di laci dengan transaksi yang
+     * tercatat (membantu menemukan selisih).
+     *
+     * @return array<int, array{tanggal: string, total: float, metode: string}>
+     */
+    public function riwayatTransaksi(): array
+    {
+        $sampai = $this->ditutupPada ?? date('Y-m-d H:i:s');
+
+        $stmt = Database::connect()->prepare(
+            'SELECT r.tanggal, r.total, r.metode
+             FROM rekap_penjualan r
+             WHERE r.tanggal >= :mulai AND r.tanggal <= :sampai
+               AND r.kasir_id = :kasir
+             ORDER BY r.tanggal ASC'
+        );
+        $stmt->execute([
+            ':mulai'  => $this->dibukaPada,
+            ':sampai' => $sampai,
+            ':kasir'  => $this->kasirId,
+        ]);
+
+        return array_map(static function (array $row): array {
+            return [
+                'tanggal' => $row['tanggal'],
+                'total'   => (float) $row['total'],
+                'metode'  => (string) $row['metode'],
+            ];
+        }, $stmt->fetchAll());
+    }
+
+    /**
      * Tutup kas: rekonsiliasi kas fisik vs total sistem.
      *
      * @throws \RuntimeException bila shift tidak ditemukan / sudah tutup

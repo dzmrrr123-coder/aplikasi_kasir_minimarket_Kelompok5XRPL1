@@ -77,13 +77,21 @@
                 : '';
             initNumpad();
             syncNumpadMetode();
+        } else {
+            // Fragment tidak berisi panel kanan (shift belum/sudah tutup) —
+            // kosongkan isi lama supaya tidak ada sisa yang menggantung.
+            fragKanan.innerHTML = '';
         }
 
         // Panel kanan sempat disembunyikan (d-none) saat wajib buka kas.
-        // Begitu ada interaksi yang menghasilkan fragment (buka kas,
-        // tambah item, dll.), tampilkan kembali.
+        // Begitu ada interaksi yang menghasilkan fragment, tampilkan kembali —
+        // TAPI hanya kalau fragment masih berisi panel kanan (server render
+        // ulang). Kalau tidak (mis. shift baru saja ditutup, panel kanan
+        // memang harus hilang), biarkan state-nya apa adanya.
         var kioskKanan = document.querySelector('.kiosk-kanan');
-        if (kioskKanan) kioskKanan.classList.remove('d-none');
+        if (kioskKanan && kanan) {
+            kioskKanan.classList.remove('d-none');
+        }
 
         initKembalian();
         // Pertahankan fokus barcode setelah fragment diganti (supaya
@@ -212,6 +220,19 @@
                     if (cardBukaKas) cardBukaKas.classList.add('d-none');
                 }
 
+                if (aksi === 'tutup_kas') {
+                    // Tutup modal + tampilkan hasil rekonsiliasi yang jelas,
+                    // supaya kasir tidak bingung apakah kas berhasil ditutup.
+                    var modalTutup = document.getElementById('modal-tutup-kas');
+                    if (modalTutup && window.bootstrap) {
+                        var bs = bootstrap.Modal.getInstance(modalTutup);
+                        if (bs) bs.hide();
+                    }
+                    if (res.tipe === 'success') {
+                        tampilkanFlash(res.pesan + ' Kas kembali terkunci.', 'success');
+                    }
+                }
+
                 // Respons error (validasi/guard server) — aktifkan lagi tombol
                 // supaya kasir bisa perbaiki input & coba lagi.
                 if (res.tipe === 'danger' || res.tipe === 'warning') {
@@ -292,5 +313,73 @@
             var pin = document.getElementById('void-pin');
             if (pin) { pin.value = ''; setTimeout(function () { pin.focus(); }, 300); }
         });
+    }
+
+    // Modal tutup kas: muat ringkasan & riwayat transaksi shift saat dibuka,
+    // supaya kasir bisa mencocokkan uang di laci dengan transaksi tercatat.
+    function muatRingkasanTutupKas() {
+        var wadah = document.getElementById('tutup-kas-ringkasan');
+        var dibuka = document.getElementById('tutup-kas-dibuka');
+        var hint = document.getElementById('tutup-kas-hint');
+        if (!wadah) return;
+
+        wadah.innerHTML = '<div class="text-muted small py-2">Memuat riwayat shift...</div>';
+
+        var meta = document.querySelector('meta[name="csrf-token"]');
+        var token = meta ? meta.getAttribute('content') : '';
+        fetch('api.php?aksi=shift.ringkasan&csrf=' + encodeURIComponent(token))
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (!d.ada) {
+                    wadah.innerHTML = '<div class="alert alert-warning py-2 small">Tidak ada shift aktif. Buka kas dulu.</div>';
+                    return;
+                }
+
+                if (dibuka) dibuka.textContent = d.dibuka_pada ? new Date(d.dibuka_pada.replace(' ', 'T')).toLocaleString('id-ID') : '-';
+                if (hint) hint.textContent = 'Cocokkan dengan uang seharusnya di laci: ' + rupiah(d.uang_seharusnya) + '.';
+
+                var baris = (d.riwayat || []).map(function (r) {
+                    var tgl = r.tanggal ? new Date(r.tanggal.replace(' ', 'T')).toLocaleString('id-ID') : '';
+                    var cls = r.metode === 'Tunai' ? 'text-bg-success' : 'text-bg-secondary';
+                    return '<tr><td class="small font-num">' + tgl + '</td>' +
+                        '<td class="text-end font-num">' + rupiah(r.total) + '</td>' +
+                        '<td class="text-center"><span class="badge ' + cls + '">' + (r.metode || '') + '</span></td></tr>';
+                }).join('');
+
+                var isi = '<div class="row g-2 mb-3">' +
+                    '<div class="col-4"><div class="border rounded p-2 text-center"><div class="small text-muted">Modal awal</div>' +
+                    '<div class="fw-bold font-num">' + rupiah(d.modal_awal) + '</div></div></div>' +
+                    '<div class="col-4"><div class="border rounded p-2 text-center"><div class="small text-muted">Penjualan shift</div>' +
+                    '<div class="fw-bold font-num">' + rupiah(d.total_penjualan) + '</div></div></div>' +
+                    '<div class="col-4"><div class="border rounded p-2 text-center"><div class="small text-muted">Uang seharusnya</div>' +
+                    '<div class="fw-bold font-num">' + rupiah(d.uang_seharusnya) + '</div></div></div></div>';
+
+                isi += '<div class="mb-3"><div class="d-flex justify-content-between align-items-center mb-1">' +
+                    '<span class="small fw-semibold">Riwayat transaksi shift ini</span>' +
+                    '<span class="badge text-bg-light">' + (d.riwayat || []).length + ' transaksi</span></div>';
+
+                if ((d.riwayat || []).length === 0) {
+                    isi += '<div class="text-muted small border rounded p-3 text-center">Belum ada transaksi di shift ini.</div>';
+                } else {
+                    isi += '<div class="table-responsive border rounded" style="max-height: 220px; overflow-y: auto;">' +
+                        '<table class="table table-sm align-middle mb-0"><thead class="table-light">' +
+                        '<tr><th>Waktu</th><th class="text-end">Total</th><th class="text-center">Metode</th></tr></thead>' +
+                        '<tbody>' + baris + '</tbody>' +
+                        '<tfoot class="table-light"><tr><td class="fw-semibold">Total</td>' +
+                        '<td class="text-end fw-semibold font-num">' + rupiah(d.total_penjualan) + '</td><td></td></tr></tfoot>' +
+                        '</table></div>';
+                }
+                isi += '</div>';
+
+                wadah.innerHTML = isi;
+            })
+            .catch(function () {
+                wadah.innerHTML = '<div class="alert alert-danger py-2 small">Gagal memuat riwayat shift.</div>';
+            });
+    }
+
+    var modalTutupKas = document.getElementById('modal-tutup-kas');
+    if (modalTutupKas) {
+        modalTutupKas.addEventListener('show.bs.modal', muatRingkasanTutupKas);
     }
 })();

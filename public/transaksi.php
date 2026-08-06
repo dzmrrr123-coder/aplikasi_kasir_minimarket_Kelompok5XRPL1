@@ -327,6 +327,13 @@ function renderFragmentKananKiosk(): string
 {
     global $namaUser, $shiftAktif;
 
+    // Shift tidak aktif (belum buka kas / sudah tutup kas): panel kanan
+    // dikosongkan. `gantiFragment` memakai ada/tidaknya .kiosk-userbar
+    // sebagai penanda — kalau kosong, kolom kanan tetap tersembunyi.
+    if ($shiftAktif === null) {
+        return '';
+    }
+
     $keranjang = $_SESSION['keranjang'] ?? [];
 
     $memberId = (int) ($_SESSION['member_id'] ?? 0);
@@ -823,6 +830,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $modal = (float) ($_POST['modal_awal'] ?? 0);
                 $shiftId = ShiftKasir::buka($userId, $modal);
                 \App\Models\AuditLog::catat('buka_kas', 'shift_kasir', $shiftId, ['modal_awal' => $modal]);
+
+                // Refresh $shiftAktif global supaya fragment yang dikirim
+                // redirectSelf() merender panel kanan (bukan kosong).
+                $shiftAktif = ShiftKasir::shiftAktif($userId);
+
                 redirectSelf('Kas dibuka. Selamat bertugas!', 'success');
             } catch (\Throwable $e) {
                 redirectSelf(pesanErrorRamah($e), 'danger');
@@ -1280,7 +1292,7 @@ $produkSemua = Produk::semua();
 
 
 <script src="assets/vendor/bootstrap/bootstrap.bundle.min.js"></script>
-<script src="assets/pos.js?v=2"></script>
+<script src="assets/pos.js?v=3"></script>
 <script src="assets/hardware.js"></script>
 <script src="assets/hardware-pos.js"></script>
 
@@ -1321,7 +1333,7 @@ $produkSemua = Produk::semua();
 
 <!-- Modal tutup kas (rekonsiliasi) -->
 <div class="modal fade" id="modal-tutup-kas" tabindex="-1" aria-labelledby="modal-tutup-label" aria-hidden="true">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <form method="post" data-aksi="tutup_kas">
                 <input type="hidden" name="aksi" value="tutup_kas">
@@ -1332,8 +1344,14 @@ $produkSemua = Produk::semua();
                 <div class="modal-body">
                     <div class="mb-3">
                         <div class="small text-muted">Kas dibuka sejak</div>
-                        <div class="fw-semibold"><?= $shiftAktif !== null ? date('d-m-Y H:i', strtotime($shiftAktif->getDibukaPada())) : '-' ?></div>
+                        <div class="fw-semibold" id="tutup-kas-dibuka">-</div>
                     </div>
+
+                    <!-- Ringkasan & riwayat transaksi shift (diisi dinamis
+                         via api.php?aksi=shift.ringkasan saat modal dibuka,
+                         supaya selalu mutakhir walau shift baru dibuka lewat AJAX) -->
+                    <div id="tutup-kas-ringkasan"></div>
+
                     <div class="mb-3">
                         <label for="kas-fisik" class="form-label">Uang di laci (kas fisik) — Rp</label>
                         <input
@@ -1343,9 +1361,10 @@ $produkSemua = Produk::semua();
                             id="kas-fisik"
                             name="kas_fisik"
                             class="form-control form-control-lg font-num"
+                            placeholder="Isi jumlah uang fisik di laci"
                             required
                         >
-                        <div class="form-text">Total penjualan shift ini otomatis dihitung untuk rekonsiliasi.</div>
+                        <div class="form-text" id="tutup-kas-hint">Total penjualan shift otomatis dihitung untuk rekonsiliasi.</div>
                     </div>
                     <div class="mb-2">
                         <label for="catatan-shift" class="form-label">Catatan (opsional)</label>
@@ -1360,7 +1379,7 @@ $produkSemua = Produk::semua();
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
-                    <button type="submit" class="btn btn-warning"><i class="bi bi-cash-coin me-1"></i>Tutup Kas</button>
+                    <button type="submit" class="btn btn-warning" id="btn-tutup-kas"><i class="bi bi-cash-coin me-1"></i>Tutup Kas</button>
                 </div>
             </form>
         </div>

@@ -45,7 +45,11 @@ if (!isset($_SESSION['user_id'], $_SESSION['role'])) {
 
 $aksi = (string) ($_GET['aksi'] ?? ($_POST['aksi'] ?? ''));
 
-if ($_SESSION['role'] !== 'admin' && $aksi !== 'hardware.config') {
+// Aksi yang boleh diakses kasir (data milik kasir sendiri / konfigurasi
+// hardware POS). Sisanya khusus admin.
+$aksiKasir = ['hardware.config', 'shift.ringkasan'];
+
+if ($_SESSION['role'] !== 'admin' && !in_array($aksi, $aksiKasir, true)) {
     http_response_code(403);
     echo json_encode(['error' => 'forbidden']);
     exit;
@@ -114,6 +118,11 @@ switch ($aksi) {
 
     case 'shift.tabel':
         $hasil = $shift->dataTabelShift($params);
+        break;
+
+    case 'shift.ringkasan':
+        // Ringkasan shift aktif untuk modal tutup kas (riwayat transaksi).
+        $hasil = $shift->ringkasanShift($params);
         break;
 
     case 'audit.tabel':

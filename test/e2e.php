@@ -1188,6 +1188,15 @@ $tShift->prosesPembayaran(new PembayaranTunai(['jumlah' => 100000]));
 $shift = ShiftKasir::shiftAktif($kasirId);
 assertTrue($shift->totalPenjualanShift() > 0, 'total penjualan shift > 0 setelah transaksi');
 
+// Riwayat transaksi shift: dipakai modal tutup kas supaya kasir bisa
+// mencocokkan uang laci. Harus memuat transaksi yang baru saja dibuat.
+$riwayatShift = $shift->riwayatTransaksi();
+assertTrue(count($riwayatShift) >= 1, 'riwayat transaksi shift berisi minimal 1 transaksi');
+assertTrue(
+    (float) $riwayatShift[0]['total'] > 0 && isset($riwayatShift[0]['metode']),
+    'baris riwayat memuat total & metode pembayaran'
+);
+
 // ---- Shift kasir: tutup (rekonsiliasi) ----
 // Uang di laci = modal 100.000 + penjualan 100.000 = 200.000.
 $shift->tutup(200000, 'Shift uji');
