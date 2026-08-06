@@ -46,7 +46,7 @@ if (!isset($_SESSION['user_id'], $_SESSION['role'])) {
 $aksi = (string) ($_GET['aksi'] ?? ($_POST['aksi'] ?? ''));
 
 // Aksi yang boleh diakses kasir (data milik kasir sendiri / konfigurasi
-// hardware POS). Sisanya khusus admin.
+// hardware POS yang tidak sensitif). Sisanya khusus admin.
 $aksiKasir = ['hardware.config', 'shift.ringkasan'];
 
 if ($_SESSION['role'] !== 'admin' && !in_array($aksi, $aksiKasir, true)) {

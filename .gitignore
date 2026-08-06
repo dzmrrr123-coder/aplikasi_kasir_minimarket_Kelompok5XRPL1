@@ -11,3 +11,6 @@
 
 # Log & cache
 *.log
+
+# Command Code session (berisi kredensial plaintext dari perintah shell)
+/.commandcode/

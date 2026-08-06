@@ -679,6 +679,15 @@ function aksiBayar(string $metode, float $jumlahDibayar, int $kasirId, string $n
         redirectSelf('Keranjang masih kosong.', 'danger');
     }
 
+    // Idempotency guard: cegah double-submit (2 tap/klik bersamaan).
+    // Request kedua yang masuk saat request pertama masih berjalan akan
+    // mendapat pesan ramah, bukan error "stok tidak cukup".
+    if (!empty($_SESSION['bayar_lock'])) {
+        redirectSelf('Transaksi sedang diproses, silakan tunggu.', 'warning');
+    }
+
+    $_SESSION['bayar_lock'] = true;
+
     $transaksi = new Transaksi(['kasir_id' => $kasirId]);
 
     // Member transaksi (bila dipasang lewat scan telepon).
@@ -747,7 +756,8 @@ function aksiBayar(string $metode, float $jumlahDibayar, int $kasirId, string $n
         $_SESSION['diskon_jenis'],
         $_SESSION['diskon_nilai'],
         $_SESSION['member_id'],
-        $_SESSION['struk']
+        $_SESSION['struk'],
+        $_SESSION['bayar_lock']
     );
     $_SESSION['struk'] = $struk;
 

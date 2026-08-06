@@ -193,8 +193,20 @@ class ReturBarang implements DataReporter
             $this->id = (string) $pdo->lastInsertId();
 
             // Retur barang ke supplier = barang keluar dari stok toko.
-            $this->produk->kurangiStok($this->qty);
-            $this->produk->perbarui();
+            // Atomic decrement: hanya berhasil bila stok masih cukup,
+            // mencegah race condition (mirip Transaksi::prosesPembayaran).
+            $update = $pdo->prepare(
+                'UPDATE produk SET stok = stok - :qty WHERE id = :id AND stok >= :qty_cek'
+            );
+            $update->execute([
+                ':qty'     => $this->qty,
+                ':qty_cek' => $this->qty,
+                ':id'      => (int) $this->produk->getId(),
+            ]);
+
+            if ($update->rowCount() === 0) {
+                throw new RuntimeException('Stok tidak cukup untuk diretur.');
+            }
 
             $pdo->commit();
         } catch (\Throwable $e) {
