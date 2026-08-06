@@ -26,12 +26,18 @@ use App\Models\Diskon;
 use App\Models\Kasir;
 use App\Models\Kategori;
 use App\Models\ItemTransaksi;
+use App\Models\Laba;
 use App\Models\LaporanPenjualan;
-use App\Models\PaymentMethod;
+use App\Models\Member;
+use App\Models\Pembelian;
 use App\Models\PembayaranNonTunai;
 use App\Models\PembayaranTunai;
+use App\Models\PaymentMethod;
+use App\Models\Pengaturan;
 use App\Models\Produk;
 use App\Models\ReturBarang;
+use App\Models\ShiftKasir;
+use App\Models\AuditLog;
 use App\Models\Struk;
 use App\Models\Supplier;
 use App\Models\Transaksi;
@@ -82,8 +88,9 @@ $pdo = Database::connect();
 // Bersihkan data uji lama (urutan penting karena FK).
 $pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
 foreach ([
-    'item_transaksi', 'rekap_penjualan', 'transaksi', 'pembayaran', 'diskon',
-    'retur_barang', 'produk', 'kategori', 'supplier', 'users',
+    'audit_log', 'shift_kasir', 'item_pembelian', 'pembelian', 'item_transaksi',
+    'rekap_penjualan', 'transaksi', 'pembayaran', 'diskon', 'retur_barang', 'produk',
+    'kategori', 'supplier', 'users', 'member', 'pengaturan', 'katalog_penukaran',
 ] as $tabel) {
     $pdo->exec("TRUNCATE TABLE $tabel");
 }
@@ -357,16 +364,17 @@ assertTrue((int) $rekap2->fetchColumn() === 0, 'observer yang di-detach tidak me
 echo "\n== 3. Batalkan transaksi ==\n";
 
 $transaksiBatal = new Transaksi(['kasir_id' => $kasirId]);
+$stokSebelumJualBatal = Produk::cari($produkId)->getStok();
 $transaksiBatal->tambahItem($produkSetelah, 2);
 $transaksiBatal->hitungTotal();
 $transaksiBatal->prosesPembayaran(new PembayaranTunai(['jumlah' => 10000]));
 $idBatal = $transaksiBatal->getId();
 
-// Jalur sukses: batalkan -> stok dikembalikan.
+// Jalur sukses: batalkan -> stok dikembalikan ke nilai sebelum transaksi batal.
 $transaksiBatal->batalkan();
 $produkSetelahBatal = Produk::cari($produkId);
 assertTrue(
-    $produkSetelahBatal->getStok() === $produkSetelah->getStok(),
+    $produkSetelahBatal->getStok() === $stokSebelumJualBatal,
     'stok dikembalikan setelah transaksi dibatalkan'
 );
 assertTrue(Transaksi::cari((int) $idBatal) === null, 'transaksi terhapus dari database');
@@ -462,19 +470,29 @@ assertTrue(
 
 echo "\n== 5. Supplier & retur barang ==\n";
 
+// ---- Siapkan stok masuk (pembelian) sebagai asal retur ----
 $supplier = new Supplier(['nama' => 'PT Sumber Jaya', 'kontak' => '0812-3456', 'alamat' => 'Jakarta']);
 $supplierId = $supplier->simpan();
 assertTrue($supplierId > 0, 'simpan supplier sukses');
+
+// Produk yang mau diretur harus punya riwayat stok masuk dulu.
+$supplier2 = new Supplier(['nama' => 'PT Sumber Lain', 'kontak' => '0812-0000', 'alamat' => 'Bandung']);
+$supplier2Id = $supplier2->simpan();
+$pembelianRetur = new Pembelian(['supplier_id' => $supplier2Id, 'keterangan' => 'Stok masuk utk retur']);
+$pembelianReturId = $pembelianRetur->simpan([
+    ['produk_id' => $produkId, 'qty' => 5, 'harga_beli' => 3000],
+]);
 
 // Jalur sukses: retur valid -> stok berkurang & retur tercatat.
 $produkRetur = Produk::cari($produkId);
 $stokSebelumRetur = $produkRetur->getStok();
 
 $retur = new ReturBarang([
-    'produk_id'   => $produkId,
-    'supplier_id' => $supplierId,
-    'qty'         => 2,
-    'alasan'      => 'Rusak',
+    'produk_id'    => $produkId,
+    'supplier_id'  => $supplier2Id,
+    'pembelian_id' => $pembelianReturId,
+    'qty'          => 2,
+    'alasan'       => 'Rusak',
 ]);
 assertTrue($retur->prosesRetur(), 'retur sukses');
 
@@ -484,25 +502,56 @@ assertTrue(
     'stok berkurang 2 setelah retur'
 );
 
-// Jalur gagal 1: stok produk kurang dari qty retur -> dibatalkan.
-$returGagalStok = new ReturBarang([
-    'produk_id'   => $produkId,
-    'supplier_id' => $supplierId,
-    'qty'         => 9999,
-    'alasan'      => 'Uji',
-]);
-assertThrows(fn () => $returGagalStok->prosesRetur(), 'retur dengan stok kurang ditolak');
+// Retur tersimpan merujuk pembelian asal.
+$returTersimpan = ReturBarang::cari((int) $retur->getId());
+assertTrue(
+    $returTersimpan !== null && $returTersimpan->getPembelianId() === $pembelianReturId,
+    'retur tercatat dengan pembelian asal (pembelian_id)'
+);
 
-// Jalur gagal 2: supplier invalid -> dibatalkan.
-$returGagalSupplier = new ReturBarang([
-    'produk_id'   => $produkId,
-    'supplier_id' => 999999,
+// Jalur gagal 1: produk belum pernah ada stok masuk -> tidak bisa diretur.
+$produkTanpaPembelian = new Produk([
+    'nama'        => 'Produk Tanpa Beli',
+    'harga'       => 1000,
+    'stok'        => 10,
+    'kategori_id' => (int) $kategoriPenggantiId,
+]);
+$produkTanpaPembelianId = $produkTanpaPembelian->simpan();
+$returTanpaBeli = new ReturBarang([
+    'produk_id'   => $produkTanpaPembelianId,
+    'supplier_id' => $supplier2Id,
     'qty'         => 1,
     'alasan'      => 'Uji',
 ]);
-assertThrows(fn () => $returGagalSupplier->prosesRetur(), 'retur dengan supplier invalid ditolak');
+assertThrows(
+    fn () => $returTanpaBeli->prosesRetur(),
+    'retur produk yang belum pernah ada stok masuk ditolak'
+);
 
-// Pastikan stok tidak berubah dari 2 skenario gagal di atas.
+// Jalur gagal 2: supplier bukan asal pembelian -> ditolak.
+$returSupplierSalah = new ReturBarang([
+    'produk_id'    => $produkId,
+    'supplier_id'  => $supplierId, // supplier lain, bukan asal pembelian
+    'pembelian_id' => $pembelianReturId,
+    'qty'          => 1,
+    'alasan'       => 'Uji',
+]);
+assertThrows(
+    fn () => $returSupplierSalah->prosesRetur(),
+    'retur ke supplier yang bukan asal pembelian ditolak'
+);
+
+// Jalur gagal 3: stok produk kurang dari qty retur -> dibatalkan.
+$returGagalStok = new ReturBarang([
+    'produk_id'    => $produkId,
+    'supplier_id'  => $supplier2Id,
+    'pembelian_id' => $pembelianReturId,
+    'qty'          => 9999,
+    'alasan'       => 'Uji',
+]);
+assertThrows(fn () => $returGagalStok->prosesRetur(), 'retur dengan stok kurang ditolak');
+
+// Pastikan stok tidak berubah dari skenario gagal di atas.
 $produkAkhir = Produk::cari($produkId);
 assertTrue(
     $produkAkhir->getStok() === $produkSetelahRetur->getStok(),
@@ -524,8 +573,9 @@ assertTrue(
 );
 
 // Hapus supplier yang masih dipakai retur -> ditolak (FK RESTRICT).
+$supplierAsalRetur = Supplier::cari($supplier2Id);
 assertThrows(
-    fn () => $supplier->hapus(),
+    fn () => $supplierAsalRetur->hapus(),
     'hapus supplier yang masih dipakai retur ditolak'
 );
 
@@ -823,6 +873,296 @@ assertTrue(
     'qty float (gram) tersimpan di item_transaksi'
 );
 
+echo "\n== 10. Fitur v2 (pengaturan, barcode, pembelian, laba, member, soft-delete) ==\n";
+
+// Kategori valid yang masih ada di titik ini (kategori dari bagian 1 bisa
+// sudah dihapus di akhir tes CRUD produk/kategori).
+$kategoriValid = Kategori::semua()[0];
+$kategoriValidId = (int) $kategoriValid->getId();
+
+// ---- Pengaturan toko ----
+Pengaturan::simpan([
+    'nama_toko'    => 'Minimarket Plaza Uji',
+    'alamat'       => 'Jl. Test No. 1',
+    'telepon'      => '021-000',
+    'footer_struk' => 'Terima kasih!',
+    'pajak'        => '11',
+]);
+$semuaSet = Pengaturan::semua();
+assertTrue(($semuaSet['nama_toko'] ?? '') === 'Minimarket Plaza Uji', 'pengaturan simpan & baca (semua)');
+assertTrue(Pengaturan::get('pajak', '0') === '11', 'pengaturan get dengan nilai');
+assertTrue(Pengaturan::get('kunci_tidak_ada', 'dflt') === 'dflt', 'pengaturan get fallback default');
+
+// Struk memakai nama toko & footer dari pengaturan.
+$strukPengaturan = new Struk($transaksiGram);
+$teksStruk = $strukPengaturan->cetak();
+assertTrue(str_contains($teksStruk, 'MINIMARKET PLAZA UJI'), 'struk memakai nama toko dari pengaturan');
+assertTrue(str_contains($teksStruk, 'Terima kasih!'), 'struk memakai footer dari pengaturan');
+
+// ---- Barcode produk ----
+$produkBarcode = new Produk([
+    'nama'         => 'Produk Barcode Uji',
+    'harga'        => 5000,
+    'stok'         => 10,
+    'kategori_id'  => $kategoriValidId,
+    'barcode'      => '8991002101234',
+    'harga_beli'   => 4000,
+    'stok_minimum' => 5,
+]);
+$produkBarcodeId = $produkBarcode->simpan();
+$cariBarcode = Produk::cariBerdasarkanBarcode('8991002101234');
+assertTrue($cariBarcode !== null && $cariBarcode->getId() === $produkBarcode->getId(), 'cari produk by barcode');
+assertTrue($cariBarcode->getHargaBeli() === 4000.0, 'produk menyimpan harga_beli');
+assertTrue($cariBarcode->getStokMinimum() === 5, 'produk menyimpan stok_minimum');
+assertTrue(Produk::cariBerdasarkanBarcode('000') === null, 'barcode tidak dikenal -> null');
+
+assertThrows(
+    fn () => (new Produk(['nama' => 'Dup', 'harga' => 1, 'stok' => 1, 'kategori_id' => $kategoriValidId, 'barcode' => '8991002101234']))->simpan(),
+    'barcode duplikat ditolak'
+);
+
+// ---- Pembelian / stok masuk ----
+$supplierPembelian = new Supplier(['nama' => 'Supplier Uji', 'kontak' => '081', 'alamat' => 'Jl. Uji']);
+$supplierPembelianId = $supplierPembelian->simpan();
+$stokAwalProdukBarcode = Produk::cari($produkBarcodeId)->getStok();
+
+$pembelian = new Pembelian([
+    'supplier_id' => $supplierPembelianId,
+    'keterangan'  => 'Restock uji',
+]);
+$pembelianId = $pembelian->simpan([
+    ['produk_id' => $produkBarcodeId, 'qty' => 10, 'harga_beli' => 3000],
+]);
+assertTrue($pembelianId > 0, 'simpan pembelian sukses');
+assertTrue(abs($pembelian->getTotal() - (10 * 3000)) < 0.01, 'total pembelian = qty x harga beli');
+
+$produkSetelahBeli = Produk::cari($produkBarcodeId);
+assertTrue($produkSetelahBeli->getStok() === $stokAwalProdukBarcode + 10, 'stok produk bertambah setelah pembelian');
+assertTrue($produkSetelahBeli->getHargaBeli() === 3000.0, 'harga_beli produk diperbarui dari pembelian');
+
+assertThrows(
+    fn () => (new Pembelian(['supplier_id' => $supplierPembelianId]))->simpan([['produk_id' => $produkBarcodeId, 'qty' => 0, 'harga_beli' => 100]]),
+    'pembelian qty 0 ditolak'
+);
+
+// ---- Laporan laba ----
+// HPP transaksi gram sebelumnya: harga beli produk gram saat itu (default 0), omzet 125.050
+$laba = new Laba();
+$ringkasan = $laba->ringkasan(['tanggal_mulai' => date('Y-m-01'), 'tanggal_akhir' => date('Y-m-d')]);
+assertTrue($ringkasan['omzet'] > 0, 'ringkasan laba: omzet > 0');
+assertTrue(isset($ringkasan['hpp'], $ringkasan['laba'], $ringkasan['margin']), 'ringkasan laba punya hpp/laba/margin');
+
+$tabelLaba = $laba->getDataTabel(['tanggal_mulai' => date('Y-m-01'), 'tanggal_akhir' => date('Y-m-d')]);
+assertTrue(count($tabelLaba['rows']) > 0, 'tabel laba per transaksi terisi');
+
+// ---- Member & poin ----
+$member = new Member(['nama' => 'Budi Uji', 'telepon' => '081234567890', 'poin' => 50, 'password' => 'rahasia123']);
+$memberId = $member->simpan();
+assertTrue($memberId > 0, 'simpan member sukses');
+
+// Nomor member dibuat otomatis (format MEM-XXXXXX) & unik.
+assertTrue(str_starts_with($member->getNomorMember(), 'MEM-'), 'nomor member otomatis format MEM-XXXXXX');
+assertTrue(Member::cariBerdasarkanNomor($member->getNomorMember()) !== null, 'cari member by nomor member');
+assertTrue(Member::cariBerdasarkanTelepon('081234567890') !== null, 'cari member by telepon');
+
+// Login member: pakai nomor member atau telepon + password.
+assertTrue(Member::login($member->getNomorMember(), 'rahasia123') !== null, 'login member pakai nomor member sukses');
+assertTrue(Member::login('081234567890', 'rahasia123') !== null, 'login member pakai telepon sukses');
+assertTrue(Member::login($member->getNomorMember(), 'salah') === null, 'login member password salah ditolak');
+assertTrue(Member::login('TIDAK_ADA', 'rahasia123') === null, 'login member identitas tidak dikenal ditolak');
+
+// Reset password member via setPassword.
+$memberSet = Member::cari($memberId);
+$memberSet->setPassword('baru456');
+assertTrue(Member::login('081234567890', 'baru456') !== null, 'member bisa login dengan password baru');
+assertTrue(Member::login('081234567890', 'rahasia123') === null, 'password lama member tidak berlaku');
+$memberSet->setPassword('rahasia123');
+
+assertThrows(
+    fn () => (new Member(['nama' => 'X', 'telepon' => '081234567890']))->simpan(),
+    'telepon member duplikat ditolak'
+);
+
+// Transaksi member -> poin bertambah (1 poin / Rp 1.000).
+$transaksiMember = new Transaksi(['kasir_id' => $kasirId]);
+$transaksiMember->setMemberId($memberId);
+$transaksiMember->tambahItem($produkSetelahBeli, 2); // harga 5000 x 2 = 10.000
+$transaksiMember->prosesPembayaran(new PembayaranTunai(['jumlah' => 20000]));
+$memberSetelah = Member::cari($memberId);
+assertTrue($memberSetelah->getPoin() >= 60, 'poin member bertambah setelah transaksi member');
+assertTrue($transaksiMember->getMemberNama() === 'Budi Uji', 'nama member terbaca dari transaksi');
+
+$strukMember = new Struk($transaksiMember);
+assertTrue(str_contains($strukMember->cetak(), 'Budi Uji'), 'struk menampilkan nama member');
+
+// ---- Katalog penukaran poin ----
+$pdo = Database::connect();
+$pdo->prepare('INSERT INTO katalog_penukaran (nama, poin) VALUES (:nama, :poin)')
+    ->execute([':nama' => 'Voucher Uji', ':poin' => 100]);
+$hadiahId = (int) $pdo->lastInsertId();
+
+assertTrue(count(Member::katalogHadiah()) >= 1, 'katalog hadiah terisi');
+
+// Pastikan saldo cukup utk hadiah 100 poin (poin member saat ini 60).
+$memberCukup = Member::cari($memberId);
+$memberCukup->setPoin(150);
+$memberCukup->perbarui();
+
+// Tukar poin sukses: poin berkurang sesuai biaya hadiah.
+$poinSebelumTukar = Member::cari($memberId)->getPoin();
+Member::tukarPoin($memberId, $hadiahId);
+assertTrue(
+    Member::cari($memberId)->getPoin() === $poinSebelumTukar - 100,
+    'poin berkurang 100 setelah tukar hadiah'
+);
+
+// Tukar poin gagal: poin tidak cukup (sisa 50 < 100).
+assertThrows(
+    fn () => Member::tukarPoin($memberId, $hadiahId),
+    'tukar poin dengan saldo kurang ditolak'
+);
+
+// Tukar poin gagal: hadiah tidak ditemukan.
+assertThrows(
+    fn () => Member::tukarPoin($memberId, 999999),
+    'tukar poin hadiah tidak dikenal ditolak'
+);
+
+// ---- Soft-delete user ----
+$kasirSoft = User::simpanKasir(['nama' => 'Kasir Soft', 'username' => 'kasirsoft', 'password' => 'rahasia1']);
+assertTrue(User::loginPolimorfik('kasirsoft', 'rahasia1') !== null, 'kasir baru bisa login');
+User::setStatusAktifKasir($kasirSoft, false);
+assertTrue(User::loginPolimorfik('kasirsoft', 'rahasia1') === null, 'kasir nonaktif ditolak login');
+User::setStatusAktifKasir($kasirSoft, true);
+assertTrue(User::loginPolimorfik('kasirsoft', 'rahasia1') !== null, 'kasir diaktifkan lagi bisa login');
+User::hapusKasir($kasirSoft);
+
+// ---- Stok menipis dengan stok_minimum ----
+$produkMin = new Produk(['nama' => 'Produk Min Uji', 'harga' => 1000, 'stok' => 20, 'kategori_id' => $kategoriValidId, 'stok_minimum' => 25]);
+$produkMinId = $produkMin->simpan();
+$namaMenipis = array_map(static fn ($p) => $p->getNama(), Produk::cariStokMenipis());
+assertTrue(in_array('Produk Min Uji', $namaMenipis, true), 'produk di bawah stok_minimum terdeteksi menipis');
+
+echo "\n== 11. Debug QA: akurasi uang, pajak, poin, HPP, CSRF ==\n";
+
+// ---- Diskon tidak boleh dobel ----
+Pengaturan::simpan(['pajak' => '0']);
+$produkDis = new Produk(['nama' => 'Produk Diskon', 'harga' => 100000, 'stok' => 100, 'kategori_id' => $kategoriValidId, 'harga_beli' => 60000]);
+$produkDisId = $produkDis->simpan();
+$diskon10 = new Diskon(['kode' => 'DIS10UJI', 'jenis' => 'persen', 'nilai' => 10]);
+$diskon10Id = $diskon10->simpan();
+
+$tDis = new Transaksi(['kasir_id' => $kasirId]);
+$tDis->tambahItem(Produk::cari((int) $produkDisId), 1);
+$tDis->terapkanDiskon(Diskon::cari((int) $diskon10Id));
+$tDis->hitungTotal();
+$tDis->hitungTotal(); // panggil 2x — harus tetap 90.000 (bukan 81.000)
+assertTrue(abs($tDis->getTotal() - 90000.0) < 0.01, 'diskon TIDAK dobel saat hitungTotal dipanggil 2x');
+$tDis->prosesPembayaran(new PembayaranTunai(['jumlah' => 100000]));
+assertTrue(abs(Transaksi::cari((int) $tDis->getId())->getTotal() - 90000.0) < 0.01, 'total tersimpan = 1x diskon (90.000)');
+
+// ---- Pajak masuk total & validasi ----
+Pengaturan::simpan(['pajak' => '11']);
+$tPajak = new Transaksi(['kasir_id' => $kasirId]);
+$tPajak->tambahItem(Produk::cari((int) $produkDisId), 1); // 100.000
+$tPajak->hitungTotal();
+assertTrue(abs($tPajak->getTotal() - 111000.0) < 0.01, 'total termasuk PPN 11% (111.000)');
+assertTrue(abs($tPajak->getPajak() - 11000.0) < 0.01, 'nilai pajak 11.000');
+assertTrue(!$tPajak->prosesPembayaran(new PembayaranTunai(['jumlah' => 100000])), 'bayar kurang dari total + pajak DITOLAK');
+$tPajak->prosesPembayaran(new PembayaranTunai(['jumlah' => 120000]));
+assertTrue(abs(Transaksi::cari((int) $tPajak->getId())->getTotal() - 111000.0) < 0.01, 'total tersimpan termasuk pajak');
+Pengaturan::simpan(['pajak' => '0']);
+
+// ---- Poin dikembalikan saat batalkan ----
+$memberPoin = new Member(['nama' => 'Poin Uji', 'telepon' => '085700000001', 'poin' => 10]);
+$memberPoinId = $memberPoin->simpan();
+$tPoin = new Transaksi(['kasir_id' => $kasirId]);
+$tPoin->setMemberId((int) $memberPoinId);
+$tPoin->tambahItem(Produk::cari((int) $produkDisId), 2); // 200.000 -> +200 poin
+$tPoin->prosesPembayaran(new PembayaranTunai(['jumlah' => 200000]));
+assertTrue(Member::cari((int) $memberPoinId)->getPoin() === 210, 'poin member bertambah setelah transaksi');
+$tPoin->batalkan();
+assertTrue(Member::cari((int) $memberPoinId)->getPoin() === 10, 'poin member kembali setelah batalkan');
+
+// ---- HPP historis (laba tidak berubah saat harga_beli diubah) ----
+$produkHpp = Produk::cari((int) $produkDisId); // harga_beli 60.000
+$tHpp = new Transaksi(['kasir_id' => $kasirId]);
+$tHpp->tambahItem($produkHpp, 1);
+$tHpp->prosesPembayaran(new PembayaranTunai(['jumlah' => 100000]));
+
+// Ubah harga beli produk setelah transaksi.
+$produkHpp->setHargaBeli(70000);
+$produkHpp->perbarui();
+
+$labaHpp = (new Laba())->ringkasan(['tanggal_mulai' => date('Y-m-01'), 'tanggal_akhir' => date('Y-m-d')]);
+// HPP transaksi $tHpp harus pakai snapshot 60.000, bukan 70.000.
+$itemHpp = ItemTransaksi::untukTransaksi((int) $tHpp->getId())[0];
+assertTrue(abs($itemHpp->getHargaBeliSatuan() - 60000.0) < 0.01, 'item_transaksi menyimpan snapshot harga_beli (HPP historis)');
+assertTrue($labaHpp['hpp'] > 0, 'ringkasan laba tetap punya HPP setelah harga beli berubah');
+
+// ---- Struk produk gram pakai harga per gram ----
+$produkGramStruk = new Produk(['nama' => 'Gram Struk', 'harga' => 0, 'stok' => 5000, 'kategori_id' => $kategoriValidId, 'satuan' => 'gram', 'harga_per_gram' => 100]);
+$produkGramStrukId = $produkGramStruk->simpan();
+$tGram = new Transaksi(['kasir_id' => $kasirId]);
+$tGram->tambahItem(Produk::cari((int) $produkGramStrukId), 100);
+$tGram->prosesPembayaran(new PembayaranTunai(['jumlah' => 20000]));
+$strukGram = (new Struk($tGram))->cetak();
+assertTrue(str_contains($strukGram, 'x Rp 100'), 'struk gram menampilkan harga per gram (bukan Rp 0)');
+
+// ---- Merge duplikat produk di pembelian ----
+$produkMerge = new Produk(['nama' => 'Produk Merge', 'harga' => 5000, 'stok' => 0, 'kategori_id' => $kategoriValidId]);
+$produkMergeId = $produkMerge->simpan();
+$pembelianMerge = new Pembelian(['supplier_id' => $supplierPembelianId]);
+$pembelianMerge->simpan([
+    ['produk_id' => $produkMergeId, 'qty' => 10, 'harga_beli' => 3000],
+    ['produk_id' => $produkMergeId, 'qty' => 5, 'harga_beli' => 3000],
+]);
+assertTrue(Produk::cari((int) $produkMergeId)->getStok() === 15, 'pembelian dengan duplikat produk di-merge (10+5=15)');
+
+echo "\n== 12. Shift kasir, void item, audit log ==\n";
+
+// ---- Shift kasir: buka ----
+Pengaturan::simpan(['pin_supervisor' => '1234']);
+$shiftId = ShiftKasir::buka($kasirId, 100000);
+assertTrue($shiftId > 0, 'buka kas sukses');
+assertTrue(ShiftKasir::shiftAktif($kasirId) !== null, 'shift aktif terdeteksi setelah buka kas');
+
+assertThrows(
+    fn () => ShiftKasir::buka($kasirId, 50000),
+    'buka kas kedua ditolak saat shift masih terbuka'
+);
+
+// Transaksi selama shift -> total sistem bertambah.
+$produkShift = Produk::cari((int) $produkDisId); // harga 100.000
+$tShift = new Transaksi(['kasir_id' => $kasirId]);
+$tShift->attach(new LaporanPenjualan()); // mencatat rekap_penjualan (basis total shift)
+$tShift->tambahItem($produkShift, 1);
+$tShift->prosesPembayaran(new PembayaranTunai(['jumlah' => 100000]));
+
+$shift = ShiftKasir::shiftAktif($kasirId);
+assertTrue($shift->totalPenjualanShift() > 0, 'total penjualan shift > 0 setelah transaksi');
+
+// ---- Shift kasir: tutup (rekonsiliasi) ----
+// Uang di laci = modal 100.000 + penjualan 100.000 = 200.000.
+$shift->tutup(200000, 'Shift uji');
+assertTrue($shift->getStatus() === 'tutup', 'shift berstatus tutup setelah ditutup');
+assertTrue(abs((float) $shift->getTotalSistem() - 200000.0) < 0.01, 'total sistem = modal + penjualan (200.000)');
+assertTrue(abs((float) $shift->getSelisih() - 0.0) < 0.01, 'selisih 0 saat kas fisik pas');
+
+// Selisih tidak nol kalau kas fisik beda dari modal + penjualan shift.
+$shift2Id = ShiftKasir::buka($kasirId, 50000);
+$shift2 = ShiftKasir::cari($shift2Id);
+$harusnya = 50000 + $shift2->totalPenjualanShift(); // uang yang seharusnya di laci
+$shift2->tutup($harusnya + 10000);                  // kas fisik lebih 10.000
+assertTrue(abs((float) $shift2->getSelisih() - 10000.0) < 0.01, 'selisih +10.000 saat kas fisik lebih');
+assertThrows(fn () => $shift2->tutup($harusnya + 10000), 'tutup shift dua kali ditolak');
+
+// ---- Audit log ----
+AuditLog::catat('void_item', 'item_transaksi', 99, ['produk' => 'Tes', 'kasir' => 'Kasir Uji']);
+$auditTabel = (new AuditLog())->getDataTabel([]);
+assertTrue($auditTabel['total'] >= 1, 'audit log mencatat entri');
+assertTrue($auditTabel['rows'][0]['aksi'] === 'void_item', 'audit log baris terbaru = void_item');
+
 echo "\n== RINGKASAN ==\n";
 echo "Lulus: $lulus\n";
 echo "Gagal: $gagal\n";
@@ -830,11 +1170,16 @@ echo "Gagal: $gagal\n";
 // Bersihkan semua data uji.
 $pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
 foreach ([
-    'item_transaksi', 'rekap_penjualan', 'transaksi', 'pembayaran', 'diskon',
-    'retur_barang', 'produk', 'kategori', 'supplier', 'users',
+    'audit_log', 'shift_kasir', 'item_pembelian', 'pembelian', 'item_transaksi',
+    'rekap_penjualan', 'transaksi', 'pembayaran', 'diskon', 'retur_barang', 'produk',
+    'kategori', 'supplier', 'users', 'member', 'pengaturan', 'katalog_penukaran',
 ] as $tabel) {
     $pdo->exec("TRUNCATE TABLE $tabel");
 }
 $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
+
+// Restore data demo supaya aplikasi tetap bisa dipakai (akun admin/kasir,
+// produk, supplier, dll.) setelah pengujian selesai.
+require __DIR__ . '/../database/seed.php';
 
 exit($gagal === 0 ? 0 : 1);
