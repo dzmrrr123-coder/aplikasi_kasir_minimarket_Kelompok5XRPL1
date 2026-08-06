@@ -1014,7 +1014,7 @@ $produkSemua = Produk::semua();
 
     <?php if ($wajibBukaKas): ?>
         <!-- Wajib buka kas sebelum transaksi -->
-        <div class="card pos-card mb-4 border-warning">
+        <div class="card pos-card mb-4 border-warning" id="card-buka-kas">
             <div class="card-header bg-warning-subtle text-warning-emphasis">
                 <i class="bi bi-cash-stack me-1"></i>Buka Kas
             </div>
@@ -1475,6 +1475,12 @@ $produkSemua = Produk::semua();
                             barcode.value = '';
                             barcode.focus();
                         }
+                    }
+
+                    if (aksi === 'buka_kas') {
+                        // Kas sudah terbuka — sembunyikan card "Buka Kas".
+                        var cardBukaKas = document.getElementById('card-buka-kas');
+                        if (cardBukaKas) cardBukaKas.classList.add('d-none');
                     }
 
                     if (res.struk) {
