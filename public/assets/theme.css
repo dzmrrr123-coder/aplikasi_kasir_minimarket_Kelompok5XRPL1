@@ -702,3 +702,123 @@ a:hover {
     border: 1px solid var(--border-soft);
     padding: 0.25rem;
 }
+
+/* ------------------------------------------------------------
+   Print CSS — struk & laporan
+   Saat print: sembunyikan navbar/aksi/form, tampilkan header
+   toko (dari pengaturan) + konten utama saja, font monospace utk struk.
+   ------------------------------------------------------------ */
+@media print {
+    body {
+        background: #fff !important;
+        color: #000 !important;
+    }
+    /* Sembunyikan elemen navigasi & interaksi */
+    .navbar,
+    .sidebar,
+    .kiosk-kanan,
+    .kiosk-userbar,
+    .btn,
+    .btn-group,
+    form,
+    .no-print,
+    #navbar,
+    .card-header .btn,
+    .alert,
+    .dataTables_filter,
+    .dataTables_length,
+    .dataTables_info,
+    .dataTables_paginate,
+    .dt-buttons {
+        display: none !important;
+    }
+    /* Struk: hanya kartu struk yang tercetak */
+    .kiosk-body {
+        overflow: visible !important;
+        height: auto !important;
+    }
+    .kiosk-body .kiosk-wrapper {
+        display: block !important;
+        height: auto !important;
+    }
+    .kiosk-body .kiosk-kiri {
+        max-width: 100% !important;
+        flex: none !important;
+        overflow: visible !important;
+        padding: 0 !important;
+    }
+    #area-struk {
+        display: block !important;
+        border: none !important;
+        box-shadow: none !important;
+    }
+    #area-struk .card-header {
+        display: none !important;
+    }
+    #area-struk pre {
+        font-family: 'Courier New', monospace !important;
+        font-size: 12px !important;
+        line-height: 1.35 !important;
+        white-space: pre !important;
+        color: #000 !important;
+        border: none !important;
+        padding: 0 !important;
+    }
+    /* Kartu lain di halaman transaksi tidak ikut tercetak */
+    .kiosk-kiri > *:not(#area-struk) {
+        display: none !important;
+    }
+    /* Laporan & tabel: header toko + tabel rapi */
+    .container .card {
+        border: 1px solid #ddd !important;
+        box-shadow: none !important;
+        break-inside: avoid;
+    }
+    .card {
+        box-shadow: none !important;
+    }
+    table {
+        font-size: 12px !important;
+    }
+    .table thead th {
+        background: #f1f3f5 !important;
+        color: #000 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    a[href]::after {
+        content: none !important;
+    }
+}
+
+/* ------------------------------------------------------------
+   Tablet / layar menengah — penyempurnaan POS
+   Breakpoint existing <1024px menurunkan panel kanan; di sini
+   grid produk & panel pembayaran disesuaikan utk tablet.
+   ------------------------------------------------------------ */
+@media (max-width: 991.98px) {
+    .kiosk-kiri .kiosk-produk-grid .col-sm-6,
+    .kiosk-kiri .row.g-2 > [class*='col-'] {
+        /* kartu produk sedikit lebih lebar di tablet */
+        flex: 0 0 33.3333%;
+        max-width: 33.3333%;
+    }
+    .kiosk-kanan .kiosk-ringkasan {
+        position: static !important;
+    }
+    .numpad-grid {
+        grid-template-columns: repeat(4, 1fr) !important;
+    }
+    .kiosk-kanan .kiosk-total {
+        font-size: 1.5rem !important;
+    }
+}
+
+/* Tablet kecil / HP landscape (<768px): kartu produk 2 kolom */
+@media (max-width: 767.98px) {
+    .kiosk-kiri .kiosk-produk-grid .col-sm-6,
+    .kiosk-kiri .row.g-2 > [class*='col-'] {
+        flex: 0 0 50%;
+        max-width: 50%;
+    }
+}

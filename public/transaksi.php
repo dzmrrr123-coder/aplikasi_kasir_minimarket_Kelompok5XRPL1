@@ -1049,7 +1049,12 @@ $produkSemua = Produk::semua();
         <div class="card pos-card mb-4" id="area-struk">
             <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
                 <span>Struk terakhir</span>
-                <button type="button" class="btn-close btn-close-white" id="tutup-struk" aria-label="Tutup"></button>
+                <span class="d-flex gap-2">
+                    <button type="button" class="btn btn-sm btn-light" id="cetak-struk" title="Cetak struk">
+                        <i class="bi bi-printer me-1"></i>Cetak
+                    </button>
+                    <button type="button" class="btn-close btn-close-white" id="tutup-struk" aria-label="Tutup"></button>
+                </span>
             </div>
             <div class="card-body">
                 <pre class="mb-0"><?= htmlspecialchars($struk) ?></pre>
@@ -1059,7 +1064,12 @@ $produkSemua = Produk::semua();
         <div class="card pos-card mb-4 d-none" id="area-struk">
             <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
                 <span>Struk terakhir</span>
-                <button type="button" class="btn-close btn-close-white" id="tutup-struk" aria-label="Tutup"></button>
+                <span class="d-flex gap-2">
+                    <button type="button" class="btn btn-sm btn-light" id="cetak-struk" title="Cetak struk">
+                        <i class="bi bi-printer me-1"></i>Cetak
+                    </button>
+                    <button type="button" class="btn-close btn-close-white" id="tutup-struk" aria-label="Tutup"></button>
+                </span>
             </div>
             <div class="card-body">
                 <pre class="mb-0"></pre>
@@ -1479,6 +1489,16 @@ $produkSemua = Produk::semua();
                             if (area) area.classList.add('d-none');
                         }
                     });
+            });
+        }
+
+        // Cetak struk: hanya area struk yang tercetak (lihat @media print).
+        var cetakStruk = document.getElementById('cetak-struk');
+        if (cetakStruk) {
+            cetakStruk.addEventListener('click', function () {
+                var area = document.getElementById('area-struk');
+                if (!area) return;
+                window.print();
             });
         }
 

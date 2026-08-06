@@ -107,6 +107,10 @@ if (isset($_GET['ekspor']) && $_GET['ekspor'] === '1') {
 // Tabel & grafik periode diambil via api.php (Controller → DataReporter),
 // bukan di-render di view. View murni konsumen JSON.
 $aktif = 'laporan';
+
+// Header toko utk cetak laporan (muncul hanya saat print via @media print).
+$namaTokoCetak = \App\Models\Pengaturan::get('nama_toko', 'Minimarket');
+$alamatTokoCetak = \App\Models\Pengaturan::get('alamat', '');
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -120,13 +124,40 @@ $aktif = 'laporan';
     <link href="assets/theme.css" rel="stylesheet">
     <style>
         .total-besar { font-size: 1.5rem; font-weight: 700; }
+        .header-toko-cetak { display: none; }
+        @media print {
+            .header-toko-cetak {
+                display: block !important;
+                text-align: center;
+                margin-bottom: 1rem;
+                border-bottom: 2px solid #000;
+                padding-bottom: 0.5rem;
+            }
+            .header-toko-cetak h1 {
+                font-size: 1.25rem;
+                margin-bottom: 0.1rem;
+            }
+            .header-toko-cetak p {
+                margin-bottom: 0;
+                font-size: 0.8rem;
+                color: #333;
+            }
+        }
     </style>
 </head>
 <body>
 <?php require __DIR__ . '/assets/partials/navbar.php'; ?>
 <div class="container py-4">
 
-    <div class="mb-4">
+    <div class="header-toko-cetak">
+        <h1><?= htmlspecialchars($namaTokoCetak) ?></h1>
+        <p>Laporan Penjualan — <?= htmlspecialchars($dMulai->format('d M Y')) ?> s/d <?= htmlspecialchars($dAkhir->format('d M Y')) ?></p>
+        <?php if ($alamatTokoCetak !== ''): ?>
+            <p><?= htmlspecialchars($alamatTokoCetak) ?></p>
+        <?php endif; ?>
+    </div>
+
+    <div class="mb-4 no-print">
         <h1 class="h3 mb-1">Laporan Penjualan</h1>
         <span class="text-muted small">Admin: <?= htmlspecialchars($nama) ?></span>
     </div>
@@ -207,13 +238,18 @@ $aktif = 'laporan';
             <div class="card pos-card">
                 <div class="card-header bg-white d-flex justify-content-between align-items-center">
                     <span>Daftar Transaksi</span>
-                    <a
-                        href="?tanggal_mulai=<?= htmlspecialchars($dMulai->format('Y-m-d')) ?>&amp;tanggal_akhir=<?= htmlspecialchars($dAkhir->format('Y-m-d')) ?>&amp;ekspor=1"
-                        class="btn btn-sm btn-outline-success"
-                        title="Unduh laporan periode ini sebagai CSV"
-                    >
-                        <i class="bi bi-download me-1"></i>Ekspor CSV
-                    </a>
+                    <span class="d-flex gap-2 no-print">
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="window.print()" title="Cetak laporan">
+                            <i class="bi bi-printer me-1"></i>Cetak
+                        </button>
+                        <a
+                            href="?tanggal_mulai=<?= htmlspecialchars($dMulai->format('Y-m-d')) ?>&amp;tanggal_akhir=<?= htmlspecialchars($dAkhir->format('Y-m-d')) ?>&amp;ekspor=1"
+                            class="btn btn-sm btn-outline-success"
+                            title="Unduh laporan periode ini sebagai CSV"
+                        >
+                            <i class="bi bi-download me-1"></i>Ekspor CSV
+                        </a>
+                    </span>
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
