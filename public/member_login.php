@@ -30,6 +30,13 @@ if (isset($_SESSION['member_id'])) {
 $error = '';
 $identitas = '';
 
+// Ambil member demo pertama (untuk ditampilkan sebagai petunjuk login).
+$demoMember = null;
+$semuaMember = \App\Models\Member::semua();
+if ($semuaMember !== []) {
+    $demoMember = $semuaMember[0];
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_csrf();
     $identitas = trim((string) ($_POST['identitas'] ?? ''));
@@ -95,10 +102,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </div>
                 <?php endif; ?>
 
+                <?php if ($demoMember !== null): ?>
+                    <div class="alert alert-light border small py-2 mb-3">
+                        <strong>Akun demo:</strong> <?= htmlspecialchars($demoMember->getNama()) ?><br>
+                        Identitas: <code><?= htmlspecialchars($demoMember->getNomorMember()) ?></code>
+                        (atau telepon <code><?= htmlspecialchars($demoMember->getTelepon()) ?></code>)<br>
+                        Password: <code>member123</code>
+                    </div>
+                <?php endif; ?>
+
                 <form method="post" novalidate>
                     <?= csrf_field() ?>
                     <div class="mb-3">
-                        <label for="identitas" class="form-label">Nomor Member / Telepon</label>
+                        <label for="identitas" class="form-label">Nomor Member / Telepon / Nama</label>
                         <input
                             type="text"
                             id="identitas"

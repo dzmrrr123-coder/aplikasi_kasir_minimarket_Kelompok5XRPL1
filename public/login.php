@@ -180,6 +180,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </form>
 
                 <p class="text-muted small mt-4 mb-0 text-center">
+                    <i class="bi bi-person-badge me-1"></i>
+                    <a href="member_login.php" class="text-decoration-none">Login Member</a>
+                    &middot;
                     <i class="bi bi-shield-lock me-1"></i> Akun dibuat langsung di tabel <code>users</code>.
                 </p>
             </div>

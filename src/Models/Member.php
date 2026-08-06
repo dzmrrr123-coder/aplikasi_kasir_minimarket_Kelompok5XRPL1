@@ -247,7 +247,7 @@ class Member implements DataReporter
     }
 
     /**
-     * Login member (nomor member atau telepon + password).
+     * Login member (nomor member, telepon, atau nama + password).
      * Mengembalikan objek Member bila kredensial valid, null bila tidak.
      */
     public static function login(string $identitas, string $password): ?self
@@ -261,12 +261,13 @@ class Member implements DataReporter
         $stmt = Database::connect()->prepare(
             'SELECT id, nomor_member, nama, telepon, password, poin
              FROM member
-             WHERE nomor_member = :nomor OR telepon = :telepon
+             WHERE nomor_member = :nomor OR telepon = :telepon OR nama = :nama
              LIMIT 1'
         );
         $stmt->execute([
             ':nomor'   => strtoupper($identitas),
             ':telepon' => $identitas,
+            ':nama'    => $identitas,
         ]);
         $row = $stmt->fetch();
 
