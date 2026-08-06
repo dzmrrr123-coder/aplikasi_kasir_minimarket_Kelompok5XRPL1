@@ -24,8 +24,10 @@ require __DIR__ . '/../src/autoload.php';
 
 use App\Controllers\DashboardController;
 use App\Controllers\InventarisController;
+use App\Controllers\LabaController;
 use App\Controllers\LaporanController;
 use App\Controllers\ReturController;
+use App\Controllers\ShiftController;
 
 if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
@@ -74,6 +76,8 @@ $dashboard = new DashboardController();
 $laporan = new LaporanController();
 $retur = new ReturController();
 $inventaris = new InventarisController();
+$laba = new LabaController();
+$shift = new ShiftController();
 
 $hasil = null;
 
@@ -90,6 +94,30 @@ switch ($aksi) {
 
     case 'supplier.tabel':
         $hasil = $inventaris->dataTabelSupplier($params);
+        break;
+
+    case 'pembelian.tabel':
+        $hasil = $inventaris->dataTabelPembelian($params);
+        break;
+
+    case 'member.tabel':
+        $hasil = $inventaris->dataTabelMember($params);
+        break;
+
+    case 'member.cari':
+        $hasil = $inventaris->cariMember($params);
+        break;
+
+    case 'produk.harga_beli':
+        $hasil = $inventaris->hargaBeliTerakhir($params);
+        break;
+
+    case 'shift.tabel':
+        $hasil = $shift->dataTabelShift($params);
+        break;
+
+    case 'audit.tabel':
+        $hasil = $shift->dataTabelAudit($params);
         break;
 
     case 'dashboard.grafik':
@@ -120,8 +148,25 @@ switch ($aksi) {
         $hasil = $laporan->dataTabelTransaksi($params);
         break;
 
+    case 'laba.ringkasan':
+        $hasil = $laba->ringkasan($params);
+        break;
+
+    case 'laba.grafik':
+        $hasil = $laba->grafik($params);
+        break;
+
+    case 'laba.tabel':
+        $hasil = $laba->dataTabel($params);
+        break;
+
     case 'retur.tabel':
         $hasil = $retur->dataTabelRiwayat($params);
+        break;
+
+    case 'retur.supplier_asal':
+        // Supplier asal produk (dari pembelian/stok masuk terakhir).
+        $hasil = $retur->supplierAsalProduk($params);
         break;
 
     case 'retur.grafik':
@@ -135,7 +180,7 @@ switch ($aksi) {
 }
 
 // Aksi DataTables membungkus ke format server-side DataTables.
-if (in_array($aksi, ['produk.tabel', 'supplier.tabel', 'dashboard.terlaris', 'dashboard.transaksi', 'laporan.tabel', 'retur.tabel'], true)) {
+if (in_array($aksi, ['produk.tabel', 'supplier.tabel', 'pembelian.tabel', 'member.tabel', 'dashboard.terlaris', 'dashboard.transaksi', 'laporan.tabel', 'laba.tabel', 'retur.tabel', 'shift.tabel', 'audit.tabel'], true)) {
     echo json_encode([
         'draw'            => (int) ($params['draw'] ?? 0),
         'recordsTotal'    => $hasil['total'],

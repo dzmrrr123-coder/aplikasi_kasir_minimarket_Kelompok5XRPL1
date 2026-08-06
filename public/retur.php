@@ -7,8 +7,11 @@ declare(strict_types=1);
  *
  * Alur mengikuti ReturBarang::prosesRetur():
  *   1. cek stok produk cukup -> kalau kurang, batalkan dengan pesan spesifik;
- *   2. cek data supplier valid -> kalau invalid, batalkan;
- *   3. kalau valid: kurangi stok produk & catat retur dalam satu transaksi DB
+ *   2. cek produk punya riwayat stok masuk (pembelian) -> kalau belum pernah
+ *      dibeli, batalkan (barang tidak berasal dari supplier manapun);
+ *   3. supplier tujuan retur = supplier asal pembelian terakhir -> kalau tidak
+ *      cocok, batalkan;
+ *   4. kalau valid: kurangi stok produk & catat retur dalam satu transaksi DB
  *      (rollback otomatis kalau gagal di tengah, stok tidak terlanjur berkurang).
  */
 
@@ -17,7 +20,6 @@ require __DIR__ . '/../src/autoload.php';
 use App\Database\Database;
 use App\Models\Produk;
 use App\Models\ReturBarang;
-use App\Models\Supplier;
 
 if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
@@ -77,6 +79,7 @@ function aksiProsesRetur(array $data): void
 {
     $produkId = (int) ($data['produk_id'] ?? 0);
     $supplierId = (int) ($data['supplier_id'] ?? 0);
+    $pembelianId = (int) ($data['pembelian_id'] ?? 0);
     $qty = (int) ($data['qty'] ?? 0);
     $alasan = trim((string) ($data['alasan'] ?? ''));
 
@@ -87,10 +90,11 @@ function aksiProsesRetur(array $data): void
     }
 
     $retur = new ReturBarang([
-        'produk_id'   => $produkId,
-        'supplier_id' => $supplierId,
-        'qty'         => $qty,
-        'alasan'      => $alasan,
+        'produk_id'    => $produkId,
+        'supplier_id'  => $supplierId,
+        'pembelian_id' => $pembelianId,
+        'qty'          => $qty,
+        'alasan'       => $alasan,
     ]);
 
     // Update stok di objek produk dari DB supaya cek stok aktual.
@@ -105,12 +109,13 @@ function aksiProsesRetur(array $data): void
             $retur->getSupplier()->getNama()
         ));
     } catch (\Throwable $e) {
-        redirectSelf($e->getMessage());
+        redirectSelf(pesanErrorRamah($e));
     }
 }
 
 // ---- Routing aksi (POST) ----
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    require_csrf();
     $aksi = $_POST['aksi'] ?? '';
 
     switch ($aksi) {
@@ -126,9 +131,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// ---- Data untuk tampilan (view murni: produk & supplier utk form) ----
+// ---- Data untuk tampilan (view murni: produk utk form) ----
 $produkSemua = Produk::semua();
-$supplierSemua = Supplier::semua();
+$aktif = 'retur';
 // Riwayat retur diambil via DataTables server-side dari api.php?aksi=retur.tabel
 // (Controller → ReturBarang::getDataTabel), bukan di-render di view.
 ?>
@@ -144,57 +149,7 @@ $supplierSemua = Supplier::semua();
     <link href="assets/theme.css" rel="stylesheet">
 </head>
 <body>
-<nav class="navbar navbar-expand-lg pos-navbar mb-4 sticky-top">
-    <div class="container">
-        <a class="navbar-brand" href="admin.php"><i class="bi bi-shop"></i> Kasir Minimarket</a>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav-retur"
-                aria-controls="nav-retur" aria-expanded="false" aria-label="Toggle navigation">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="collapse navbar-collapse" id="nav-retur">
-            <ul class="navbar-nav me-auto">
-                <li class="nav-item">
-                    <a class="nav-link" href="dashboard.php"><i class="bi bi-speedometer2"></i> Dashboard</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="admin.php"><i class="bi bi-box-seam"></i> Admin</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="transaksi.php"><i class="bi bi-cash-register"></i> Kasir</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="laporan.php"><i class="bi bi-bar-chart-line"></i> Laporan</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="supplier.php"><i class="bi bi-truck"></i> Supplier</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link active" href="retur.php"><i class="bi bi-arrow-counterclockwise"></i> Retur</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="diskon.php"><i class="bi bi-tags"></i> Diskon</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="user.php"><i class="bi bi-people"></i> Kelola Kasir</a>
-                </li>
-            </ul>
-            <div class="d-flex align-items-center gap-2">
-                <button type="button" class="theme-toggle" id="toggle-theme" title="Ganti mode terang/gelap">
-                    <i class="bi bi-circle-half"></i>
-                </button>
-                <span class="navbar-text text-white small me-2 d-none d-lg-inline">
-                    <i class="bi bi-person-circle me-1"></i><?= htmlspecialchars($nama) ?>
-                </span>
-                <form method="post" class="d-inline">
-                    <input type="hidden" name="aksi" value="logout">
-                    <button type="submit" class="btn btn-outline-light btn-sm">
-                        <i class="bi bi-box-arrow-right me-1"></i>Logout
-                    </button>
-                </form>
-            </div>
-        </div>
-    </div>
-</nav>
+<?php require __DIR__ . '/assets/partials/navbar.php'; ?>
 <div class="container py-4">
 
     <div class="mb-4">
@@ -215,11 +170,9 @@ $supplierSemua = Supplier::semua();
             <div class="card pos-card">
                 <div class="card-header bg-white"><strong>Catat Retur</strong></div>
                 <div class="card-body">
-                    <?php if ($produkSemua === [] || $supplierSemua === []): ?>
+                    <?php if ($produkSemua === []): ?>
                         <div class="text-muted small">
-                            <?= $produkSemua === [] ? 'Belum ada produk. ' : '' ?>
-                            <?= $supplierSemua === [] ? 'Belum ada supplier. ' : '' ?>
-                            Siapkan dulu lewat halaman terkait.
+                            Belum ada produk. Siapkan dulu lewat halaman terkait.
                         </div>
                     <?php else: ?>
                         <form method="post" class="row g-3">
@@ -236,22 +189,18 @@ $supplierSemua = Supplier::semua();
                                 </select>
                             </div>
                             <div class="col-12">
-                                <label for="supplier-retur" class="form-label">Supplier</label>
-                                <select id="supplier-retur" name="supplier_id" class="form-select" required>
-                                    <option value="">Pilih supplier...</option>
-                                    <?php foreach ($supplierSemua as $s): ?>
-                                        <option value="<?= $s->getId() ?>">
-                                            <?= htmlspecialchars($s->getNama()) ?>
-                                        </option>
-                                    <?php endforeach; ?>
+                                <label for="supplier-retur" class="form-label">Supplier asal (dari stok masuk)</label>
+                                <select id="supplier-retur" name="supplier_id" class="form-select" required disabled>
+                                    <option value="">Pilih produk dulu...</option>
                                 </select>
+                                <div class="form-text" id="info-pembelian"></div>
                             </div>
+                            <input type="hidden" name="pembelian_id" id="pembelian-id" value="0">
                             <div class="col-md-4">
                                 <label for="qty-retur" class="form-label">Qty</label>
                                 <input
                                     type="number"
                                     min="1"
-                                    max="1"
                                     id="qty-retur"
                                     name="qty"
                                     class="form-control"
@@ -309,21 +258,65 @@ $supplierSemua = Supplier::semua();
 <script src="https://cdn.datatables.net/2.1.8/js/dataTables.min.js"></script>
 <script src="https://cdn.datatables.net/2.1.8/js/dataTables.bootstrap5.min.js"></script>
 <script>
-    // Batasi qty retur maksimal = stok produk yang dipilih.
+    // Saat produk dipilih: ambil supplier asal (dari stok masuk terakhir)
+    // lalu isi dropdown supplier + info pembelian. Batasi qty maks = stok.
     (function () {
         var select = document.getElementById('produk-retur');
+        var supplier = document.getElementById('supplier-retur');
+        var info = document.getElementById('info-pembelian');
+        var pembelianId = document.getElementById('pembelian-id');
         var qty = document.getElementById('qty-retur');
-        if (!select || !qty) return;
+        if (!select || !supplier || !info || !pembelianId || !qty) return;
 
-        function syncMax() {
-            var opt = select.options[select.selectedIndex];
-            var stok = opt && opt.dataset.stok ? parseInt(opt.dataset.stok, 10) : 1;
+        function setMaksStok(stok) {
             var maks = Math.max(1, stok);
             qty.max = maks;
             if (parseInt(qty.value, 10) > maks) qty.value = maks;
         }
-        select.addEventListener('change', syncMax);
-        syncMax();
+
+        function muatSupplierAsal() {
+            var id = select.value;
+            if (!id) {
+                supplier.innerHTML = '<option value="">Pilih produk dulu...</option>';
+                supplier.disabled = true;
+                info.textContent = '';
+                pembelianId.value = '0';
+                qty.max = '';
+                return;
+            }
+
+            var opt = select.options[select.selectedIndex];
+            setMaksStok(opt && opt.dataset.stok ? parseInt(opt.dataset.stok, 10) : 1);
+
+            fetch('api.php?aksi=retur.supplier_asal&produk_id=' + encodeURIComponent(id), {
+                headers: { 'X-Requested-With': 'fetch' }
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (!data.ditemukan) {
+                        supplier.innerHTML = '<option value="">Belum ada stok masuk</option>';
+                        supplier.disabled = true;
+                        info.textContent = 'Produk ini belum pernah dibeli dari supplier mana pun, belum bisa diretur.';
+                        info.className = 'form-text text-danger';
+                        pembelianId.value = '0';
+                        return;
+                    }
+                    supplier.innerHTML =
+                        '<option value="' + data.supplier_id + '">' + data.nama + '</option>';
+                    supplier.disabled = false;
+                    pembelianId.value = data.pembelian_id;
+                    info.textContent = 'Stok masuk terakhir: ' + data.tanggal_beli + ' — ' + data.nama + '.';
+                    info.className = 'form-text';
+                })
+                .catch(function () {
+                    supplier.innerHTML = '<option value="">Gagal memuat supplier</option>';
+                    supplier.disabled = true;
+                    info.textContent = 'Terjadi kesalahan saat memuat data. Coba lagi.';
+                });
+        }
+
+        select.addEventListener('change', muatSupplierAsal);
+        muatSupplierAsal();
     })();
 
     // Riwayat retur via DataTables server-side (api.php → ReturController).

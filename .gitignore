@@ -1,0 +1,12 @@
+# Dependency PHP (dompdf tidak terpakai di kode aplikasi)
+/vendor/
+
+# File debugging sementara
+/login_*.html
+
+# Upload produk
+/public/uploads/*
+!/public/uploads/.gitkeep
+
+# Log & cache
+*.log

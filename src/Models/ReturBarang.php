@@ -14,6 +14,7 @@ class ReturBarang implements DataReporter
     private DateTimeImmutable $tanggal;
     private Produk $produk;
     private Supplier $supplier;
+    private int $pembelianId = 0;
     private int $qty = 0;
     private string $alasan = '';
 
@@ -36,6 +37,9 @@ class ReturBarang implements DataReporter
         if (isset($data['supplier_id'])) {
             $supplier = Supplier::cari((int) $data['supplier_id']);
             $this->supplier = $supplier ?? new Supplier();
+        }
+        if (isset($data['pembelian_id'])) {
+            $this->pembelianId = (int) $data['pembelian_id'];
         }
         if (isset($data['qty'])) {
             $this->qty = (int) $data['qty'];
@@ -65,6 +69,12 @@ class ReturBarang implements DataReporter
         return $this->supplier;
     }
 
+    /** Id pembelian (stok masuk) asal barang yang diretur; 0 bila tidak ada. */
+    public function getPembelianId(): int
+    {
+        return $this->pembelianId;
+    }
+
     public function getQty(): int
     {
         return $this->qty;
@@ -85,6 +95,11 @@ class ReturBarang implements DataReporter
         $this->supplier = $supplier;
     }
 
+    public function setPembelianId(int $pembelianId): void
+    {
+        $this->pembelianId = $pembelianId;
+    }
+
     public function setQty(int $qty): void
     {
         $this->qty = $qty;
@@ -98,11 +113,13 @@ class ReturBarang implements DataReporter
     /**
      * Proses retur sesuai alur pada spesifikasi:
      * 1. Cek stok produk cukup untuk diretur -> kalau kurang, batalkan dengan pesan spesifik.
-     * 2. Cek data supplier valid -> kalau tidak valid, batalkan.
-     * 3. Kalau keduanya valid: kurangi stok produk & catat retur dalam satu transaksi DB,
+     * 2. Cek produk punya riwayat stok masuk (pembelian) -> kalau belum pernah dibeli,
+     *    tidak bisa diretur (barang tidak berasal dari supplier manapun).
+     * 3. Cek supplier asal pembelian valid -> kalau tidak valid, batalkan.
+     * 4. Kalau semua valid: kurangi stok produk & catat retur dalam satu transaksi DB,
      *    jadi kalau pencatatan gagal, stok ikut di-rollback (tidak terlanjur berkurang).
      *
-     * @throws RuntimeException bila stok atau supplier tidak valid
+     * @throws RuntimeException bila stok, riwayat pembelian, atau supplier tidak valid
      */
     public function prosesRetur(): bool
     {
@@ -120,24 +137,57 @@ class ReturBarang implements DataReporter
             );
         }
 
-        if ($this->supplier->getId() === '' || $this->supplier->getNama() === '') {
-            throw new RuntimeException('Data supplier tidak valid.');
+        // Retur harus merujuk stok masuk (pembelian) asal barang. Barang yang
+        // belum pernah dibeli tidak punya supplier asal, jadi tidak bisa diretur.
+        $asal = self::pembelianTerakhirProduk((int) $this->produk->getId());
+
+        if ($asal === null) {
+            throw new RuntimeException(
+                sprintf('Produk "%s" belum pernah ada stok masuk, tidak bisa diretur ke supplier.', $this->produk->getNama())
+            );
         }
+
+        // Supplier tujuan retur WAJIB sama dengan supplier asal pembelian terakhir.
+        if ($this->pembelianId > 0) {
+            $asalDipilih = self::cariItemPembelian($this->pembelianId, (int) $this->produk->getId());
+
+            if ($asalDipilih === null) {
+                throw new RuntimeException('Stok masuk asal tidak valid untuk produk ini.');
+            }
+        } else {
+            $this->pembelianId = (int) $asal['pembelian_id'];
+        }
+
+        $supplierAsal = Supplier::cari((int) $asal['supplier_id']);
+
+        if ($supplierAsal === null || $supplierAsal->getNama() === '') {
+            throw new RuntimeException('Data supplier asal pembelian tidak valid.');
+        }
+
+        // Supplier yang dipilih harus cocok dengan supplier asal pembelian.
+        if ($this->supplier->getId() !== '' && (int) $this->supplier->getId() !== (int) $asal['supplier_id']) {
+            throw new RuntimeException(
+                sprintf('Retur "%s" hanya bisa ke supplier asal: %s.', $this->produk->getNama(), $supplierAsal->getNama())
+            );
+        }
+
+        $this->supplier = $supplierAsal;
 
         $pdo = Database::connect();
         $pdo->beginTransaction();
 
         try {
             $stmt = $pdo->prepare(
-                'INSERT INTO retur_barang (tanggal, produk_id, supplier_id, qty, alasan)
-                 VALUES (:tanggal, :produk_id, :supplier_id, :qty, :alasan)'
+                'INSERT INTO retur_barang (tanggal, produk_id, supplier_id, pembelian_id, qty, alasan)
+                 VALUES (:tanggal, :produk_id, :supplier_id, :pembelian_id, :qty, :alasan)'
             );
             $stmt->execute([
-                ':tanggal'     => $this->tanggal->format('Y-m-d H:i:s'),
-                ':produk_id'   => $this->produk->getId(),
-                ':supplier_id' => $this->supplier->getId(),
-                ':qty'         => $this->qty,
-                ':alasan'      => $this->alasan,
+                ':tanggal'      => $this->tanggal->format('Y-m-d H:i:s'),
+                ':produk_id'    => $this->produk->getId(),
+                ':supplier_id'  => $this->supplier->getId(),
+                ':pembelian_id' => $this->pembelianId > 0 ? $this->pembelianId : null,
+                ':qty'          => $this->qty,
+                ':alasan'       => $this->alasan,
             ]);
 
             $this->id = (string) $pdo->lastInsertId();
@@ -163,7 +213,7 @@ class ReturBarang implements DataReporter
     public static function cari(int $id): ?self
     {
         $stmt = Database::connect()->prepare(
-            'SELECT id, tanggal, produk_id, supplier_id, qty, alasan FROM retur_barang WHERE id = :id LIMIT 1'
+            'SELECT id, tanggal, produk_id, supplier_id, pembelian_id, qty, alasan FROM retur_barang WHERE id = :id LIMIT 1'
         );
         $stmt->execute([':id' => $id]);
         $row = $stmt->fetch();
@@ -193,6 +243,64 @@ class ReturBarang implements DataReporter
         $stmt->execute();
 
         return $stmt->fetchAll();
+    }
+
+    /**
+     * Pembelian (stok masuk) terakhir untuk sebuah produk — dipakai untuk
+     * menentukan supplier asal retur. Mengembalikan baris item_pembelian
+     * terbaru beserta supplier pembelian-nya, atau null bila produk belum
+     * pernah dibeli.
+     *
+     * @return array<string, mixed>|null
+     */
+    public static function pembelianTerakhirProduk(int $produkId): ?array
+    {
+        if ($produkId <= 0) {
+            return null;
+        }
+
+        $stmt = Database::connect()->prepare(
+            'SELECT ip.id            AS item_id,
+                    ip.pembelian_id,
+                    ip.qty           AS qty_dibeli,
+                    p.supplier_id,
+                    s.nama           AS supplier_nama,
+                    p.tanggal        AS tanggal_beli
+             FROM item_pembelian ip
+             JOIN pembelian p ON p.id = ip.pembelian_id
+             JOIN supplier s ON s.id = p.supplier_id
+             WHERE ip.produk_id = :produk_id
+             ORDER BY p.tanggal DESC, ip.id DESC
+             LIMIT 1'
+        );
+        $stmt->execute([':produk_id' => $produkId]);
+        $row = $stmt->fetch();
+
+        return $row === false ? null : $row;
+    }
+
+    /**
+     * Cek apakah sebuah produk termasuk dalam pembelian (stok masuk) tertentu.
+     * Dipakai untuk memastikan pembelian_id yang dipilih valid untuk produk itu.
+     *
+     * @return array<string, mixed>|null
+     */
+    public static function cariItemPembelian(int $pembelianId, int $produkId): ?array
+    {
+        if ($pembelianId <= 0 || $produkId <= 0) {
+            return null;
+        }
+
+        $stmt = Database::connect()->prepare(
+            'SELECT ip.id AS item_id, ip.pembelian_id, ip.qty AS qty_dibeli
+             FROM item_pembelian ip
+             WHERE ip.pembelian_id = :pembelian_id AND ip.produk_id = :produk_id
+             LIMIT 1'
+        );
+        $stmt->execute([':pembelian_id' => $pembelianId, ':produk_id' => $produkId]);
+        $row = $stmt->fetch();
+
+        return $row === false ? null : $row;
     }
 
     // ------------------------------------------------------------
