@@ -36,8 +36,7 @@ if (isset($_SESSION['user_id'], $_SESSION['role'])) {
     $userSesi = User::cariBerdasarkanId((int) $_SESSION['user_id']);
 
     if ($userSesi === null || ($_SESSION['role'] !== 'admin' && $_SESSION['role'] !== 'kasir')) {
-        session_unset();
-        session_destroy();
+        logoutKaryawan();
         // Lanjut ke form login di bawah (tidak redirect).
     } else {
         redirectSesuaiRole((string) $_SESSION['role']);

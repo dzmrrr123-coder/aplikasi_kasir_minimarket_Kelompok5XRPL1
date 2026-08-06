@@ -317,8 +317,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     switch ($aksi) {
         case 'logout':
-            session_unset();
-            session_destroy();
+            logoutKaryawan();
             header('Location: login.php');
             exit;
 

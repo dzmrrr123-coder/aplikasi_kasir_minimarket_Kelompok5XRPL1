@@ -62,6 +62,25 @@ if (!function_exists('csrf_valid')) {
 }
 
 /**
+ * Logout karyawan (kasir/admin): hapus key sesi milik karyawan TANPA
+ * menghapus sesi member yang mungkin aktif di browser/perangkat sama.
+ * Sesi member dipisahkan (member_id, member_nama, member_nomor) supaya
+ * kios self-service member tidak terganggu saat kasir ganti akun.
+ */
+if (!function_exists('logoutKaryawan')) {
+    function logoutKaryawan(): void
+    {
+        foreach (['user_id', 'role', 'nama'] as $kunci) {
+            unset($_SESSION[$kunci]);
+        }
+
+        // Regenerasi id sesi supaya sesi lama (yang sudah punya data
+        // karyawan) tidak bisa disadap/dipakai ulang.
+        session_regenerate_id(true);
+    }
+}
+
+/**
  * Wajib token CSRF valid untuk semua request POST.
  * Dipanggil di awal blok routing POST tiap halaman. Kalau tidak valid,
  * hentikan dengan 419 (atau redirect ke halaman sendiri untuk UX).

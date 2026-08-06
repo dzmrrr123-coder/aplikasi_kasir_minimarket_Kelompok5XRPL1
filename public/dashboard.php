@@ -57,8 +57,7 @@ $nama = $_SESSION['nama'] ?? 'Admin';
 // Logout.
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['aksi'] ?? '') === 'logout') {
     require_csrf();
-    session_unset();
-    session_destroy();
+    logoutKaryawan();
     header('Location: login.php');
     exit;
 }
