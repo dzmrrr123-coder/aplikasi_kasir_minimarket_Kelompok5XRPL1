@@ -500,7 +500,7 @@ function renderFragmentKananKiosk(): string
             >
         </div>
 
-        <div class="kiosk-numpad mb-3">
+        <div class="kiosk-numpad mb-3 d-none" id="kiosk-numpad">
             <div class="numpad-grid">
                 <button type="button" data-num="1">1</button>
                 <button type="button" data-num="2">2</button>
@@ -1360,6 +1360,7 @@ $produkSemua = Produk::semua();
                     ? tmp.querySelector('.kiosk-userbar').parentElement.innerHTML
                     : '';
                 initNumpad();
+                syncNumpadMetode();
             }
 
             initKembalian();
@@ -1396,6 +1397,22 @@ $produkSemua = Produk::semua();
                 input.dispatchEvent(new Event('input'));
             });
         }
+
+        // Numpad (kalkulator) hanya muncul saat kasir memilih metode
+        // pembayaran Tunai — panel kanan tetap lega saat awal / non-tunai.
+        var numpadTampil = false; // default: sembunyi biar panel lega
+        function syncNumpadMetode() {
+            var numpad = document.getElementById('kiosk-numpad');
+            if (!numpad) return;
+            numpad.classList.toggle('d-none', !numpadTampil);
+        }
+        document.addEventListener('change', function (e) {
+            if (e.target && e.target.name === 'metode') {
+                // Muncul saat Tunai dipilih; sembunyi saat Non-tunai.
+                numpadTampil = e.target.value === 'tunai';
+                syncNumpadMetode();
+            }
+        });
 
         // Shortcut keyboard: F1 = fokus pencarian, F2 = fokus jumlah dibayar.
         document.addEventListener('keydown', function (e) {
@@ -1504,6 +1521,7 @@ $produkSemua = Produk::semua();
 
         initKembalian();
         initNumpad();
+        syncNumpadMetode();
         fokusBarcode();
 
         // Modal void: isi produk id & nama dari tombol yang diklik.
