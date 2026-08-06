@@ -218,6 +218,16 @@ class Database
             $pdo->exec('ALTER TABLE member ADD COLUMN password VARCHAR(255) NULL AFTER telepon');
         }
 
+        // Migrasi v8 (K2 fix — poin member saat batalkan transaksi):
+        //   transaksi.poin_diberikan = snapshot poin yang diberikan saat
+        //   transaksi dibuat, dipakai saat batalkan() supaya pengembalian
+        //   selalu akurat (tidak dihitung ulang dari floor(total/1000)).
+        if (!self::kolomAda($pdo, $db['dbname'], 'transaksi', 'poin_diberikan')) {
+            $pdo->exec(
+                'ALTER TABLE transaksi ADD COLUMN poin_diberikan INT NOT NULL DEFAULT 0 AFTER member_id'
+            );
+        }
+
         if (!self::tabelAda($pdo, $db['dbname'], 'katalog_penukaran')) {
             $pdo->exec(
                 'CREATE TABLE katalog_penukaran (

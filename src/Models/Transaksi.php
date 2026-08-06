@@ -349,8 +349,18 @@ class Transaksi implements Subject
             }
 
             // Poin member: 1 poin per Rp 1.000 belanja (dibulatkan ke bawah).
+            // Disimpan di kolom poin_diberikan supaya saat batalkan() bisa
+            // dikembalikan persis, bukan dihitung ulang dari total.
             if ($this->memberId > 0) {
-                Member::tambahPoinId($this->memberId, (int) floor($this->total / 1000));
+                $poinDiberikan = (int) floor($this->total / 1000);
+
+                if ($poinDiberikan > 0) {
+                    $upPoin = $pdo->prepare(
+                        'UPDATE transaksi SET poin_diberikan = :poin WHERE id = :id'
+                    );
+                    $upPoin->execute([':poin' => $poinDiberikan, ':id' => $transaksiId]);
+                    Member::tambahPoinId($this->memberId, $poinDiberikan);
+                }
             }
 
             // Observer (Struk & LaporanPenjualan) dipanggil SEBELUM commit:
@@ -388,14 +398,16 @@ class Transaksi implements Subject
         $pdo->beginTransaction();
 
         try {
-            // Ambil member_id & total dari DB (objek bisa jadi belum punya nilai itu).
+            // Ambil member_id, total & poin_diberikan dari DB (objek bisa
+            // jadi belum punya nilai itu; poin dikembalikan sesuai snapshot).
             $stmtInfo = $pdo->prepare(
-                'SELECT member_id, total FROM transaksi WHERE id = :id LIMIT 1'
+                'SELECT member_id, total, poin_diberikan FROM transaksi WHERE id = :id LIMIT 1'
             );
             $stmtInfo->execute([':id' => (int) $this->id]);
             $info = $stmtInfo->fetch();
             $memberId = $info === false ? 0 : (int) ($info['member_id'] ?? 0);
             $totalFinal = $info === false ? 0.0 : (float) ($info['total'] ?? 0);
+            $poinDiberikan = $info === false ? 0 : (int) ($info['poin_diberikan'] ?? 0);
 
             $items = ItemTransaksi::untukTransaksi((int) $this->id);
 
@@ -413,13 +425,11 @@ class Transaksi implements Subject
             $stmt = $pdo->prepare('DELETE FROM transaksi WHERE id = :id');
             $stmt->execute([':id' => $this->id]);
 
-            // Kembalikan poin member yang diberikan saat transaksi dibuat.
-            if ($memberId > 0 && $totalFinal > 0) {
-                $poinDikembalikan = (int) floor($totalFinal / 1000);
-
-                if ($poinDikembalikan > 0) {
-                    Member::tambahPoinId($memberId, -$poinDikembalikan);
-                }
+            // Kembalikan poin member sesuai snapshot yang disimpan saat
+            // transaksi dibuat (bukan floor(total/1000) yang bisa salah
+            // kalau member sudah menukar poin setelah transaksi).
+            if ($memberId > 0 && $poinDiberikan > 0) {
+                Member::tambahPoinId($memberId, -$poinDiberikan);
             }
 
             $pdo->commit();

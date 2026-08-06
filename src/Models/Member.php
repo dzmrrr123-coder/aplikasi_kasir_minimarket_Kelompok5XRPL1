@@ -80,11 +80,13 @@ class Member implements DataReporter
 
     /**
      * Tambah/kurangi poin member. Nilai negatif diperbolehkan (mis. saat
-     * transaksi dibatalkan), tapi hasil akhir tidak pernah negatif.
+     * transaksi dibatalkan). Penjagaan anti-negatif ada di database level
+     * via constraint CHECK (poin >= 0) — aplikasi tidak memotong di sini
+     * supaya pengembalian poin saat batalkan() selalu akurat.
      */
     public function tambahPoin(int $poin): void
     {
-        $this->poin = max(0, $this->poin + $poin);
+        $this->poin = $this->poin + $poin;
     }
 
     public function simpan(): int

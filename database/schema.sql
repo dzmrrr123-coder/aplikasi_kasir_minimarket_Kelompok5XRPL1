@@ -54,14 +54,15 @@ CREATE TABLE IF NOT EXISTS pembayaran (
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS transaksi (
-    id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    tanggal       DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    total         DECIMAL(12,2)   NOT NULL DEFAULT 0,
-    pajak         DECIMAL(12,2)   NOT NULL DEFAULT 0,
-    kasir_id      INT UNSIGNED    NOT NULL,
-    diskon_id     INT UNSIGNED    NULL,
-    pembayaran_id INT UNSIGNED    NULL,
-    member_id     INT UNSIGNED    NULL,
+    id             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tanggal        DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    total          DECIMAL(12,2)   NOT NULL DEFAULT 0,
+    pajak          DECIMAL(12,2)   NOT NULL DEFAULT 0,
+    kasir_id       INT UNSIGNED    NOT NULL,
+    diskon_id      INT UNSIGNED    NULL,
+    pembayaran_id  INT UNSIGNED    NULL,
+    member_id      INT UNSIGNED    NULL,
+    poin_diberikan INT             NOT NULL DEFAULT 0,
     CONSTRAINT fk_transaksi_kasir
         FOREIGN KEY (kasir_id) REFERENCES users(id)
         ON UPDATE CASCADE ON DELETE RESTRICT,
