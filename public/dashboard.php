@@ -56,11 +56,17 @@ $nama = $_SESSION['nama'] ?? 'Admin';
 
 // Logout.
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['aksi'] ?? '') === 'logout') {
+    require_csrf();
     session_unset();
     session_destroy();
     header('Location: login.php');
     exit;
 }
+
+// Notifikasi stok menipis (server-side, pakai stok_minimum per produk).
+use App\Models\Produk;
+$stokMenipis = Produk::cariStokMenipis();
+$aktif = 'dashboard';
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -74,57 +80,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['aksi'] ?? '') === 'logout'
     <link href="https://cdn.datatables.net/2.1.8/css/dataTables.bootstrap5.min.css" rel="stylesheet">
 </head>
 <body>
-<nav class="navbar navbar-expand-lg pos-navbar mb-4 sticky-top">
-    <div class="container">
-        <a class="navbar-brand" href="dashboard.php"><i class="bi bi-shop"></i> Kasir Minimarket</a>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav-dash"
-                aria-controls="nav-dash" aria-expanded="false" aria-label="Toggle navigation">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="collapse navbar-collapse" id="nav-dash">
-            <ul class="navbar-nav me-auto">
-                <li class="nav-item">
-                    <a class="nav-link active" href="dashboard.php"><i class="bi bi-speedometer2"></i> Dashboard</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="admin.php"><i class="bi bi-box-seam"></i> Admin</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="transaksi.php"><i class="bi bi-cash-register"></i> Kasir</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="laporan.php"><i class="bi bi-bar-chart-line"></i> Laporan</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="supplier.php"><i class="bi bi-truck"></i> Supplier</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="retur.php"><i class="bi bi-arrow-counterclockwise"></i> Retur</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="diskon.php"><i class="bi bi-tags"></i> Diskon</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="user.php"><i class="bi bi-people"></i> Kelola Kasir</a>
-                </li>
-            </ul>
-            <div class="d-flex align-items-center gap-2">
-                <button type="button" class="theme-toggle" id="toggle-theme" title="Ganti mode terang/gelap">
-                    <i class="bi bi-circle-half"></i>
-                </button>
-                <span class="navbar-text text-white small me-2 d-none d-lg-inline">
-                    <i class="bi bi-person-circle me-1"></i><?= htmlspecialchars($nama) ?>
-                </span>
-                <form method="post" class="d-inline">
-                    <input type="hidden" name="aksi" value="logout">
-                    <button type="submit" class="btn btn-outline-light btn-sm">
-                        <i class="bi bi-box-arrow-right me-1"></i>Logout
-                    </button>
-                </form>
-            </div>
-        </div>
-    </div>
-</nav>
+<?php require __DIR__ . '/assets/partials/navbar.php'; ?>
 <div class="container py-4">
 
     <div class="d-flex flex-wrap align-items-center justify-content-between mb-4 gap-2">
@@ -136,6 +92,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['aksi'] ?? '') === 'logout'
             <i class="bi bi-bar-chart-line me-1"></i>Buka Laporan
         </a>
     </div>
+
+    <?php if ($stokMenipis !== []): ?>
+        <div class="alert alert-warning alert-dismissible fade show" role="alert">
+            <div class="d-flex align-items-start gap-2">
+                <i class="bi bi-exclamation-triangle-fill mt-1"></i>
+                <div>
+                    <strong>Stok menipis:</strong>
+                    <?php
+                    $namaStokMenipis = array_map(
+                        static fn ($p) => $p->getNama() . ' (' . $p->getStok() . ')',
+                        array_slice($stokMenipis, 0, 5)
+                    );
+                    ?>
+                    <?= htmlspecialchars(implode(', ', $namaStokMenipis)) ?>
+                    <?php if (count($stokMenipis) > 5): ?>
+                        <span class="text-muted">+<?= count($stokMenipis) - 5 ?> lainnya</span>
+                    <?php endif; ?>
+                    <a href="admin.php" class="alert-link ms-1">Kelola stok</a>
+                </div>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Tutup"></button>
+        </div>
+    <?php endif; ?>
 
     <!-- Stat cards (diisi via AJAX) -->
     <div class="row g-3 mb-4">
@@ -277,14 +256,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['aksi'] ?? '') === 'logout'
 
         // Stat cards.
         fetch('api.php?aksi=dashboard.ringkasan')
-            .then(function (r) { return r.json(); })
+            .then(function (r) {
+                if (r.status === 401) { window.location.href = 'login.php'; throw new Error('Sesi habis'); }
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
             .then(function (d) {
                 document.getElementById('stat-total').textContent = rupiah(d.total || 0);
                 document.getElementById('stat-jumlah').textContent = d.jumlah || 0;
                 document.getElementById('stat-item').textContent = d.item || 0;
                 document.getElementById('stat-rata').textContent = rupiah(d.rata_rata || 0);
             })
-            .catch(function () { /* diam */ });
+            .catch(function (err) {
+                if (err.message === 'Sesi habis') return;
+                var el = document.getElementById('stat-total');
+                if (el && el.textContent === '—') {
+                    el.closest('.card').querySelector('.stat-label').textContent = 'Gagal memuat data';
+                    el.textContent = '!';
+                }
+            });
 
         // Grafik penjualan 7 hari.
         fetch('api.php?aksi=dashboard.grafik')

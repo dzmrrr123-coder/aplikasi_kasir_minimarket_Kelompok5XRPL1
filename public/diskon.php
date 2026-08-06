@@ -133,8 +133,8 @@ function aksiSimpanDiskon(array $data): void
 
         redirectSelf('Diskon ditambahkan.', 'success');
     } catch (\Throwable $e) {
-        // Duplikat kode (UNIQUE) atau error lain.
-        redirectSelfDenganEdit('Gagal menyimpan diskon: ' . $e->getMessage(), $editId);
+        // Duplikat kode (UNIQUE) atau error lain — tampilkan pesan ramah.
+        redirectSelfDenganEdit(pesanErrorRamah($e), $editId);
     }
 }
 
@@ -157,6 +157,7 @@ function aksiHapusDiskon(int $id): void
 
 // ---- Routing aksi (POST) ----
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    require_csrf();
     $aksi = $_POST['aksi'] ?? '';
 
     switch ($aksi) {
@@ -185,6 +186,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $diskonSemua = Diskon::semua();
 $editDiskonId = (int) ($_SESSION['edit_diskon_id'] ?? 0);
 $editDiskon = $editDiskonId > 0 ? Diskon::cari($editDiskonId) : null;
+$aktif = 'diskon';
 
 function formatRupiah(float $jumlah): string
 {
@@ -202,57 +204,7 @@ function formatRupiah(float $jumlah): string
     <link href="assets/theme.css" rel="stylesheet">
 </head>
 <body>
-<nav class="navbar navbar-expand-lg pos-navbar mb-4 sticky-top">
-    <div class="container">
-        <a class="navbar-brand" href="dashboard.php"><i class="bi bi-shop"></i> Kasir Minimarket</a>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav-diskon"
-                aria-controls="nav-diskon" aria-expanded="false" aria-label="Toggle navigation">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="collapse navbar-collapse" id="nav-diskon">
-            <ul class="navbar-nav me-auto">
-                <li class="nav-item">
-                    <a class="nav-link" href="dashboard.php"><i class="bi bi-speedometer2"></i> Dashboard</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="admin.php"><i class="bi bi-box-seam"></i> Admin</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="transaksi.php"><i class="bi bi-cash-register"></i> Kasir</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="laporan.php"><i class="bi bi-bar-chart-line"></i> Laporan</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="supplier.php"><i class="bi bi-truck"></i> Supplier</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="retur.php"><i class="bi bi-arrow-counterclockwise"></i> Retur</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link active" href="diskon.php"><i class="bi bi-tags"></i> Diskon</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="user.php"><i class="bi bi-people"></i> Kelola Kasir</a>
-                </li>
-            </ul>
-            <div class="d-flex align-items-center gap-2">
-                <button type="button" class="theme-toggle" id="toggle-theme" title="Ganti mode terang/gelap">
-                    <i class="bi bi-circle-half"></i>
-                </button>
-                <span class="navbar-text text-white small me-2 d-none d-lg-inline">
-                    <i class="bi bi-person-circle me-1"></i><?= htmlspecialchars($nama) ?>
-                </span>
-                <form method="post" class="d-inline">
-                    <input type="hidden" name="aksi" value="logout">
-                    <button type="submit" class="btn btn-outline-light btn-sm">
-                        <i class="bi bi-box-arrow-right me-1"></i>Logout
-                    </button>
-                </form>
-            </div>
-        </div>
-    </div>
-</nav>
+<?php require __DIR__ . '/assets/partials/navbar.php'; ?>
 <div class="container py-4">
 
     <div class="mb-4">

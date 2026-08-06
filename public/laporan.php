@@ -62,6 +62,7 @@ $nama = $_SESSION['nama'] ?? 'Admin';
 
 // Logout.
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['aksi'] ?? '') === 'logout') {
+    require_csrf();
     session_unset();
     session_destroy();
     header('Location: login.php');
@@ -81,6 +82,14 @@ try {
     $dAkhir = new DateTimeImmutable(date('Y-m-d'));
 }
 
+// Kalau rentang terbalik (mulai > akhir), swap otomatis + peringatan.
+$peringatanTanggal = '';
+
+if ($dMulai > $dAkhir) {
+    [$dMulai, $dAkhir] = [$dAkhir, $dMulai];
+    $peringatanTanggal = 'Rentang tanggal dibalik (mulai > akhir) — otomatis ditukar.';
+}
+
 // Ekspor CSV: unduh laporan sesuai periode (dipanggil server-side via model).
 if (isset($_GET['ekspor']) && $_GET['ekspor'] === '1') {
     $laporan = new LaporanPenjualan();
@@ -97,6 +106,7 @@ if (isset($_GET['ekspor']) && $_GET['ekspor'] === '1') {
 
 // Tabel & grafik periode diambil via api.php (Controller → DataReporter),
 // bukan di-render di view. View murni konsumen JSON.
+$aktif = 'laporan';
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -113,63 +123,20 @@ if (isset($_GET['ekspor']) && $_GET['ekspor'] === '1') {
     </style>
 </head>
 <body>
-<nav class="navbar navbar-expand-lg pos-navbar mb-4 sticky-top">
-    <div class="container">
-        <a class="navbar-brand" href="admin.php"><i class="bi bi-shop"></i> Kasir Minimarket</a>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav-laporan"
-                aria-controls="nav-laporan" aria-expanded="false" aria-label="Toggle navigation">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="collapse navbar-collapse" id="nav-laporan">
-            <ul class="navbar-nav me-auto">
-                <li class="nav-item">
-                    <a class="nav-link" href="dashboard.php"><i class="bi bi-speedometer2"></i> Dashboard</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="admin.php"><i class="bi bi-box-seam"></i> Admin</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="transaksi.php"><i class="bi bi-cash-register"></i> Kasir</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link active" href="laporan.php"><i class="bi bi-bar-chart-line"></i> Laporan</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="supplier.php"><i class="bi bi-truck"></i> Supplier</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="retur.php"><i class="bi bi-arrow-counterclockwise"></i> Retur</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="diskon.php"><i class="bi bi-tags"></i> Diskon</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="user.php"><i class="bi bi-people"></i> Kelola Kasir</a>
-                </li>
-            </ul>
-            <div class="d-flex align-items-center gap-2">
-                <button type="button" class="theme-toggle" id="toggle-theme" title="Ganti mode terang/gelap">
-                    <i class="bi bi-circle-half"></i>
-                </button>
-                <span class="navbar-text text-white small me-2 d-none d-lg-inline">
-                    <i class="bi bi-person-circle me-1"></i><?= htmlspecialchars($nama) ?>
-                </span>
-                <form method="post" class="d-inline">
-                    <input type="hidden" name="aksi" value="logout">
-                    <button type="submit" class="btn btn-outline-light btn-sm">
-                        <i class="bi bi-box-arrow-right me-1"></i>Logout
-                    </button>
-                </form>
-            </div>
-        </div>
-    </div>
-</nav>
+<?php require __DIR__ . '/assets/partials/navbar.php'; ?>
 <div class="container py-4">
 
     <div class="mb-4">
         <h1 class="h3 mb-1">Laporan Penjualan</h1>
         <span class="text-muted small">Admin: <?= htmlspecialchars($nama) ?></span>
     </div>
+
+    <?php if ($peringatanTanggal !== ''): ?>
+        <div class="alert alert-warning alert-dismissible fade show" role="alert">
+            <?= htmlspecialchars($peringatanTanggal) ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Tutup"></button>
+        </div>
+    <?php endif; ?>
 
     <div class="card pos-card mb-4">
         <div class="card-header bg-white"><strong>Filter Periode</strong></div>

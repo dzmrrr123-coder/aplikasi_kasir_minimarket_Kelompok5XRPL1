@@ -186,6 +186,32 @@ a:hover {
     color: rgba(255, 255, 255, 0.9);
 }
 
+/* Dropdown "Lainnya" di navbar: menu putih dengan teks gelap, item aktif teal.
+   Diposisikan ke kanan supaya tidak menggantung keluar layar. */
+.pos-navbar .dropdown-menu {
+    background-color: var(--surface);
+    border-color: var(--border);
+    box-shadow: var(--shadow-hover);
+    min-width: 14rem;
+    margin-top: 0.5rem;
+}
+.pos-navbar .dropdown-item {
+    color: var(--text);
+    border-radius: 0.375rem;
+}
+.pos-navbar .dropdown-item:hover,
+.pos-navbar .dropdown-item:focus {
+    background-color: var(--surface-2);
+    color: var(--text);
+}
+.pos-navbar .dropdown-item.active {
+    background-color: var(--brand-primary);
+    color: #ffffff;
+}
+.pos-navbar .dropdown-item i {
+    font-size: 1rem;
+}
+
 /* Tombol toggle theme di navbar */
 .theme-toggle {
     width: 2.25rem;
@@ -532,6 +558,32 @@ a:hover {
     padding: 1rem;
     overflow-y: auto;
 }
+
+/* Responsif: layar sempit (<1024px) — panel kanan turun ke bawah,
+   layout jadi satu kolom yang bisa di-scroll. */
+@media (max-width: 1023.98px) {
+    .kiosk-body {
+        overflow: auto;
+        height: auto;
+        min-height: 100vh;
+    }
+    .kiosk-body .kiosk-wrapper {
+        flex-direction: column;
+        height: auto;
+    }
+    .kiosk-body .kiosk-kiri {
+        flex: 1 1 auto;
+        max-width: 100%;
+        overflow-y: visible;
+    }
+    .kiosk-body .kiosk-kanan {
+        flex: 1 1 auto;
+        max-width: 100%;
+        border-left: 0;
+        border-top: 1px solid var(--border);
+        overflow-y: visible;
+    }
+}
 /* Header panel kanan: nama kasir + logout */
 .kiosk-kanan .kiosk-userbar {
     display: flex;
@@ -641,4 +693,12 @@ a:hover {
 }
 .dark-mode .kiosk-produk .kiosk-produk-harga {
     color: #2dd4bf;
+}
+.kiosk-produk .kiosk-produk-gambar {
+    width: 100%;
+    height: 72px;
+    object-fit: contain;
+    background-color: #ffffff;
+    border: 1px solid var(--border-soft);
+    padding: 0.25rem;
 }

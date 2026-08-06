@@ -16,6 +16,7 @@ require __DIR__ . '/../src/autoload.php';
 
 use App\Models\Kategori;
 use App\Models\Produk;
+use App\Models\Supplier;
 
 if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
@@ -104,23 +105,27 @@ function aksiSimpanKategori(string $namaKategori): void
     $editId = (int) ($_SESSION['edit_kategori_id'] ?? 0);
     unset($_SESSION['edit_kategori_id']);
 
-    if ($editId > 0) {
-        $kategori = Kategori::cari($editId);
+    try {
+        if ($editId > 0) {
+            $kategori = Kategori::cari($editId);
 
-        if ($kategori === null) {
-            redirectSelf('Kategori tidak ditemukan.');
+            if ($kategori === null) {
+                redirectSelf('Kategori tidak ditemukan.');
+            }
+
+            $kategori->setNama($namaKategori);
+            $kategori->perbarui();
+
+            redirectSelf('Kategori diperbarui.');
         }
 
-        $kategori->setNama($namaKategori);
-        $kategori->perbarui();
+        $kategori = new Kategori(['nama' => $namaKategori]);
+        $kategori->simpan();
 
-        redirectSelf('Kategori diperbarui.');
+        redirectSelf('Kategori ditambahkan.');
+    } catch (\Throwable $e) {
+        redirectSelf(pesanErrorRamah($e));
     }
-
-    $kategori = new Kategori(['nama' => $namaKategori]);
-    $kategori->simpan();
-
-    redirectSelf('Kategori ditambahkan.');
 }
 
 /** Hapus kategori; ditolak bila masih dipakai produk (FK RESTRICT). */
@@ -140,6 +145,41 @@ function aksiHapusKategori(int $id): void
     }
 }
 
+/**
+ * Simpan file gambar produk ke public/uploads/.
+ * Hanya izinkan gambar (jpg/jpeg/png/webp/gif), maks 2 MB.
+ * Mengembalikan string error (kosong = sukses; nama file di $GLOBALS).
+ */
+function simpanGambarProduk(array $file): string
+{
+    $izin = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp', 'image/gif' => 'gif'];
+    $tipe = (string) ($file['type'] ?? '');
+
+    if (!isset($izin[$tipe])) {
+        return 'Gambar harus berformat JPG, PNG, WEBP, atau GIF.';
+    }
+
+    if ((int) $file['size'] > 2 * 1024 * 1024) {
+        return 'Ukuran gambar maksimal 2 MB.';
+    }
+
+    $ekstensi = $izin[$tipe];
+    $namaFile = 'produk-' . bin2hex(random_bytes(8)) . '.' . $ekstensi;
+    $folder = __DIR__ . '/uploads';
+
+    if (!is_dir($folder)) {
+        mkdir($folder, 0775, true);
+    }
+
+    if (!move_uploaded_file($file['tmp_name'], $folder . '/' . $namaFile)) {
+        return 'Gagal menyimpan gambar.';
+    }
+
+    $GLOBALS['gambar_terupload'] = $namaFile;
+
+    return '';
+}
+
 /** Simpan atau perbarui produk. */
 function aksiSimpanProduk(array $data): void
 {
@@ -150,6 +190,30 @@ function aksiSimpanProduk(array $data): void
     $harga = (float) ($data['harga'] ?? 0);
     $stok = (int) ($data['stok'] ?? 0);
     $kategoriId = (int) ($data['kategori_id'] ?? 0);
+    $barcode = trim((string) ($data['barcode'] ?? ''));
+    $hargaBeli = (float) ($data['harga_beli'] ?? 0);
+    $stokMinimum = (int) ($data['stok_minimum'] ?? 0);
+    $supplierId = (int) ($data['supplier_id'] ?? 0);
+    $satuan = (string) ($data['satuan'] ?? 'pcs');
+    $hargaPerGram = (float) ($data['harga_per_gram'] ?? 0);
+    $gambar = trim((string) ($data['gambar_lama'] ?? ''));
+
+    // Normalisasi satuan & harga per gram.
+    $satuan = $satuan === 'gram' ? 'gram' : 'pcs';
+    $hargaPerGram = $satuan === 'gram' ? $hargaPerGram : 0.0;
+
+    // Upload gambar produk (opsional). Disimpan ke public/uploads/.
+    if (!empty($_FILES['gambar']['name']) && is_uploaded_file($_FILES['gambar']['tmp_name'] ?? '')) {
+        $file = $_FILES['gambar'];
+        $error = simpanGambarProduk($file);
+
+        if ($error !== '') {
+            redirectSelfDenganEdit($error, $editId, 0);
+        } else {
+            $gambar = $GLOBALS['gambar_terupload'];
+            unset($GLOBALS['gambar_terupload']);
+        }
+    }
 
     // Validasi cepat: kategori harus dipilih & valid.
     $kategori = Kategori::cari($kategoriId);
@@ -170,31 +234,49 @@ function aksiSimpanProduk(array $data): void
         redirectSelfDenganEdit('Stok produk tidak boleh negatif.', $editId, 0);
     }
 
-    if ($editId > 0) {
-        $produk = Produk::cari($editId);
+    try {
+        if ($editId > 0) {
+            $produk = Produk::cari($editId);
 
-        if ($produk === null) {
-            redirectSelf('Produk tidak ditemukan.');
+            if ($produk === null) {
+                redirectSelf('Produk tidak ditemukan.');
+            }
+
+            $produk->setNama($nama);
+            $produk->setHarga($harga);
+            $produk->setStok($stok);
+            $produk->setKategori($kategori);
+            $produk->setBarcode($barcode);
+            $produk->setHargaBeli($hargaBeli);
+            $produk->setStokMinimum($stokMinimum);
+            $produk->setSupplierId($supplierId);
+            $produk->setSatuan($satuan);
+            $produk->setHargaPerGram($hargaPerGram);
+            $produk->setGambar($gambar);
+            $produk->perbarui();
+
+            redirectSelf('Produk diperbarui.');
         }
 
-        $produk->setNama($nama);
-        $produk->setHarga($harga);
-        $produk->setStok($stok);
-        $produk->setKategori($kategori);
-        $produk->perbarui();
+        $produk = new Produk([
+            'nama'           => $nama,
+            'harga'          => $harga,
+            'stok'           => $stok,
+            'kategori_id'    => $kategoriId,
+            'barcode'        => $barcode,
+            'harga_beli'     => $hargaBeli,
+            'stok_minimum'   => $stokMinimum,
+            'supplier_id'    => $supplierId,
+            'satuan'         => $satuan,
+            'harga_per_gram' => $hargaPerGram,
+            'gambar'         => $gambar,
+        ]);
+        $produk->simpan();
 
-        redirectSelf('Produk diperbarui.');
+        redirectSelf('Produk ditambahkan.');
+    } catch (\Throwable $e) {
+        redirectSelfDenganEdit(pesanErrorRamah($e), $editId, 0);
     }
-
-    $produk = new Produk([
-        'nama'        => $nama,
-        'harga'       => $harga,
-        'stok'        => $stok,
-        'kategori_id' => $kategoriId,
-    ]);
-    $produk->simpan();
-
-    redirectSelf('Produk ditambahkan.');
 }
 
 /** Hapus produk. */
@@ -216,6 +298,7 @@ function aksiHapusProduk(int $id): void
 
 // ---- Routing aksi (POST) ----
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    require_csrf();
     $aksi = $_POST['aksi'] ?? '';
 
     switch ($aksi) {
@@ -255,12 +338,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // ---- Data untuk tampilan ----
 $kategoriSemua = Kategori::semua();
+$supplierSemua = Supplier::semua();
 
 // Produk/kategori yang sedang diedit (kalau ada).
 $editKategoriId = (int) ($_SESSION['edit_kategori_id'] ?? 0);
 $editProdukId = (int) ($_SESSION['edit_produk_id'] ?? 0);
 $editKategori = $editKategoriId > 0 ? Kategori::cari($editKategoriId) : null;
 $editProduk = $editProdukId > 0 ? Produk::cari($editProdukId) : null;
+$aktif = 'admin';
+
+// ID produk yang sedang diedit (dipakai JS untuk ambil harga beli otomatis).
+$produkEditId = $editProduk?->getId() ?? 0;
 
 function formatRupiah(float $jumlah): string
 {
@@ -275,6 +363,7 @@ $stokMenipis = Produk::cariStokMenipis();
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="produk-id-edit" content="<?= (int) $produkEditId ?>">
     <title>Admin - Kasir Minimarket</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
@@ -285,57 +374,7 @@ $stokMenipis = Produk::cariStokMenipis();
     </style>
 </head>
 <body>
-<nav class="navbar navbar-expand-lg pos-navbar mb-4 sticky-top">
-    <div class="container">
-        <a class="navbar-brand" href="admin.php"><i class="bi bi-shop"></i> Kasir Minimarket</a>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav-admin"
-                aria-controls="nav-admin" aria-expanded="false" aria-label="Toggle navigation">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="collapse navbar-collapse" id="nav-admin">
-            <ul class="navbar-nav me-auto">
-                <li class="nav-item">
-                    <a class="nav-link" href="dashboard.php"><i class="bi bi-speedometer2"></i> Dashboard</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link active" href="admin.php"><i class="bi bi-box-seam"></i> Admin</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="transaksi.php"><i class="bi bi-cash-register"></i> Kasir</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="laporan.php"><i class="bi bi-bar-chart-line"></i> Laporan</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="supplier.php"><i class="bi bi-truck"></i> Supplier</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="retur.php"><i class="bi bi-arrow-counterclockwise"></i> Retur</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="diskon.php"><i class="bi bi-tags"></i> Diskon</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="user.php"><i class="bi bi-people"></i> Kelola Kasir</a>
-                </li>
-            </ul>
-            <div class="d-flex align-items-center gap-2">
-                <button type="button" class="theme-toggle" id="toggle-theme" title="Ganti mode terang/gelap">
-                    <i class="bi bi-circle-half"></i>
-                </button>
-                <span class="navbar-text text-white small me-2 d-none d-lg-inline">
-                    <i class="bi bi-person-circle me-1"></i><?= htmlspecialchars($nama) ?>
-                </span>
-                <form method="post" class="d-inline">
-                    <input type="hidden" name="aksi" value="logout">
-                    <button type="submit" class="btn btn-outline-light btn-sm">
-                        <i class="bi bi-box-arrow-right me-1"></i>Logout
-                    </button>
-                </form>
-            </div>
-        </div>
-    </div>
-</nav>
+<?php require __DIR__ . '/assets/partials/navbar.php'; ?>
 <div class="container py-4">
 
     <div class="mb-4">
@@ -434,8 +473,9 @@ $stokMenipis = Produk::cariStokMenipis();
                 </div>
                 <div class="card-body">
                     <?php if ($editProduk !== null): ?>
-                        <form method="post" class="row g-3">
+                        <form method="post" class="row g-3" enctype="multipart/form-data">
                             <input type="hidden" name="aksi" value="simpan_produk">
+                            <input type="hidden" name="gambar_lama" value="<?= htmlspecialchars($editProduk->getGambar()) ?>">
                             <div class="col-md-6">
                                 <label for="nama-produk" class="form-label">Nama produk</label>
                                 <input
@@ -472,6 +512,28 @@ $stokMenipis = Produk::cariStokMenipis();
                                     required
                                 >
                             </div>
+                            <div class="col-md-3">
+                                <label for="satuan-produk" class="form-label">Satuan</label>
+                                <select id="satuan-produk" name="satuan" class="form-select">
+                                    <option value="pcs" <?= $editProduk->getSatuan() === 'pcs' ? 'selected' : '' ?>>pcs (satuan)</option>
+                                    <option value="gram" <?= $editProduk->getSatuan() === 'gram' ? 'selected' : '' ?>>gram (curah)</option>
+                                </select>
+                                <div class="form-text">gram = dijual per berat.</div>
+                            </div>
+                            <div class="col-md-3" id="blok-harga-per-gram">
+                                <label for="harga-per-gram" class="form-label">Harga per gram</label>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    id="harga-per-gram"
+                                    name="harga_per_gram"
+                                    class="form-control"
+                                    value="<?= $editProduk->getHargaPerGram() ?>"
+                                    placeholder="cth: 25"
+                                >
+                                <div class="form-text">Wajib untuk produk gram.</div>
+                            </div>
                             <div class="col-md-6">
                                 <label for="kategori-produk" class="form-label">Kategori</label>
                                 <select id="kategori-produk" name="kategori_id" class="form-select" required>
@@ -486,14 +548,89 @@ $stokMenipis = Produk::cariStokMenipis();
                                     <?php endforeach; ?>
                                 </select>
                             </div>
+                            <div class="col-md-6">
+                                <label for="barcode-produk" class="form-label">Barcode</label>
+                                <input
+                                    type="text"
+                                    id="barcode-produk"
+                                    name="barcode"
+                                    class="form-control"
+                                    value="<?= htmlspecialchars($editProduk->getBarcode()) ?>"
+                                    placeholder="cth: 8991002101234"
+                                >
+                                <div class="form-text">Kosongkan bila tidak memakai scan.</div>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="harga-beli-produk" class="form-label">Harga beli</label>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    id="harga-beli-produk"
+                                    name="harga_beli"
+                                    class="form-control"
+                                    value="<?= $editProduk->getHargaBeli() ?>"
+                                >
+                            </div>
+                            <div class="col-md-4">
+                                <label for="stok-min-produk" class="form-label">Stok minimum</label>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    id="stok-min-produk"
+                                    name="stok_minimum"
+                                    class="form-control"
+                                    value="<?= $editProduk->getStokMinimum() ?>"
+                                >
+                                <div class="form-text">Notifikasi stok menipis.</div>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="supplier-produk" class="form-label">Supplier</label>
+                                <select id="supplier-produk" name="supplier_id" class="form-select">
+                                    <option value="">Tidak ada</option>
+                                    <?php foreach ($supplierSemua as $s): ?>
+                                        <option
+                                            value="<?= $s->getId() ?>"
+                                            <?= (int) $s->getId() === $editProduk->getSupplierId() ? 'selected' : '' ?>
+                                        >
+                                            <?= htmlspecialchars($s->getNama()) ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="gambar-produk" class="form-label">Gambar produk</label>
+                                <input
+                                    type="file"
+                                    id="gambar-produk"
+                                    name="gambar"
+                                    class="form-control"
+                                    accept="image/jpeg,image/png,image/webp,image/gif"
+                                >
+                                <div class="form-text">JPG/PNG/WEBP/GIF, maks 2 MB.</div>
+                            </div>
+                            <div class="col-md-8 d-flex align-items-center">
+                                <?php if ($editProduk->getGambar() !== ''): ?>
+                                    <img
+                                        src="uploads/<?= htmlspecialchars($editProduk->getGambar()) ?>"
+                                        alt="Gambar produk"
+                                        class="rounded border"
+                                        style="max-height: 80px; max-width: 120px; object-fit: contain;"
+                                        onerror="this.style.display='none';"
+                                    >
+                                <?php else: ?>
+                                    <span class="text-muted small"><i class="bi bi-image me-1"></i>Belum ada gambar</span>
+                                <?php endif; ?>
+                            </div>
                             <div class="col-12 d-flex gap-2">
                                 <button type="submit" class="btn btn-primary">Simpan Perubahan</button>
                                 <a href="?batal_edit_produk=1" class="btn btn-outline-secondary">Batal</a>
                             </div>
                         </form>
                     <?php else: ?>
-                        <form method="post" class="row g-3">
+                        <form method="post" class="row g-3" enctype="multipart/form-data">
                             <input type="hidden" name="aksi" value="simpan_produk">
+                            <input type="hidden" name="gambar_lama" value="">
                             <div class="col-md-6">
                                 <label for="nama-produk" class="form-label">Nama produk</label>
                                 <input
@@ -530,6 +667,27 @@ $stokMenipis = Produk::cariStokMenipis();
                                     required
                                 >
                             </div>
+                            <div class="col-md-3">
+                                <label for="satuan-produk" class="form-label">Satuan</label>
+                                <select id="satuan-produk" name="satuan" class="form-select">
+                                    <option value="pcs" selected>pcs (satuan)</option>
+                                    <option value="gram">gram (curah)</option>
+                                </select>
+                                <div class="form-text">gram = dijual per berat.</div>
+                            </div>
+                            <div class="col-md-3" id="blok-harga-per-gram">
+                                <label for="harga-per-gram" class="form-label">Harga per gram</label>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    id="harga-per-gram"
+                                    name="harga_per_gram"
+                                    class="form-control"
+                                    placeholder="cth: 25"
+                                >
+                                <div class="form-text">Wajib untuk produk gram.</div>
+                            </div>
                             <div class="col-md-6">
                                 <label for="kategori-produk" class="form-label">Kategori</label>
                                 <select id="kategori-produk" name="kategori_id" class="form-select" required>
@@ -538,6 +696,61 @@ $stokMenipis = Produk::cariStokMenipis();
                                         <option value="<?= $k->getId() ?>"><?= htmlspecialchars($k->getNama()) ?></option>
                                     <?php endforeach; ?>
                                 </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="barcode-produk" class="form-label">Barcode</label>
+                                <input
+                                    type="text"
+                                    id="barcode-produk"
+                                    name="barcode"
+                                    class="form-control"
+                                    placeholder="cth: 8991002101234"
+                                >
+                                <div class="form-text">Kosongkan bila tidak memakai scan.</div>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="harga-beli-produk" class="form-label">Harga beli</label>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    id="harga-beli-produk"
+                                    name="harga_beli"
+                                    class="form-control"
+                                    placeholder="0"
+                                >
+                            </div>
+                            <div class="col-md-4">
+                                <label for="stok-min-produk" class="form-label">Stok minimum</label>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    id="stok-min-produk"
+                                    name="stok_minimum"
+                                    class="form-control"
+                                    placeholder="0"
+                                >
+                                <div class="form-text">Notifikasi stok menipis.</div>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="supplier-produk" class="form-label">Supplier</label>
+                                <select id="supplier-produk" name="supplier_id" class="form-select">
+                                    <option value="">Tidak ada</option>
+                                    <?php foreach ($supplierSemua as $s): ?>
+                                        <option value="<?= $s->getId() ?>"><?= htmlspecialchars($s->getNama()) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="gambar-produk" class="form-label">Gambar produk</label>
+                                <input
+                                    type="file"
+                                    id="gambar-produk"
+                                    name="gambar"
+                                    class="form-control"
+                                    accept="image/jpeg,image/png,image/webp,image/gif"
+                                >
+                                <div class="form-text">JPG/PNG/WEBP/GIF, maks 2 MB.</div>
                             </div>
                             <div class="col-12">
                                 <button type="submit" class="btn btn-success">Tambah Produk</button>
@@ -559,6 +772,8 @@ $stokMenipis = Produk::cariStokMenipis();
                                 <tr>
                                     <th>Nama</th>
                                     <th>Kategori</th>
+                                    <th>Barcode</th>
+                                    <th>Supplier</th>
                                     <th class="text-end">Harga</th>
                                     <th class="text-center">Stok</th>
                                     <th class="text-center">Aksi</th>
@@ -597,13 +812,16 @@ $stokMenipis = Produk::cariStokMenipis();
             columns: [
                 { data: 'nama' },
                 { data: 'kategori' },
+                { data: 'barcode', render: function (d) { return d ? '<span class="font-num small">' + d + '</span>' : '<span class="text-muted">—</span>'; } },
+                { data: 'supplier_nama', render: function (d) { return d ? d : '<span class="text-muted">—</span>'; } },
                 { data: 'harga', className: 'text-end font-num', render: function (d) { return rupiah(d); } },
                 {
                     data: 'stok',
                     className: 'text-center',
                     render: function (d, t, row) {
                         var stok = Number(d);
-                        if (stok <= 10) {
+                        var min = Number(row.stok_minimum) || 10; // fallback ambang umum
+                        if (stok <= min) {
                             return '<span class="' + (stok <= 0 ? 'stok-habis' : 'stok-menipis') + '">' + stok + '</span>' +
                                 (stok <= 0 ? ' (habis)' : ' (menipis)');
                         }
@@ -633,6 +851,59 @@ $stokMenipis = Produk::cariStokMenipis();
                 url: 'https://cdn.datatables.net/plug-ins/2.1.8/i18n/id.json'
             }
         });
+    })();
+
+    // Toggle field "Harga per gram" sesuai satuan yang dipilih.
+    (function () {
+        var pilih = document.querySelectorAll('select[name="satuan"]');
+        pilih.forEach(function (sel) {
+            function sinkron() {
+                var blok = document.getElementById('blok-harga-per-gram');
+                if (!blok) return;
+                var gram = sel.value === 'gram';
+                blok.style.display = gram ? '' : 'none';
+                var input = document.getElementById('harga-per-gram');
+                if (input) input.required = gram;
+            }
+            sel.addEventListener('change', sinkron);
+            sinkron();
+        });
+    })();
+
+    // Harga beli otomatis: saat supplier dipilih, ambil harga beli terakhir
+    // produk dari supplier itu (riwayat pembelian) lalu isi field-nya.
+    (function () {
+        var supplier = document.querySelector('select[name="supplier_id"]');
+        var hargaBeli = document.getElementById('harga-beli-produk');
+        if (!supplier || !hargaBeli) return;
+
+        // Produk yang sedang diedit (edit mode) — untuk tahu produk_id.
+        function ambilProdukId() {
+            // Form edit: produk_id tidak ada di form; pakai id dari tombol
+            // edit yang disimpan di session server. Untuk tambah: 0 (kosong).
+            var meta = document.querySelector('meta[name="produk-id-edit"]');
+            return meta ? parseInt(meta.getAttribute('content'), 10) : 0;
+        }
+
+        function sinkronHargaBeli() {
+            var supplierId = parseInt(supplier.value, 10) || 0;
+            var produkId = ambilProdukId();
+
+            // Kalau bukan mode edit, tidak ada produk yang dipilih —
+            // harga beli diisi dari supplier saja tidak bisa (butuh produk).
+            if (produkId <= 0) return;
+
+            fetch('api.php?aksi=produk.harga_beli&produk_id=' + produkId + '&supplier_id=' + supplierId)
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    if (d && typeof d.harga_beli === 'number') {
+                        hargaBeli.value = d.harga_beli;
+                    }
+                })
+                .catch(function () { /* biarkan */ });
+        }
+
+        supplier.addEventListener('change', sinkronHargaBeli);
     })();
 </script>
 </body>

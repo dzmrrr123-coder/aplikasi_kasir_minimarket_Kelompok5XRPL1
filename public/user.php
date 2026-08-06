@@ -99,8 +99,8 @@ function aksiSimpanKasir(array $data): void
 
         User::simpanKasir($data);
         redirectSelf('Akun kasir ditambahkan.');
-    } catch (\RuntimeException $e) {
-        redirectSelfDenganEdit($e->getMessage(), $editId);
+    } catch (\Throwable $e) {
+        redirectSelfDenganEdit(pesanErrorRamah($e), $editId);
     }
 }
 
@@ -110,8 +110,8 @@ function aksiResetPassword(int $id, string $password): void
     try {
         User::resetPasswordKasir($id, $password);
         redirectSelf('Password kasir berhasil direset.');
-    } catch (\RuntimeException $e) {
-        redirectSelf($e->getMessage());
+    } catch (\Throwable $e) {
+        redirectSelf(pesanErrorRamah($e));
     }
 }
 
@@ -121,13 +121,14 @@ function aksiHapusKasir(int $id): void
     try {
         User::hapusKasir($id);
         redirectSelf('Akun kasir dihapus.');
-    } catch (\RuntimeException $e) {
-        redirectSelf($e->getMessage());
+    } catch (\Throwable $e) {
+        redirectSelf(pesanErrorRamah($e));
     }
 }
 
 // ---- Routing aksi (POST) ----
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    require_csrf();
     $aksi = $_POST['aksi'] ?? '';
 
     switch ($aksi) {
@@ -156,6 +157,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         case 'hapus_kasir':
             aksiHapusKasir((int) ($_POST['kasir_id'] ?? 0));
             break;
+
+        case 'toggle_aktif_kasir':
+            try {
+                $aktif = (string) ($_POST['aktif'] ?? '1') === '1';
+                User::setStatusAktifKasir(
+                    (int) ($_POST['kasir_id'] ?? 0),
+                    $aktif
+                );
+                redirectSelf('Status akun kasir diperbarui.');
+            } catch (\Throwable $e) {
+                redirectSelf(pesanErrorRamah($e));
+            }
+            break;
     }
 }
 
@@ -165,6 +179,7 @@ $kasirSemua = User::daftarKasir();
 // Kasir yang sedang diedit (kalau ada).
 $editKasirId = (int) ($_SESSION['edit_kasir_id'] ?? 0);
 $editKasir = $editKasirId > 0 ? User::cariKasir($editKasirId) : null;
+$aktif = 'user';
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -177,57 +192,7 @@ $editKasir = $editKasirId > 0 ? User::cariKasir($editKasirId) : null;
     <link href="assets/theme.css" rel="stylesheet">
 </head>
 <body>
-<nav class="navbar navbar-expand-lg pos-navbar mb-4 sticky-top">
-    <div class="container">
-        <a class="navbar-brand" href="admin.php"><i class="bi bi-shop"></i> Kasir Minimarket</a>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav-user"
-                aria-controls="nav-user" aria-expanded="false" aria-label="Toggle navigation">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="collapse navbar-collapse" id="nav-user">
-            <ul class="navbar-nav me-auto">
-                <li class="nav-item">
-                    <a class="nav-link" href="dashboard.php"><i class="bi bi-speedometer2"></i> Dashboard</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="admin.php"><i class="bi bi-box-seam"></i> Admin</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="transaksi.php"><i class="bi bi-cash-register"></i> Kasir</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="laporan.php"><i class="bi bi-bar-chart-line"></i> Laporan</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="supplier.php"><i class="bi bi-truck"></i> Supplier</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="retur.php"><i class="bi bi-arrow-counterclockwise"></i> Retur</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="diskon.php"><i class="bi bi-tags"></i> Diskon</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link active" href="user.php"><i class="bi bi-people"></i> Kelola Kasir</a>
-                </li>
-            </ul>
-            <div class="d-flex align-items-center gap-2">
-                <button type="button" class="theme-toggle" id="toggle-theme" title="Ganti mode terang/gelap">
-                    <i class="bi bi-circle-half"></i>
-                </button>
-                <span class="navbar-text text-white small me-2 d-none d-lg-inline">
-                    <i class="bi bi-person-circle me-1"></i><?= htmlspecialchars($nama) ?>
-                </span>
-                <form method="post" class="d-inline">
-                    <input type="hidden" name="aksi" value="logout">
-                    <button type="submit" class="btn btn-outline-light btn-sm">
-                        <i class="bi bi-box-arrow-right me-1"></i>Logout
-                    </button>
-                </form>
-            </div>
-        </div>
-    </div>
-</nav>
+<?php require __DIR__ . '/assets/partials/navbar.php'; ?>
 <div class="container py-4">
 
     <div class="mb-4">
@@ -356,6 +321,7 @@ $editKasir = $editKasirId > 0 ? User::cariKasir($editKasirId) : null;
                                     <tr>
                                         <th>Nama</th>
                                         <th>Username</th>
+                                        <th class="text-center">Status</th>
                                         <th class="text-center">Aksi</th>
                                     </tr>
                                 </thead>
@@ -365,12 +331,35 @@ $editKasir = $editKasirId > 0 ? User::cariKasir($editKasirId) : null;
                                             <td><?= htmlspecialchars($k->getNama()) ?></td>
                                             <td><?= htmlspecialchars($k->getUsername()) ?></td>
                                             <td class="text-center">
+                                                <?php if ($k->isActive()): ?>
+                                                    <span class="badge text-bg-success"><i class="bi bi-check-circle me-1"></i>Aktif</span>
+                                                <?php else: ?>
+                                                    <span class="badge text-bg-secondary"><i class="bi bi-slash-circle me-1"></i>Nonaktif</span>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td class="text-center">
                                                 <span class="d-inline-flex gap-1">
                                                     <form method="post" class="d-inline">
                                                         <input type="hidden" name="aksi" value="edit_kasir">
                                                         <input type="hidden" name="kasir_id" value="<?= $k->getId() ?>">
                                                         <button type="submit" class="btn btn-sm btn-outline-primary" title="Edit"><i class="bi bi-pencil me-1"></i>Edit</button>
                                                     </form>
+                                                    <?php if ($k->isActive()): ?>
+                                                        <form method="post" class="d-inline"
+                                                              onsubmit="return confirm('Nonaktifkan akun ini? Kasir tidak bisa login.');">
+                                                            <input type="hidden" name="aksi" value="toggle_aktif_kasir">
+                                                            <input type="hidden" name="kasir_id" value="<?= $k->getId() ?>">
+                                                            <input type="hidden" name="aktif" value="0">
+                                                            <button type="submit" class="btn btn-sm btn-outline-secondary" title="Nonaktifkan"><i class="bi bi-pause-circle me-1"></i>Nonaktif</button>
+                                                        </form>
+                                                    <?php else: ?>
+                                                        <form method="post" class="d-inline">
+                                                            <input type="hidden" name="aksi" value="toggle_aktif_kasir">
+                                                            <input type="hidden" name="kasir_id" value="<?= $k->getId() ?>">
+                                                            <input type="hidden" name="aktif" value="1">
+                                                            <button type="submit" class="btn btn-sm btn-outline-success" title="Aktifkan"><i class="bi bi-play-circle me-1"></i>Aktifkan</button>
+                                                        </form>
+                                                    <?php endif; ?>
                                                     <button
                                                         type="button"
                                                         class="btn btn-sm btn-outline-warning"
