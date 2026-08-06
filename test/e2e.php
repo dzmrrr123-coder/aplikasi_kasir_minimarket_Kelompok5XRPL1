@@ -1198,16 +1198,21 @@ assertTrue(
 );
 
 // ---- Shift kasir: tutup (rekonsiliasi) ----
-// Uang di laci = modal 100.000 + penjualan 100.000 = 200.000.
+// Uang di laci = modal 100.000 + penjualan TUNAI 100.000 = 200.000.
+// Hanya ada transaksi tunai, non-tunai = 0.
+assertTrue(
+    abs($shift->totalPenjualanTunai() - 100000.0) < 0.01,
+    'total tunai = 100.000'
+);
 $shift->tutup(200000, 'Shift uji');
 assertTrue($shift->getStatus() === 'tutup', 'shift berstatus tutup setelah ditutup');
-assertTrue(abs((float) $shift->getTotalSistem() - 200000.0) < 0.01, 'total sistem = modal + penjualan (200.000)');
+assertTrue(abs((float) $shift->getTotalSistem() - 200000.0) < 0.01, 'total sistem = modal + tunai (200.000)');
 assertTrue(abs((float) $shift->getSelisih() - 0.0) < 0.01, 'selisih 0 saat kas fisik pas');
 
-// Selisih tidak nol kalau kas fisik beda dari modal + penjualan shift.
+// Selisih tidak nol kalau kas fisik beda dari modal + penjualan tunai.
 $shift2Id = ShiftKasir::buka($kasirId, 50000);
 $shift2 = ShiftKasir::cari($shift2Id);
-$harusnya = 50000 + $shift2->totalPenjualanShift(); // uang yang seharusnya di laci
+$harusnya = 50000 + $shift2->totalPenjualanTunai(); // uang yang seharusnya di laci (hanya tunai)
 $shift2->tutup($harusnya + 10000);                  // kas fisik lebih 10.000
 assertTrue(abs((float) $shift2->getSelisih() - 10000.0) < 0.01, 'selisih +10.000 saat kas fisik lebih');
 assertThrows(fn () => $shift2->tutup($harusnya + 10000), 'tutup shift dua kali ditolak');

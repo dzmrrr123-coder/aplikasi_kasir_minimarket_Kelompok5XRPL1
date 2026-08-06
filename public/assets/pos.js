@@ -347,11 +347,13 @@
                 }).join('');
 
                 var isi = '<div class="row g-2 mb-3">' +
-                    '<div class="col-4"><div class="border rounded p-2 text-center"><div class="small text-muted">Modal awal</div>' +
+                    '<div class="col-6 col-md-3"><div class="border rounded p-2 text-center"><div class="small text-muted">Modal awal</div>' +
                     '<div class="fw-bold font-num">' + rupiah(d.modal_awal) + '</div></div></div>' +
-                    '<div class="col-4"><div class="border rounded p-2 text-center"><div class="small text-muted">Penjualan shift</div>' +
-                    '<div class="fw-bold font-num">' + rupiah(d.total_penjualan) + '</div></div></div>' +
-                    '<div class="col-4"><div class="border rounded p-2 text-center"><div class="small text-muted">Uang seharusnya</div>' +
+                    '<div class="col-6 col-md-3"><div class="border rounded p-2 text-center"><div class="small text-muted">Penjualan tunai</div>' +
+                    '<div class="fw-bold font-num">' + rupiah(d.total_tunai || 0) + '</div></div></div>' +
+                    '<div class="col-6 col-md-3"><div class="border rounded p-2 text-center"><div class="small text-muted">Non-tunai (QRIS/EDC)</div>' +
+                    '<div class="fw-bold font-num">' + rupiah(d.total_nontunai || 0) + '</div></div></div>' +
+                    '<div class="col-6 col-md-3"><div class="border rounded p-2 text-center"><div class="small text-muted">Uang di laci</div>' +
                     '<div class="fw-bold font-num">' + rupiah(d.uang_seharusnya) + '</div></div></div></div>';
 
                 isi += '<div class="mb-3"><div class="d-flex justify-content-between align-items-center mb-1">' +

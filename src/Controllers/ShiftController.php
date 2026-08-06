@@ -32,15 +32,18 @@ class ShiftController
             return ['ada' => false];
         }
 
-        $total = $shift->totalPenjualanShift();
+        $tunai = $shift->totalPenjualanTunai();
+        $nonTunai = round($shift->totalPenjualanShift() - $tunai, 2);
 
         return [
-            'ada'            => true,
-            'dibuka_pada'    => $shift->getDibukaPada(),
-            'modal_awal'     => $shift->getModalAwal(),
-            'total_penjualan' => $total,
-            'uang_seharusnya' => round($shift->getModalAwal() + $total, 2),
-            'riwayat'        => $shift->riwayatTransaksi(),
+            'ada'             => true,
+            'dibuka_pada'     => $shift->getDibukaPada(),
+            'modal_awal'      => $shift->getModalAwal(),
+            'total_penjualan'  => $shift->totalPenjualanShift(),
+            'total_tunai'     => $tunai,
+            'total_nontunai'  => $nonTunai,
+            'uang_seharusnya' => round($shift->getModalAwal() + $tunai, 2),
+            'riwayat'         => $shift->riwayatTransaksi(),
         ];
     }
 

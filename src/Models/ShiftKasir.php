@@ -139,6 +139,28 @@ class ShiftKasir implements DataReporter
     }
 
     /**
+     * Total penjualan TUNAI selama shift (dipakai rekonsiliasi kas fisik).
+     * Uang non-tunai (QRIS/EDC) masuk rekening bank, bukan laci.
+     */
+    public function totalPenjualanTunai(): float
+    {
+        $sampai = $this->ditutupPada ?? date('Y-m-d H:i:s');
+
+        $stmt = Database::connect()->prepare(
+            "SELECT COALESCE(SUM(total), 0) FROM rekap_penjualan
+             WHERE tanggal >= :mulai AND tanggal <= :sampai
+               AND kasir_id = :kasir AND metode = 'Tunai'"
+        );
+        $stmt->execute([
+            ':mulai'  => $this->dibukaPada,
+            ':sampai' => $sampai,
+            ':kasir'  => $this->kasirId,
+        ]);
+
+        return round((float) $stmt->fetchColumn(), 2);
+    }
+
+    /**
      * Buka kas baru untuk kasir.
      *
      * @throws \RuntimeException bila masih ada shift terbuka
@@ -216,9 +238,12 @@ class ShiftKasir implements DataReporter
             throw new \RuntimeException('Kas fisik tidak boleh negatif.');
         }
 
-        $totalSistem = $this->totalPenjualanShift();
-        // Uang yang seharusnya ada di laci = modal awal + total penjualan.
-        $harusnya = round($this->modalAwal + $totalSistem, 2);
+        $totalTunai = $this->totalPenjualanTunai();
+        $totalNonTunai = round($this->totalPenjualanShift() - $totalTunai, 2);
+
+        // Uang yang seharusnya di laci = modal awal + penjualan TUNAI saja
+        // (non-tunai masuk rekening bank, bukan laci kasir).
+        $harusnya = round($this->modalAwal + $totalTunai, 2);
         $selisih = round($kasFisik - $harusnya, 2);
 
         $stmt = Database::connect()->prepare(
