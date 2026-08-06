@@ -998,7 +998,7 @@ $produkSemua = Produk::semua();
 <body class="kiosk-body">
 <div class="kiosk-wrapper">
     <!-- KOLOM KIRI (70%): pencarian + keranjang + produk -->
-    <div class="kiosk-kiri <?= $wajibBukaKas ? 'd-none' : '' ?>">
+    <div class="kiosk-kiri">
 
     <div class="d-flex flex-wrap align-items-center justify-content-between mb-3 gap-2">
         <div>
