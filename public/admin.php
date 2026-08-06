@@ -163,7 +163,21 @@ function simpanGambarProduk(array $file): string
         return 'Ukuran gambar maksimal 2 MB.';
     }
 
-    $ekstensi = $izin[$tipe];
+    // Verifikasi isi file server-side: getimagesize() membaca header asli
+    // file, bukan header yang diklaim browser (bisa dipalsukan attacker).
+    $info = @getimagesize((string) ($file['tmp_name'] ?? ''));
+
+    if ($info === false) {
+        return 'File yang diunggah bukan gambar yang valid.';
+    }
+
+    $tipeAsli = (string) ($info['mime'] ?? '');
+    $ekstensi = $izin[$tipeAsli] ?? '';
+
+    if ($ekstensi === '') {
+        return 'Gambar harus berformat JPG, PNG, WEBP, atau GIF.';
+    }
+
     $namaFile = 'produk-' . bin2hex(random_bytes(8)) . '.' . $ekstensi;
     $folder = __DIR__ . '/uploads';
 

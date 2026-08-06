@@ -7,6 +7,7 @@
 # Upload produk
 /public/uploads/*
 !/public/uploads/.gitkeep
+!/public/uploads/.htaccess
 
 # Log & cache
 *.log

@@ -1,0 +1,24 @@
+# Folder upload hanya berisi gambar — matikan eksekusi PHP di sini.
+# Lapis pertahanan kedua: walau ada file PHP nyasar masuk, tidak akan dieksekusi.
+<IfModule mod_php.c>
+    php_flag engine off
+</IfModule>
+
+# Apache 2.4+ / handler alternatif
+<IfModule mod_php7.c>
+    php_flag engine off
+</IfModule>
+<IfModule mod_php8.c>
+    php_flag engine off
+</IfModule>
+
+# Cegah eksekusi skrip apa pun (paranoia: PHP/SSI/CGI sekaligus)
+<FilesMatch "\.(?i:php|phtml|php3|php4|php5|php7|phar|pl|py|cgi|sh)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
