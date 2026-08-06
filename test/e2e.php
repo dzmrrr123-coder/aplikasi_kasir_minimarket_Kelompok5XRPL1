@@ -383,6 +383,46 @@ assertTrue(Transaksi::cari((int) $idBatal) === null, 'transaksi terhapus dari da
 $transaksiBelumSimpan = new Transaksi(['kasir_id' => $kasirId]);
 assertThrows(fn () => $transaksiBelumSimpan->batalkan(), 'batalkan transaksi belum tersimpan ditolak');
 
+echo "\n== 3b. Proteksi double-tap bayar (cart-guard) ==\n";
+
+// Simulasi double-tap tombol "Bayar" persis seperti di browser: keranjang
+// session diisi, lalu aksi 'bayar' dipanggil DUA KALI berturut-turut dengan
+// PHPSESSID yang SAMA (meniru 2 tap dalam satu sesi browser). Bayar pertama
+// sukses -> keranjang dikosongkan. Bayar kedua HARUS ditolak guard
+// "Keranjang masih kosong" — bukan memproses pembayaran kedua.
+// Dipanggil via helper subprocess (test/double_tap_helper.php) karena
+// transaksi.php berisi header/exit yang tidak bisa di-require langsung.
+$produkDouble = Produk::cari($produkId);
+$stokAwalDouble = $produkDouble->getStok();
+$hargaDouble = $produkDouble->getHarga();
+$sesiDouble = 'e2etap' . bin2hex(random_bytes(4));
+
+$cmdTap1 = 'php ' . escapeshellarg(__DIR__ . '/double_tap_helper.php')
+    . ' tap1 ' . escapeshellarg($sesiDouble)
+    . ' ' . (int) $produkId
+    . ' ' . (float) $hargaDouble;
+$outTap1 = shell_exec($cmdTap1);
+$jsonTap1 = json_decode((string) $outTap1, true);
+assertTrue(
+    is_array($jsonTap1) && ($jsonTap1['pesan'] ?? '') === 'Pembayaran berhasil. Struk siap dicetak.',
+    'tap 1 (double-tap) berhasil diproses'
+);
+
+$cmdTap2 = 'php ' . escapeshellarg(__DIR__ . '/double_tap_helper.php')
+    . ' tap2 ' . escapeshellarg($sesiDouble);
+$outTap2 = shell_exec($cmdTap2);
+$jsonTap2 = json_decode((string) $outTap2, true);
+assertTrue(
+    is_array($jsonTap2) && ($jsonTap2['pesan'] ?? '') === 'Keranjang masih kosong.',
+    'tap 2 (double-tap) ditolak guard keranjang kosong'
+);
+
+// Penegasan: stok hanya berkurang 1x (tap 2 tidak memproses bayar).
+assertTrue(
+    Produk::cari($produkId)->getStok() === $stokAwalDouble - 1,
+    'double-tap hanya mengurangi stok 1x (tap 2 tidak memproses bayar)'
+);
+
 echo "\n== 4. Laporan penjualan ==\n";
 
 // Jalur sukses: ada data di periode.

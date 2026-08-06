@@ -160,6 +160,15 @@
         if (barcode) barcode.focus();
     }
 
+    // Aksi yang tombolnya di-disable selama request AJAX berjalan (cegah
+    // double-tap di layar sentuh). Aksi 'scan' & tambah_item TIDAK di-disable
+    // karena kasir butuh kecepatan scan beruntun.
+    var aksiDisableTombol = ['bayar', 'batalkan', 'buka_kas', 'tutup_kas', 'set_member', 'hapus_member'];
+
+    function tombolSubmit(form) {
+        return form ? form.querySelector('button[type="submit"]') : null;
+    }
+
     document.addEventListener('submit', function (e) {
         var form = e.target;
         var aksi = form.getAttribute('data-aksi');
@@ -171,6 +180,10 @@
         // Token CSRF untuk request fetch.
         var meta = document.querySelector('meta[name="csrf-token"]');
         if (meta) data.set('csrf', meta.getAttribute('content'));
+
+        // Disable tombol submit SEBELUM fetch supaya tidak bisa dobel-tap.
+        var tombol = aksiDisableTombol.indexOf(aksi) >= 0 ? tombolSubmit(form) : null;
+        if (tombol) tombol.disabled = true;
 
         fetch('transaksi.php', {
             method: 'POST',
@@ -199,6 +212,12 @@
                     if (cardBukaKas) cardBukaKas.classList.add('d-none');
                 }
 
+                // Respons error (validasi/guard server) — aktifkan lagi tombol
+                // supaya kasir bisa perbaiki input & coba lagi.
+                if (res.tipe === 'danger' || res.tipe === 'warning') {
+                    if (tombol) tombol.disabled = false;
+                }
+
                 if (res.struk) {
                     tampilkanStruk(res.struk);
                     // Hook hardware: cetak struk otomatis ke printer thermal.
@@ -210,9 +229,18 @@
                     var area = document.getElementById('area-struk');
                     if (area) area.classList.add('d-none');
                 }
+
+                // Setelah fragment diganti, elemen tombol lama kemungkinan besar
+                // ikut ke-replace oleh render server. Kalau ternyata nyangkut
+                // (masih disabled), aktifkan kembali supaya tidak macet.
+                if (tombol && tombol.disabled) {
+                    tombol.disabled = false;
+                }
             })
             .catch(function (err) {
                 tampilkanFlash('Terjadi kesalahan: ' + err.message, 'danger');
+                // Request gagal — aktifkan kembali tombol.
+                if (tombol) tombol.disabled = false;
             });
     });
 

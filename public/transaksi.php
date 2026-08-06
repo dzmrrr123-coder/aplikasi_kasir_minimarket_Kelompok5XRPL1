@@ -1280,7 +1280,7 @@ $produkSemua = Produk::semua();
 
 
 <script src="assets/vendor/bootstrap/bootstrap.bundle.min.js"></script>
-<script src="assets/pos.js"></script>
+<script src="assets/pos.js?v=2"></script>
 <script src="assets/hardware.js"></script>
 <script src="assets/hardware-pos.js"></script>
 
