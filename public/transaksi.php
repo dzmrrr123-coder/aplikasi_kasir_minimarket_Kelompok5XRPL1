@@ -1363,6 +1363,12 @@ $produkSemua = Produk::semua();
                 syncNumpadMetode();
             }
 
+            // Panel kanan sempat disembunyikan (d-none) saat wajib buka kas.
+            // Begitu ada interaksi yang menghasilkan fragment (buka kas,
+            // tambah item, dll.), tampilkan kembali.
+            var kioskKanan = document.querySelector('.kiosk-kanan');
+            if (kioskKanan) kioskKanan.classList.remove('d-none');
+
             initKembalian();
             // Pertahankan fokus barcode setelah fragment diganti (supaya
             // operator bisa langsung scan produk berikutnya).
