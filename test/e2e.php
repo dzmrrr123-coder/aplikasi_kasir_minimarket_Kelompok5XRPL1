@@ -394,8 +394,14 @@ $laporan->setPeriode(
 $hasil = $laporan->generate();
 assertTrue($hasil['jumlah'] >= 1, 'laporan berisi minimal 1 transaksi');
 assertTrue($hasil['total'] > 0, 'total laporan > 0');
-$csvEkspor = $laporan->eksporPDF();
-assertTrue(str_contains($csvEkspor, 'No. Transaksi'), 'ekspor laporan menghasilkan CSV');
+
+// Ekspor PDF sungguhan (via Dompdf) — hasil harus biner PDF (%PDF).
+$pdfEkspor = $laporan->eksporPDF();
+assertTrue(str_starts_with($pdfEkspor, '%PDF'), 'ekspor PDF menghasilkan file PDF (%PDF)');
+
+// Ekspor CSV (metode terpisah, jujur sebagai CSV).
+$csvEkspor = $laporan->keCsv();
+assertTrue(str_contains($csvEkspor, 'No. Transaksi'), 'ekspor CSV berisi header tabel');
 assertTrue(
     str_contains($csvEkspor, $hasil['transaksi'][0]->getKasirNama()),
     'CSV laporan memuat nama kasir'

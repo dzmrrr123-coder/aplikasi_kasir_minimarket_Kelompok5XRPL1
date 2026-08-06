@@ -89,13 +89,25 @@ if ($dMulai > $dAkhir) {
     $peringatanTanggal = 'Rentang tanggal dibalik (mulai > akhir) — otomatis ditukar.';
 }
 
-// Ekspor CSV: unduh laporan sesuai periode (dipanggil server-side via model).
-if (isset($_GET['ekspor']) && $_GET['ekspor'] === '1') {
+// Ekspor laporan: PDF (sungguhan via Dompdf) atau CSV.
+// Dipanggil server-side via model, dikirim sebagai download.
+$ekspor = (string) ($_GET['ekspor'] ?? '');
+
+if ($ekspor === 'pdf' || $ekspor === 'csv') {
     $laporan = new LaporanPenjualan();
     $laporan->setPeriode($dMulai, $dAkhir);
-    $csv = $laporan->eksporPDF();
-    $namaFile = 'laporan-penjualan-' . date('Ymd-His') . '.csv';
 
+    if ($ekspor === 'pdf') {
+        $konten = $laporan->eksporPDF();
+        $namaFile = 'laporan-penjualan-' . date('Ymd-His') . '.pdf';
+        header('Content-Type: application/pdf');
+        header('Content-Disposition: attachment; filename="' . $namaFile . '"');
+        echo $konten;
+        exit;
+    }
+
+    $csv = $laporan->keCsv();
+    $namaFile = 'laporan-penjualan-' . date('Ymd-His') . '.csv';
     header('Content-Type: text/csv; charset=utf-8');
     header('Content-Disposition: attachment; filename="' . $namaFile . '"');
     // BOM UTF-8 supaya terbuka benar di Excel.
@@ -242,7 +254,14 @@ $alamatTokoCetak = \App\Models\Pengaturan::get('alamat', '');
                             <i class="bi bi-printer me-1"></i>Cetak
                         </button>
                         <a
-                            href="?tanggal_mulai=<?= htmlspecialchars($dMulai->format('Y-m-d')) ?>&amp;tanggal_akhir=<?= htmlspecialchars($dAkhir->format('Y-m-d')) ?>&amp;ekspor=1"
+                            href="?tanggal_mulai=<?= htmlspecialchars($dMulai->format('Y-m-d')) ?>&amp;tanggal_akhir=<?= htmlspecialchars($dAkhir->format('Y-m-d')) ?>&amp;ekspor=pdf"
+                            class="btn btn-sm btn-outline-danger"
+                            title="Unduh laporan periode ini sebagai PDF"
+                        >
+                            <i class="bi bi-file-earmark-pdf me-1"></i>Ekspor PDF
+                        </a>
+                        <a
+                            href="?tanggal_mulai=<?= htmlspecialchars($dMulai->format('Y-m-d')) ?>&amp;tanggal_akhir=<?= htmlspecialchars($dAkhir->format('Y-m-d')) ?>&amp;ekspor=csv"
                             class="btn btn-sm btn-outline-success"
                             title="Unduh laporan periode ini sebagai CSV"
                         >

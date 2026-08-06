@@ -116,6 +116,15 @@ if (!function_exists('pesanErrorRamah')) {
     }
 }
 
+// Muat autoload Composer bila vendor/ ada — dipakai library eksternal
+// seperti Dompdf (ekspor PDF laporan). Aplikasi sendiri tetap pakai
+// autoloader App\ di bawah.
+$composerAutoload = __DIR__ . '/../vendor/autoload.php';
+
+if (is_file($composerAutoload)) {
+    require $composerAutoload;
+}
+
 spl_autoload_register(static function (string $class): void {
     $prefix = 'App\\';
 

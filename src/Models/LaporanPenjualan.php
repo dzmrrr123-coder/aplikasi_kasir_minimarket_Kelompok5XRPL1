@@ -125,11 +125,76 @@ class LaporanPenjualan implements Observer, DataReporter
     }
 
     /**
-     * Mengekspor laporan sebagai CSV (pengganti ekspor PDF sederhana, tanpa
-     * library eksternal). Hasil berupa string CSV yang bisa disimpan ke file
-     * dan dibuka di Excel/Spreadsheet.
+     * Mengekspor laporan sebagai file PDF sungguhan (via Dompdf).
+     * Layout: header periode + tabel transaksi + ringkasan.
+     * Mengembalikan konten PDF biner (siap dikirim sebagai download).
      */
     public function eksporPDF(): string
+    {
+        $laporan = $this->generate();
+
+        $barisTabel = '';
+        foreach ($laporan['transaksi'] as $transaksi) {
+            $barisTabel .= sprintf(
+                '<tr><td>%s</td><td>%s</td><td>%s</td><td style="text-align:right">%s</td></tr>',
+                htmlspecialchars($transaksi->getId()),
+                htmlspecialchars($transaksi->getTanggal()->format('d-m-Y H:i')),
+                htmlspecialchars($transaksi->getKasirNama()),
+                'Rp ' . number_format($transaksi->getTotal(), 0, ',', '.')
+            );
+        }
+
+        $pesanKosong = count($laporan['transaksi']) === 0
+            ? '<p style="color:#999">Tidak ada data penjualan pada periode tersebut.</p>'
+            : '';
+
+        $html = '
+<!DOCTYPE html>
+<html lang="id">
+<head><meta charset="UTF-8"><style>
+    body { font-family: DejaVu Sans, sans-serif; font-size: 12px; color: #222; }
+    h1 { font-size: 18px; margin: 0 0 2px; }
+    .periode { color: #666; margin-bottom: 16px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
+    th { background: #f0f0f0; }
+    .ringkasan { margin-top: 16px; }
+    .ringkasan td { border: none; padding: 2px 8px; }
+    .ringkasan .label { font-weight: bold; }
+</style></head>
+<body>
+    <h1>' . htmlspecialchars(\App\Models\Pengaturan::get('nama_toko', 'Minimarket')) . '</h1>
+    <div class="periode">Laporan Penjualan — '
+    . htmlspecialchars($this->tanggalMulai->format('d-m-Y')) . ' s/d '
+    . htmlspecialchars($this->tanggalAkhir->format('d-m-Y')) . '</div>
+    <table>
+        <thead><tr><th>No. Transaksi</th><th>Tanggal</th><th>Kasir</th><th style="text-align:right">Total</th></tr></thead>
+        <tbody>' . $barisTabel . '</tbody>
+    </table>
+    ' . $pesanKosong . '
+    <table class="ringkasan">
+        <tr><td class="label">Jumlah transaksi</td><td>' . (int) $laporan['jumlah'] . '</td></tr>
+        <tr><td class="label">Total penjualan</td><td>Rp ' . number_format($laporan['total'], 0, ',', '.') . '</td></tr>
+    </table>
+</body>
+</html>';
+
+        $dompdf = new \Dompdf\Dompdf([
+            'isRemoteEnabled' => false,
+            'defaultFont'     => 'DejaVu Sans',
+        ]);
+        $dompdf->loadHtml($html);
+        $dompdf->setPaper('A4', 'portrait');
+        $dompdf->render();
+
+        return $dompdf->output();
+    }
+
+    /**
+     * Mengekspor laporan sebagai CSV (alternatif ringan, bisa dibuka
+     * di Excel/Spreadsheet).
+     */
+    public function keCsv(): string
     {
         $laporan = $this->generate();
 
@@ -152,7 +217,7 @@ class LaporanPenjualan implements Observer, DataReporter
         $baris[] = ['Jumlah transaksi', $laporan['jumlah']];
         $baris[] = ['Total penjualan', $laporan['total']];
 
-        return self::keCsv($baris);
+        return self::keCsvDariBaris($baris);
     }
 
     /**
@@ -162,7 +227,7 @@ class LaporanPenjualan implements Observer, DataReporter
      *
      * @param array<int, array<int, int|float|string>> $baris
      */
-    private static function keCsv(array $baris): string
+    private static function keCsvDariBaris(array $baris): string
     {
         $out = '';
 
