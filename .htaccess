@@ -1,0 +1,18 @@
+# Kasir Minimarket — redirect semua request ke folder public/
+# Supaya URL pendek (http://localhost/kasir-minimarket/login.php) langsung
+# mengarah ke public/login.php, tidak 404.
+#
+# Struktur project: semua file aplikasi ada di /public, jadi document root
+# seharusnya public/. .htaccess ini jadi pengganti untuk Laragon yang
+# menyajikan root project langsung.
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Jangan rewrite file/folder yang sudah ada di root (mis. .git, dll.)
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+
+    # Redirect semua request ke /public/ (path preservation)
+    RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>
