@@ -14,6 +14,7 @@ abstract class User
     protected string $nama = '';
     protected string $username = '';
     protected string $password = '';
+    protected bool $isActive = true;
 
     public function __construct(array $data = [])
     {
@@ -28,6 +29,9 @@ abstract class User
         }
         if (isset($data['password'])) {
             $this->password = (string) $data['password'];
+        }
+        if (isset($data['is_active'])) {
+            $this->isActive = (bool) $data['is_active'];
         }
     }
 
@@ -44,6 +48,11 @@ abstract class User
     public function getUsername(): string
     {
         return $this->username;
+    }
+
+    public function isActive(): bool
+    {
+        return $this->isActive;
     }
 
     /**
@@ -67,12 +76,17 @@ abstract class User
         $pdo = Database::connect();
 
         $stmt = $pdo->prepare(
-            'SELECT id, nama, username, password, role FROM users WHERE username = :username LIMIT 1'
+            'SELECT id, nama, username, password, role, is_active FROM users WHERE username = :username LIMIT 1'
         );
         $stmt->execute([':username' => $username]);
         $row = $stmt->fetch();
 
         if ($row === false || !password_verify($password, $row['password'])) {
+            return null;
+        }
+
+        // Akun nonaktif tidak boleh login (soft-delete user).
+        if ((int) $row['is_active'] !== 1) {
             return null;
         }
 
@@ -122,7 +136,7 @@ abstract class User
     public static function daftarKasir(): array
     {
         $rows = Database::connect()->query(
-            "SELECT id, nama, username, password, role FROM users WHERE role = 'kasir' ORDER BY nama"
+            "SELECT id, nama, username, password, role, is_active FROM users WHERE role = 'kasir' ORDER BY nama"
         )->fetchAll();
 
         return array_map(static fn (array $row): Kasir => new Kasir($row), $rows);
@@ -131,12 +145,32 @@ abstract class User
     public static function cariKasir(int $id): ?Kasir
     {
         $stmt = Database::connect()->prepare(
-            "SELECT id, nama, username, password, role FROM users WHERE id = :id AND role = 'kasir' LIMIT 1"
+            "SELECT id, nama, username, password, role, is_active FROM users WHERE id = :id AND role = 'kasir' LIMIT 1"
         );
         $stmt->execute([':id' => $id]);
         $row = $stmt->fetch();
 
         return $row === false ? null : new Kasir($row);
+    }
+
+    /**
+     * Mencari user berdasarkan id (untuk validasi sesi login).
+     * Mengembalikan objek Admin atau Kasir sesuai role di database,
+     * atau null bila user tidak ditemukan / tidak aktif.
+     */
+    public static function cariBerdasarkanId(int $id): ?self
+    {
+        $stmt = Database::connect()->prepare(
+            'SELECT id, nama, username, password, role, is_active FROM users WHERE id = :id LIMIT 1'
+        );
+        $stmt->execute([':id' => $id]);
+        $row = $stmt->fetch();
+
+        if ($row === false || (int) $row['is_active'] !== 1) {
+            return null;
+        }
+
+        return $row['role'] === 'admin' ? new Admin($row) : new Kasir($row);
     }
 
     /**
@@ -222,6 +256,24 @@ abstract class User
 
         $stmt = Database::connect()->prepare($sql);
         $stmt->execute($params);
+    }
+
+    /**
+     * Aktifkan/nonaktifkan akun kasir (soft-delete: user tidak bisa login,
+     * tapi data transaksinya tetap aman).
+     *
+     * @throws \RuntimeException bila kasir tidak ditemukan
+     */
+    public static function setStatusAktifKasir(int $id, bool $aktif): void
+    {
+        if (self::cariKasir($id) === null) {
+            throw new \RuntimeException('Kasir tidak ditemukan.');
+        }
+
+        $stmt = Database::connect()->prepare(
+            'UPDATE users SET is_active = :aktif WHERE id = :id'
+        );
+        $stmt->execute([':aktif' => $aktif ? 1 : 0, ':id' => $id]);
     }
 
     /**

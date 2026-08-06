@@ -15,6 +15,12 @@ class Produk implements DataReporter
     private int $stok = 0;
     private string $satuan = 'pcs'; // pcs | gram
     private float $hargaPerGram = 0.0;
+    private string $barcode = '';
+    private float $hargaBeli = 0.0;
+    private int $stokMinimum = 0;
+    private int $supplierId = 0;
+    private bool $isActive = true;
+    private string $gambar = '';
     private Kategori $kategori;
 
     private const AMBANG_STOK_MENIPIS = 10;
@@ -40,6 +46,24 @@ class Produk implements DataReporter
         }
         if (isset($data['harga_per_gram'])) {
             $this->hargaPerGram = (float) $data['harga_per_gram'];
+        }
+        if (isset($data['barcode'])) {
+            $this->barcode = (string) $data['barcode'];
+        }
+        if (isset($data['harga_beli'])) {
+            $this->hargaBeli = (float) $data['harga_beli'];
+        }
+        if (isset($data['stok_minimum'])) {
+            $this->stokMinimum = (int) $data['stok_minimum'];
+        }
+        if (isset($data['supplier_id'])) {
+            $this->supplierId = (int) $data['supplier_id'];
+        }
+        if (isset($data['is_active'])) {
+            $this->isActive = (bool) $data['is_active'];
+        }
+        if (isset($data['gambar'])) {
+            $this->gambar = (string) $data['gambar'];
         }
         if (isset($data['kategori_id'])) {
             $kategori = Kategori::cari((int) $data['kategori_id']);
@@ -77,6 +101,51 @@ class Produk implements DataReporter
         return $this->hargaPerGram;
     }
 
+    public function getBarcode(): string
+    {
+        return $this->barcode;
+    }
+
+    public function getHargaBeli(): float
+    {
+        return $this->hargaBeli;
+    }
+
+    public function getStokMinimum(): int
+    {
+        return $this->stokMinimum;
+    }
+
+    public function getSupplierId(): int
+    {
+        return $this->supplierId;
+    }
+
+    public function getSupplierNama(): string
+    {
+        if ($this->supplierId <= 0) {
+            return '';
+        }
+
+        return Supplier::cari($this->supplierId)?->getNama() ?? '';
+    }
+
+    public function isActive(): bool
+    {
+        return $this->isActive;
+    }
+
+    /** Nama file gambar produk (relatif ke public/uploads/), kosong bila tak ada. */
+    public function getGambar(): string
+    {
+        return $this->gambar;
+    }
+
+    public function setGambar(string $gambar): void
+    {
+        $this->gambar = trim($gambar);
+    }
+
     /**
      * Harga per unit yang dipakai saat bertransaksi:
      * produk gram -> harga per gram; produk pcs -> harga satuan.
@@ -111,6 +180,31 @@ class Produk implements DataReporter
         $this->hargaPerGram = $hargaPerGram;
     }
 
+    public function setBarcode(string $barcode): void
+    {
+        $this->barcode = trim($barcode);
+    }
+
+    public function setHargaBeli(float $hargaBeli): void
+    {
+        $this->hargaBeli = $hargaBeli;
+    }
+
+    public function setStokMinimum(int $stokMinimum): void
+    {
+        $this->stokMinimum = $stokMinimum;
+    }
+
+    public function setSupplierId(int $supplierId): void
+    {
+        $this->supplierId = $supplierId;
+    }
+
+    public function setIsActive(bool $isActive): void
+    {
+        $this->isActive = $isActive;
+    }
+
     public function setKategori(Kategori $kategori): void
     {
         $this->kategori = $kategori;
@@ -135,7 +229,11 @@ class Produk implements DataReporter
 
     public function cekStokMenipis(): bool
     {
-        return $this->stok <= self::AMBANG_STOK_MENIPIS;
+        // Bila stok_minimum per produk diset (> 0), pakai itu;
+        // kalau belum diset, fallback ke ambang umum lama.
+        $ambang = $this->stokMinimum > 0 ? $this->stokMinimum : self::AMBANG_STOK_MENIPIS;
+
+        return $this->stok <= $ambang;
     }
 
     public function simpan(): int
@@ -146,8 +244,10 @@ class Produk implements DataReporter
 
         $pdo = Database::connect();
         $stmt = $pdo->prepare(
-            'INSERT INTO produk (nama, harga, stok, kategori_id, satuan, harga_per_gram)
-             VALUES (:nama, :harga, :stok, :kategori_id, :satuan, :harga_per_gram)'
+            'INSERT INTO produk (nama, harga, stok, kategori_id, satuan, harga_per_gram,
+                                 barcode, harga_beli, stok_minimum, supplier_id, is_active, gambar)
+             VALUES (:nama, :harga, :stok, :kategori_id, :satuan, :harga_per_gram,
+                     :barcode, :harga_beli, :stok_minimum, :supplier_id, :is_active, :gambar)'
         );
         $stmt->execute([
             ':nama'            => $this->nama,
@@ -156,6 +256,12 @@ class Produk implements DataReporter
             ':kategori_id'     => $this->kategori->getId(),
             ':satuan'          => $this->satuan,
             ':harga_per_gram'  => $this->satuan === 'gram' ? $this->hargaPerGram : null,
+            ':barcode'         => $this->barcode !== '' ? $this->barcode : null,
+            ':harga_beli'      => $this->hargaBeli,
+            ':stok_minimum'    => $this->stokMinimum,
+            ':supplier_id'     => $this->supplierId > 0 ? $this->supplierId : null,
+            ':is_active'       => $this->isActive ? 1 : 0,
+            ':gambar'          => $this->gambar !== '' ? $this->gambar : null,
         ]);
 
         $this->id = (string) $pdo->lastInsertId();
@@ -170,7 +276,9 @@ class Produk implements DataReporter
         $stmt = Database::connect()->prepare(
             'UPDATE produk
              SET nama = :nama, harga = :harga, stok = :stok, kategori_id = :kategori_id,
-                 satuan = :satuan, harga_per_gram = :harga_per_gram
+                 satuan = :satuan, harga_per_gram = :harga_per_gram,
+                 barcode = :barcode, harga_beli = :harga_beli, stok_minimum = :stok_minimum,
+                 supplier_id = :supplier_id, is_active = :is_active, gambar = :gambar
              WHERE id = :id'
         );
         $stmt->execute([
@@ -180,6 +288,12 @@ class Produk implements DataReporter
             ':kategori_id'     => $this->kategori->getId(),
             ':satuan'          => $this->satuan,
             ':harga_per_gram'  => $this->satuan === 'gram' ? $this->hargaPerGram : null,
+            ':barcode'         => $this->barcode !== '' ? $this->barcode : null,
+            ':harga_beli'      => $this->hargaBeli,
+            ':stok_minimum'    => $this->stokMinimum,
+            ':supplier_id'     => $this->supplierId > 0 ? $this->supplierId : null,
+            ':is_active'       => $this->isActive ? 1 : 0,
+            ':gambar'          => $this->gambar !== '' ? $this->gambar : null,
             ':id'              => $this->id,
         ]);
     }
@@ -208,6 +322,33 @@ class Produk implements DataReporter
         if ($this->satuan === 'gram' && $this->hargaPerGram <= 0) {
             throw new \RuntimeException('Produk gram wajib punya harga per gram lebih dari 0.');
         }
+        if ($this->barcode !== '' && $this->barcodeTerpakai()) {
+            throw new \RuntimeException('Barcode sudah dipakai produk lain.');
+        }
+        if ($this->hargaBeli < 0) {
+            throw new \RuntimeException('Harga beli tidak boleh negatif.');
+        }
+        if ($this->stokMinimum < 0) {
+            throw new \RuntimeException('Stok minimum tidak boleh negatif.');
+        }
+    }
+
+    /** Cek apakah barcode sudah dipakai produk lain. */
+    private function barcodeTerpakai(): bool
+    {
+        if ($this->id === '') {
+            $stmt = Database::connect()->prepare(
+                'SELECT COUNT(*) FROM produk WHERE barcode = :barcode'
+            );
+            $stmt->execute([':barcode' => $this->barcode]);
+        } else {
+            $stmt = Database::connect()->prepare(
+                'SELECT COUNT(*) FROM produk WHERE barcode = :barcode AND id <> :id'
+            );
+            $stmt->execute([':barcode' => $this->barcode, ':id' => $this->id]);
+        }
+
+        return (int) $stmt->fetchColumn() > 0;
     }
 
     public function hapus(): void
@@ -217,15 +358,68 @@ class Produk implements DataReporter
     }
 
     /**
+     * Harga beli terakhir untuk produk ini dari supplier tertentu.
+     * Prioritas:
+     *   1. item_pembelian terakhir yang memakai produk + supplier itu
+     *   2. fallback: harga_beli produk saat ini (kalau pernah diset manual)
+     *
+     * @param int $supplierId id supplier (0 = abaikan filter supplier)
+     */
+    public static function hargaBeliTerakhir(int $produkId, int $supplierId): float
+    {
+        $pdo = Database::connect();
+
+        if ($supplierId > 0) {
+            $stmt = $pdo->prepare(
+                'SELECT ip.harga_beli_satuan
+                 FROM item_pembelian ip
+                 JOIN pembelian pb ON pb.id = ip.pembelian_id
+                 WHERE ip.produk_id = :produk AND pb.supplier_id = :supplier
+                 ORDER BY pb.tanggal DESC, ip.id DESC
+                 LIMIT 1'
+            );
+            $stmt->execute([':produk' => $produkId, ':supplier' => $supplierId]);
+            $nilai = $stmt->fetchColumn();
+
+            if ($nilai !== false) {
+                return (float) $nilai;
+            }
+        }
+
+        // Fallback: harga beli terakhir produk (apa pun suppliernya).
+        $stmt = $pdo->prepare(
+            'SELECT ip.harga_beli_satuan
+             FROM item_pembelian ip
+             WHERE ip.produk_id = :produk
+             ORDER BY ip.id DESC
+             LIMIT 1'
+        );
+        $stmt->execute([':produk' => $produkId]);
+        $nilai = $stmt->fetchColumn();
+
+        if ($nilai !== false) {
+            return (float) $nilai;
+        }
+
+        // Terakhir: harga beli yang tersimpan di produk.
+        $produk = self::cari($produkId);
+
+        return $produk?->getHargaBeli() ?? 0.0;
+    }
+
+    /**
      * Mengambil semua produk beserta kategori-nya, diurutkan berdasarkan nama.
+     * Hanya produk aktif yang dikembalikan (soft-delete).
      *
      * @return Produk[]
      */
     public static function semua(): array
     {
         $rows = Database::connect()->query(
-            'SELECT p.id, p.nama, p.harga, p.stok, p.kategori_id, p.satuan, p.harga_per_gram
+            'SELECT p.id, p.nama, p.harga, p.stok, p.kategori_id, p.satuan, p.harga_per_gram,
+                    p.barcode, p.harga_beli, p.stok_minimum, p.supplier_id, p.is_active, p.gambar
              FROM produk p
+             WHERE p.is_active = 1
              ORDER BY p.nama'
         )->fetchAll();
 
@@ -235,7 +429,8 @@ class Produk implements DataReporter
     public static function cari(int $id): ?self
     {
         $stmt = Database::connect()->prepare(
-            'SELECT p.id, p.nama, p.harga, p.stok, p.kategori_id, p.satuan, p.harga_per_gram
+            'SELECT p.id, p.nama, p.harga, p.stok, p.kategori_id, p.satuan, p.harga_per_gram,
+                    p.barcode, p.harga_beli, p.stok_minimum, p.supplier_id, p.is_active, p.gambar
              FROM produk p
              WHERE p.id = :id
              LIMIT 1'
@@ -246,12 +441,34 @@ class Produk implements DataReporter
         return $row === false ? null : new self($row);
     }
 
+    /** Cari produk berdasarkan barcode (dipakai di scan layar POS). */
+    public static function cariBerdasarkanBarcode(string $barcode): ?self
+    {
+        if (trim($barcode) === '') {
+            return null;
+        }
+
+        $stmt = Database::connect()->prepare(
+            'SELECT p.id, p.nama, p.harga, p.stok, p.kategori_id, p.satuan, p.harga_per_gram,
+                    p.barcode, p.harga_beli, p.stok_minimum, p.supplier_id, p.is_active, p.gambar
+             FROM produk p
+             WHERE p.barcode = :barcode AND p.is_active = 1
+             LIMIT 1'
+        );
+        $stmt->execute([':barcode' => trim($barcode)]);
+        $row = $stmt->fetch();
+
+        return $row === false ? null : new self($row);
+    }
+
     public static function cariStokMenipis(): array
     {
         $rows = Database::connect()->query(
-            'SELECT id, nama, harga, stok, kategori_id, satuan, harga_per_gram
+            'SELECT id, nama, harga, stok, kategori_id, satuan, harga_per_gram,
+                    barcode, harga_beli, stok_minimum, supplier_id, is_active, gambar
              FROM produk
-             WHERE stok <= ' . self::AMBANG_STOK_MENIPIS . '
+             WHERE is_active = 1
+               AND stok <= IF(stok_minimum > 0, stok_minimum, ' . self::AMBANG_STOK_MENIPIS . ')
              ORDER BY stok ASC'
         )->fetchAll();
 
@@ -311,25 +528,28 @@ class Produk implements DataReporter
         $start = max(0, (int) ($params['start'] ?? 0));
         $length = max(1, (int) ($params['length'] ?? 10));
 
-        $where = '';
+        $where = 'WHERE p.is_active = 1';
         $bind = [];
 
         if ($cari !== '') {
-            $where = 'WHERE p.nama LIKE :cari';
+            $where .= ' AND (p.nama LIKE :cari OR p.barcode LIKE :cari OR k.nama LIKE :cari)';
             $bind[':cari'] = '%' . $cari . '%';
         }
 
         $pdo = Database::connect();
-        $total = (int) $pdo->query('SELECT COUNT(*) FROM produk')->fetchColumn();
+        $total = (int) $pdo->query('SELECT COUNT(*) FROM produk WHERE is_active = 1')->fetchColumn();
 
-        $stmtFiltered = $pdo->prepare('SELECT COUNT(*) FROM produk p ' . $where);
+        $stmtFiltered = $pdo->prepare('SELECT COUNT(*) FROM produk p JOIN kategori k ON k.id = p.kategori_id ' . $where);
         $stmtFiltered->execute($bind);
         $filtered = (int) $stmtFiltered->fetchColumn();
 
         $stmt = $pdo->prepare(
-            'SELECT p.id, p.nama, p.harga, p.stok, p.satuan, p.harga_per_gram, k.nama AS kategori
+            'SELECT p.id, p.nama, p.harga, p.stok, p.satuan, p.harga_per_gram,
+                    p.barcode, p.harga_beli, p.stok_minimum, p.supplier_id, p.is_active, p.gambar,
+                    k.nama AS kategori, s.nama AS supplier_nama
              FROM produk p
-             JOIN kategori k ON k.id = p.kategori_id ' . $where . '
+             JOIN kategori k ON k.id = p.kategori_id
+             LEFT JOIN supplier s ON s.id = p.supplier_id ' . $where . '
              ORDER BY p.nama ASC
              LIMIT :limit OFFSET :offset'
         );
@@ -350,6 +570,13 @@ class Produk implements DataReporter
                 'stok'           => (int) $r['stok'],
                 'satuan'         => $r['satuan'],
                 'harga_per_gram' => $r['harga_per_gram'] !== null ? (float) $r['harga_per_gram'] : null,
+                'barcode'        => $r['barcode'] ?? '',
+                'harga_beli'     => (float) $r['harga_beli'],
+                'stok_minimum'   => (int) $r['stok_minimum'],
+                'supplier_id'    => $r['supplier_id'] !== null ? (int) $r['supplier_id'] : null,
+                'supplier_nama'  => $r['supplier_nama'] ?? '',
+                'is_active'      => (bool) $r['is_active'],
+                'gambar'         => $r['gambar'] ?? '',
             ];
         }, $stmt->fetchAll());
 

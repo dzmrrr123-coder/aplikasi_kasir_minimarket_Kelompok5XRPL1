@@ -14,8 +14,10 @@ class Transaksi implements Subject
     private string $id = '';
     private DateTimeImmutable $tanggal;
     private float $total = 0.0;
+    private float $pajak = 0.0;
     private int $kasirId = 0;
     private string $kasirNama = '';
+    private int $memberId = 0;
     private array $items = []; // ItemTransaksi[]
     private ?Diskon $diskon = null;
     private ?PaymentMethod $pembayaran = null;
@@ -36,11 +38,17 @@ class Transaksi implements Subject
         if (isset($data['total'])) {
             $this->total = (float) $data['total'];
         }
+        if (isset($data['pajak'])) {
+            $this->pajak = (float) $data['pajak'];
+        }
         if (isset($data['kasir_id'])) {
             $this->kasirId = (int) $data['kasir_id'];
         }
         if (isset($data['kasir_nama'])) {
             $this->kasirNama = (string) $data['kasir_nama'];
+        }
+        if (isset($data['member_id'])) {
+            $this->memberId = (int) $data['member_id'];
         }
     }
 
@@ -57,6 +65,12 @@ class Transaksi implements Subject
     public function getTotal(): float
     {
         return $this->total;
+    }
+
+    /** Nilai pajak (PPN) yang dibayar pada transaksi ini. */
+    public function getPajak(): float
+    {
+        return $this->pajak;
     }
 
     public function getKasirId(): int
@@ -85,6 +99,28 @@ class Transaksi implements Subject
         $this->kasirNama = $row === false ? '' : (string) $row['nama'];
 
         return $this->kasirNama;
+    }
+
+    public function getMemberId(): int
+    {
+        return $this->memberId;
+    }
+
+    public function setMemberId(int $memberId): void
+    {
+        $this->memberId = $memberId;
+    }
+
+    /** Nama member dari database (kosong bila bukan transaksi member). */
+    public function getMemberNama(): string
+    {
+        if ($this->memberId <= 0) {
+            return '';
+        }
+
+        $member = Member::cari($this->memberId);
+
+        return $member?->getNama() ?? '';
     }
 
     /**
@@ -172,7 +208,7 @@ class Transaksi implements Subject
         // tidak mengubah objek Produk milik pemanggil (stok DB tetap aktual).
         $produkSalinan = clone $produk;
 
-        $subtotal = $produkSalinan->getHargaEfektif() * $qty;
+        $subtotal = round($produkSalinan->getHargaEfektif() * $qty, 2);
         $item = new ItemTransaksi([
             'produk'  => $produkSalinan,
             'qty'     => $qty,
@@ -181,6 +217,11 @@ class Transaksi implements Subject
         $this->items[] = $item;
     }
 
+    /**
+     * Menghitung total transaksi: subtotal item -> diskon (sekali) -> pajak.
+     * Idempotent: diskon & pajak diterapkan dari state saat ini, jadi aman
+     * dipanggil berulang (tidak akan menerapkan diskon dua kali).
+     */
     public function hitungTotal(): float
     {
         $total = 0.0;
@@ -189,11 +230,17 @@ class Transaksi implements Subject
             $total += $item->getSubtotal();
         }
 
+        $total = round($total, 2);
+
         if ($this->diskon instanceof Diskon) {
-            $total = $this->diskon->terapkan($total);
+            $total = round($this->diskon->terapkan($total), 2);
         }
 
-        $this->total = max(0.0, $total);
+        // PPN (persen) dihitung atas total setelah diskon, dari pengaturan toko.
+        $persenPajak = (float) (Pengaturan::get('pajak', '0') ?: 0);
+        $this->pajak = $persenPajak > 0 ? round($total * $persenPajak / 100, 2) : 0.0;
+
+        $this->total = max(0.0, round($total + $this->pajak, 2));
 
         return $this->total;
     }
@@ -259,15 +306,17 @@ class Transaksi implements Subject
             $pembayaranId = $pembayaran instanceof Pembayaran ? $pembayaran->simpan() : null;
 
             $stmt = $pdo->prepare(
-                'INSERT INTO transaksi (tanggal, total, kasir_id, diskon_id, pembayaran_id)
-                 VALUES (:tanggal, :total, :kasir_id, :diskon_id, :pembayaran_id)'
+                'INSERT INTO transaksi (tanggal, total, pajak, kasir_id, diskon_id, pembayaran_id, member_id)
+                 VALUES (:tanggal, :total, :pajak, :kasir_id, :diskon_id, :pembayaran_id, :member_id)'
             );
             $stmt->execute([
                 ':tanggal'        => $this->tanggal->format('Y-m-d H:i:s'),
                 ':total'          => $this->total,
+                ':pajak'          => $this->pajak,
                 ':kasir_id'       => $this->kasirId,
                 ':diskon_id'      => $diskonId,
                 ':pembayaran_id'  => $pembayaranId,
+                ':member_id'      => $this->memberId > 0 ? $this->memberId : null,
             ]);
 
             $transaksiId = (int) $pdo->lastInsertId();
@@ -277,16 +326,39 @@ class Transaksi implements Subject
                 $item->simpan($transaksiId);
 
                 $produk = $item->getProduk();
-                $produk->updateStok(-$item->getQty());
-                $produk->perbarui();
+
+                // Atomic stock decrement: hanya berhasil bila stok masih cukup.
+                // Mencegah dua kasir menjual stok terakhir bersamaan (race).
+                // Catatan: named parameter tidak boleh dipakai 2x saat
+                // emulasi prepare nonaktif, jadi pakai nama berbeda.
+                $qtyItem = $item->getQty();
+                $update = $pdo->prepare(
+                    'UPDATE produk SET stok = stok - :qty WHERE id = :id AND stok >= :qty_cek'
+                );
+                $update->execute([
+                    ':qty'     => $qtyItem,
+                    ':qty_cek' => $qtyItem,
+                    ':id'      => (int) $produk->getId(),
+                ]);
+
+                if ($update->rowCount() === 0) {
+                    throw new RuntimeException(
+                        sprintf('Stok "%s" tidak cukup saat pembayaran.', $produk->getNama())
+                    );
+                }
             }
 
-            $pdo->commit();
+            // Poin member: 1 poin per Rp 1.000 belanja (dibulatkan ke bawah).
+            if ($this->memberId > 0) {
+                Member::tambahPoinId($this->memberId, (int) floor($this->total / 1000));
+            }
 
-            // Pasca-penyelesaian: beri tahu observer (mis. Struk untuk
-            // menyiapkan JSON, LaporanPenjualan untuk mencatat rekap) —
-            // tanpa hardcode logika mereka di sini.
+            // Observer (Struk & LaporanPenjualan) dipanggil SEBELUM commit:
+            // kalau penulisan rekap_penjualan gagal, seluruh transaksi ikut
+            // di-rollback — tidak ada transaksi sukses tanpa rekap.
             $this->notify();
+
+            $pdo->commit();
         } catch (\Throwable $e) {
             $pdo->rollBack();
             $this->selesai = false;
@@ -304,7 +376,7 @@ class Transaksi implements Subject
 
     /**
      * Membatalkan transaksi: item dihapus, stok produk dikembalikan,
-     * lalu baris transaksi (beserta item) dihapus dari database.
+     * poin member dikembalikan, lalu baris transaksi (beserta item) dihapus.
      */
     public function batalkan(): void
     {
@@ -316,16 +388,39 @@ class Transaksi implements Subject
         $pdo->beginTransaction();
 
         try {
+            // Ambil member_id & total dari DB (objek bisa jadi belum punya nilai itu).
+            $stmtInfo = $pdo->prepare(
+                'SELECT member_id, total FROM transaksi WHERE id = :id LIMIT 1'
+            );
+            $stmtInfo->execute([':id' => (int) $this->id]);
+            $info = $stmtInfo->fetch();
+            $memberId = $info === false ? 0 : (int) ($info['member_id'] ?? 0);
+            $totalFinal = $info === false ? 0.0 : (float) ($info['total'] ?? 0);
+
             $items = ItemTransaksi::untukTransaksi((int) $this->id);
 
             foreach ($items as $item) {
                 $produk = $item->getProduk();
-                $produk->updateStok($item->getQty());
-                $produk->perbarui();
+
+                // Kembalikan stok secara atomik (tidak mungkin negatif saat restore).
+                $update = $pdo->prepare('UPDATE produk SET stok = stok + :qty WHERE id = :id');
+                $update->execute([
+                    ':qty' => $item->getQty(),
+                    ':id'  => (int) $produk->getId(),
+                ]);
             }
 
             $stmt = $pdo->prepare('DELETE FROM transaksi WHERE id = :id');
             $stmt->execute([':id' => $this->id]);
+
+            // Kembalikan poin member yang diberikan saat transaksi dibuat.
+            if ($memberId > 0 && $totalFinal > 0) {
+                $poinDikembalikan = (int) floor($totalFinal / 1000);
+
+                if ($poinDikembalikan > 0) {
+                    Member::tambahPoinId($memberId, -$poinDikembalikan);
+                }
+            }
 
             $pdo->commit();
 

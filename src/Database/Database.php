@@ -82,9 +82,11 @@ class Database
         $statements = preg_split('/;\s*/', $sql) ?: [];
 
         foreach ($statements as $statement) {
-            $trimmed = trim($statement);
+            // Buang baris komentar SQL (-- ...) yang menempel pada statement.
+            // Contoh: "-- komentar\nCREATE TABLE ..." harus tetap dieksekusi.
+            $trimmed = trim((string) preg_replace('/^\s*--.*$/m', '', $statement));
 
-            if ($trimmed === '' || str_starts_with($trimmed, '--')) {
+            if ($trimmed === '') {
                 continue;
             }
 
@@ -137,6 +139,265 @@ class Database
 
         if ($tipeQty === 'int') {
             $pdo->exec('ALTER TABLE item_transaksi MODIFY qty DECIMAL(12,3) NOT NULL');
+        }
+
+        // ------------------------------------------------------------
+        // Migrasi idempotent v2 (fitur kompetisi):
+        //   - produk: barcode, harga_beli, stok_minimum, supplier_id, is_active
+        //   - users : is_active
+        //   - transaksi: member_id (tabel member dibuat dulu, baru FK-nya)
+        //   - tabel baru: member, pembelian, item_pembelian, pengaturan
+        // Semua memakai pola yang sama: cek information_schema dulu,
+        // baru ALTER/CREATE supaya aman dijalankan berulang kali.
+        // ------------------------------------------------------------
+        self::migrasiTabelBaru($pdo, $db['dbname']);
+        self::migrasiProdukV2($pdo, $db['dbname']);
+        self::migrasiUsersV2($pdo, $db['dbname']);
+        self::migrasiTransaksiV2($pdo, $db['dbname']);
+
+        // Migrasi v3 (debug QA):
+        //   - transaksi.pajak        (nilai PPN yang dibayar, biar total & rekap akurat)
+        //   - item_transaksi.harga_beli_satuan (snapshot HPP historis untuk laporan laba)
+        if (!self::kolomAda($pdo, $db['dbname'], 'transaksi', 'pajak')) {
+            $pdo->exec('ALTER TABLE transaksi ADD COLUMN pajak DECIMAL(12,2) NOT NULL DEFAULT 0 AFTER total');
+        }
+        if (!self::kolomAda($pdo, $db['dbname'], 'item_transaksi', 'harga_beli_satuan')) {
+            $pdo->exec('ALTER TABLE item_transaksi ADD COLUMN harga_beli_satuan DECIMAL(12,2) NOT NULL DEFAULT 0 AFTER subtotal');
+        }
+
+        // Migrasi v4 (foto produk): kolom produk.gambar.
+        if (!self::kolomAda($pdo, $db['dbname'], 'produk', 'gambar')) {
+            $pdo->exec('ALTER TABLE produk ADD COLUMN gambar VARCHAR(255) NULL AFTER is_active');
+        }
+
+        // Migrasi v5 (shift kasir & audit log): tabel baru.
+        if (!self::tabelAda($pdo, $db['dbname'], 'shift_kasir')) {
+            $pdo->exec(
+                'CREATE TABLE shift_kasir (
+                    id                 INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                    kasir_id           INT UNSIGNED  NOT NULL,
+                    dibuka_pada        DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    modal_awal         DECIMAL(12,2) NOT NULL DEFAULT 0,
+                    ditutup_pada       DATETIME      NULL,
+                    total_sistem       DECIMAL(12,2) NOT NULL DEFAULT 0,
+                    total_kas_fisik    DECIMAL(12,2) NULL,
+                    selisih            DECIMAL(12,2) NULL,
+                    catatan            VARCHAR(255)  NULL,
+                    status             ENUM(\'buka\',\'tutup\') NOT NULL DEFAULT \'buka\',
+                    CONSTRAINT fk_shift_kasir
+                        FOREIGN KEY (kasir_id) REFERENCES users(id)
+                        ON UPDATE CASCADE ON DELETE RESTRICT
+                ) ENGINE=InnoDB'
+            );
+        }
+
+        // Migrasi v6 (retur terikat pembelian): kolom retur_barang.pembelian_id
+        // menunjuk stok masuk (item_pembelian) asal barang yang diretur.
+        if (!self::kolomAda($pdo, $db['dbname'], 'retur_barang', 'pembelian_id')) {
+            $pdo->exec(
+                'ALTER TABLE retur_barang ADD COLUMN pembelian_id INT UNSIGNED NULL AFTER supplier_id'
+            );
+        }
+        if (self::kolomAda($pdo, $db['dbname'], 'retur_barang', 'pembelian_id')
+            && !self::constraintAda($pdo, $db['dbname'], 'fk_retur_pembelian')) {
+            $pdo->exec(
+                'ALTER TABLE retur_barang ADD CONSTRAINT fk_retur_pembelian
+                 FOREIGN KEY (pembelian_id) REFERENCES pembelian(id)
+                 ON UPDATE CASCADE ON DELETE SET NULL'
+            );
+        }
+
+        // Migrasi v7 (member akun mandiri):
+        //   - member.nomor_member (nomor otomatis, unik, diisi model saat simpan)
+        //   - member.password     (untuk login member di halaman member)
+        //   - tabel baru katalog_penukaran (badge/hadiah yang bisa ditukar poin)
+        if (!self::kolomAda($pdo, $db['dbname'], 'member', 'nomor_member')) {
+            $pdo->exec('ALTER TABLE member ADD COLUMN nomor_member VARCHAR(20) NULL UNIQUE AFTER id');
+        }
+        if (!self::kolomAda($pdo, $db['dbname'], 'member', 'password')) {
+            $pdo->exec('ALTER TABLE member ADD COLUMN password VARCHAR(255) NULL AFTER telepon');
+        }
+
+        if (!self::tabelAda($pdo, $db['dbname'], 'katalog_penukaran')) {
+            $pdo->exec(
+                'CREATE TABLE katalog_penukaran (
+                    id        INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                    nama      VARCHAR(100) NOT NULL,
+                    poin      INT          NOT NULL,
+                    deskripsi VARCHAR(255) NULL,
+                    aktif     TINYINT(1)   NOT NULL DEFAULT 1
+                ) ENGINE=InnoDB'
+            );
+        }
+
+        if (!self::tabelAda($pdo, $db['dbname'], 'audit_log')) {
+            $pdo->exec(
+                'CREATE TABLE audit_log (
+                    id         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                    user_id    INT UNSIGNED    NULL,
+                    aksi       VARCHAR(50)     NOT NULL,
+                    tabel      VARCHAR(50)     NOT NULL,
+                    record_id  INT UNSIGNED    NULL,
+                    detail     TEXT            NULL,
+                    dicatat_pada DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT fk_audit_user
+                        FOREIGN KEY (user_id) REFERENCES users(id)
+                        ON UPDATE CASCADE ON DELETE SET NULL
+                ) ENGINE=InnoDB'
+            );
+        }
+    }
+
+    /** Cek apakah kolom ada di tabel tertentu. */
+    private static function kolomAda(PDO $pdo, string $db, string $tabel, string $kolom): bool
+    {
+        $stmt = $pdo->prepare(
+            'SELECT COUNT(*) FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = :db AND TABLE_NAME = :tabel AND COLUMN_NAME = :kolom'
+        );
+        $stmt->execute([':db' => $db, ':tabel' => $tabel, ':kolom' => $kolom]);
+
+        return (int) $stmt->fetchColumn() > 0;
+    }
+
+    /** Cek apakah tabel ada di database. */
+    private static function tabelAda(PDO $pdo, string $db, string $tabel): bool
+    {
+        $stmt = $pdo->prepare(
+            'SELECT COUNT(*) FROM information_schema.TABLES
+             WHERE TABLE_SCHEMA = :db AND TABLE_NAME = :tabel'
+        );
+        $stmt->execute([':db' => $db, ':tabel' => $tabel]);
+
+        return (int) $stmt->fetchColumn() > 0;
+    }
+
+    /** Cek apakah constraint (nama FK/index) sudah ada. */
+    private static function constraintAda(PDO $pdo, string $db, string $nama): bool
+    {
+        $stmt = $pdo->prepare(
+            'SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
+             WHERE CONSTRAINT_SCHEMA = :db AND CONSTRAINT_NAME = :nama'
+        );
+        $stmt->execute([':db' => $db, ':nama' => $nama]);
+
+        return (int) $stmt->fetchColumn() > 0;
+    }
+
+    /** Kolom baru pada tabel produk (barcode, harga beli, stok minimum, supplier, aktif). */
+    private static function migrasiProdukV2(PDO $pdo, string $db): void
+    {
+        if (!self::kolomAda($pdo, $db, 'produk', 'barcode')) {
+            $pdo->exec('ALTER TABLE produk ADD COLUMN barcode VARCHAR(50) NULL UNIQUE AFTER harga_per_gram');
+        }
+        if (!self::kolomAda($pdo, $db, 'produk', 'harga_beli')) {
+            $pdo->exec('ALTER TABLE produk ADD COLUMN harga_beli DECIMAL(12,2) NOT NULL DEFAULT 0 AFTER barcode');
+        }
+        if (!self::kolomAda($pdo, $db, 'produk', 'stok_minimum')) {
+            $pdo->exec('ALTER TABLE produk ADD COLUMN stok_minimum INT NOT NULL DEFAULT 0 AFTER harga_beli');
+        }
+        if (!self::kolomAda($pdo, $db, 'produk', 'supplier_id')) {
+            $pdo->exec('ALTER TABLE produk ADD COLUMN supplier_id INT UNSIGNED NULL AFTER stok_minimum');
+        }
+
+        // Constraint FK supplier: buat hanya bila kolom & constraint belum ada.
+        if (self::kolomAda($pdo, $db, 'produk', 'supplier_id')
+            && !self::constraintAda($pdo, $db, 'fk_produk_supplier')) {
+            $pdo->exec(
+                'ALTER TABLE produk ADD CONSTRAINT fk_produk_supplier
+                 FOREIGN KEY (supplier_id) REFERENCES supplier(id)
+                 ON UPDATE CASCADE ON DELETE SET NULL'
+            );
+        }
+
+        if (!self::kolomAda($pdo, $db, 'produk', 'is_active')) {
+            $pdo->exec('ALTER TABLE produk ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 1 AFTER supplier_id');
+        }
+    }
+
+    /** Kolom is_active pada tabel users. */
+    private static function migrasiUsersV2(PDO $pdo, string $db): void
+    {
+        if (!self::kolomAda($pdo, $db, 'users', 'is_active')) {
+            $pdo->exec('ALTER TABLE users ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 1 AFTER role');
+        }
+    }
+
+    /** Kolom member_id pada tabel transaksi. */
+    private static function migrasiTransaksiV2(PDO $pdo, string $db): void
+    {
+        if (!self::kolomAda($pdo, $db, 'transaksi', 'member_id')) {
+            $pdo->exec('ALTER TABLE transaksi ADD COLUMN member_id INT UNSIGNED NULL AFTER pembayaran_id');
+        }
+
+        // Constraint FK member: buat hanya bila kolom & constraint belum ada.
+        if (self::kolomAda($pdo, $db, 'transaksi', 'member_id')
+            && !self::constraintAda($pdo, $db, 'fk_transaksi_member')) {
+            $pdo->exec(
+                'ALTER TABLE transaksi ADD CONSTRAINT fk_transaksi_member
+                 FOREIGN KEY (member_id) REFERENCES member(id)
+                 ON UPDATE CASCADE ON DELETE SET NULL'
+            );
+        }
+    }
+
+    /** Tabel baru: member, pembelian, item_pembelian, pengaturan. */
+    private static function migrasiTabelBaru(PDO $pdo, string $db): void
+    {
+        if (!self::tabelAda($pdo, $db, 'member')) {
+            $pdo->exec(
+                'CREATE TABLE member (
+                    id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                    nama        VARCHAR(100) NOT NULL,
+                    telepon     VARCHAR(20)  NULL UNIQUE,
+                    poin        INT          NOT NULL DEFAULT 0,
+                    dibuat_pada DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP
+                ) ENGINE=InnoDB'
+            );
+        }
+
+        if (!self::tabelAda($pdo, $db, 'pembelian')) {
+            $pdo->exec(
+                'CREATE TABLE pembelian (
+                    id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                    tanggal     DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    supplier_id INT UNSIGNED    NULL,
+                    total       DECIMAL(12,2)   NOT NULL DEFAULT 0,
+                    keterangan  VARCHAR(255)    NULL,
+                    CONSTRAINT fk_pembelian_supplier
+                        FOREIGN KEY (supplier_id) REFERENCES supplier(id)
+                        ON UPDATE CASCADE ON DELETE SET NULL
+                ) ENGINE=InnoDB'
+            );
+        }
+
+        if (!self::tabelAda($pdo, $db, 'item_pembelian')) {
+            $pdo->exec(
+                'CREATE TABLE item_pembelian (
+                    id                INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                    pembelian_id      INT UNSIGNED  NOT NULL,
+                    produk_id         INT UNSIGNED  NOT NULL,
+                    qty               DECIMAL(12,3) NOT NULL,
+                    harga_beli_satuan DECIMAL(12,2) NOT NULL,
+                    subtotal          DECIMAL(12,2) NOT NULL,
+                    CONSTRAINT fk_item_pembelian
+                        FOREIGN KEY (pembelian_id) REFERENCES pembelian(id)
+                        ON UPDATE CASCADE ON DELETE CASCADE,
+                    CONSTRAINT fk_item_pembelian_produk
+                        FOREIGN KEY (produk_id) REFERENCES produk(id)
+                        ON UPDATE CASCADE ON DELETE RESTRICT
+                ) ENGINE=InnoDB'
+            );
+        }
+
+        if (!self::tabelAda($pdo, $db, 'pengaturan')) {
+            $pdo->exec(
+                'CREATE TABLE pengaturan (
+                    id    INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                    kunci VARCHAR(50)  NOT NULL UNIQUE,
+                    nilai VARCHAR(255) NOT NULL DEFAULT \'\'
+                ) ENGINE=InnoDB'
+            );
         }
     }
 }

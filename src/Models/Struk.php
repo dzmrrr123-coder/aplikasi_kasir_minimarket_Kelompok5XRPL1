@@ -73,27 +73,50 @@ class Struk implements Observer
     /**
      * Menghasilkan teks struk detail: item bernomor dengan harga satuan,
      * subtotal, diskon, total, metode pembayaran, jumlah dibayar, kembalian.
+     * Header toko & footer diambil dari pengaturan.
      */
     public function cetak(): string
     {
+        $pengaturan = Pengaturan::semua();
+        $namaToko = $pengaturan['nama_toko'] ?? 'KASIR MINIMARKET';
+        $alamatToko = $pengaturan['alamat'] ?? '';
+        $teleponToko = $pengaturan['telepon'] ?? '';
+        $footer = $pengaturan['footer_struk'] ?? 'Terima kasih atas kunjungan Anda!';
+
         $lines = [];
         $lines[] = '==================================';
-        $lines[] = '          KASIR MINIMARKET';
+        $lines[] = strtoupper($namaToko);
+
+        if ($alamatToko !== '') {
+            $lines[] = $alamatToko;
+        }
+        if ($teleponToko !== '') {
+            $lines[] = 'Telp: ' . $teleponToko;
+        }
+
         $lines[] = '==================================';
         $lines[] = 'No. Transaksi : ' . $this->transaksiId;
         $lines[] = 'Tanggal       : ' . $this->transaksi->getTanggal()->format('d-m-Y H:i');
         $lines[] = 'Kasir         : ' . $this->namaKasir();
+
+        $member = $this->transaksi->getMemberNama();
+
+        if ($member !== '') {
+            $lines[] = 'Member        : ' . $member;
+        }
+
         $lines[] = '----------------------------------';
 
         $no = 1;
 
         foreach ($this->transaksi->getItems() as $item) {
             $produk = $item->getProduk();
-            $hargaSatuan = $produk->getHarga();
+            // Harga satuan efektif: produk gram memakai harga per gram.
+            $hargaSatuan = $produk->getHargaEfektif();
             $lines[] = $no . '. ' . $produk->getNama();
             $lines[] = sprintf(
-                '    %d x %s',
-                $item->getQty(),
+                '    %s x %s',
+                $this->formatQty($item->getQty()),
                 $this->formatRupiah($hargaSatuan)
             );
             $lines[] = '    Subtotal  : ' . $this->formatRupiah($item->getSubtotal());
@@ -106,11 +129,19 @@ class Struk implements Observer
         $diskon = $this->transaksi->getDiskon();
 
         if ($diskon !== null) {
-            $potongan = $this->subtotalKotor() - $this->transaksi->getTotal();
+            // Potongan dihitung dari subtotal kotor vs total sebelum pajak.
+            $totalSetelahDiskon = $this->transaksi->getTotal() - $this->transaksi->getPajak();
+            $potongan = $this->subtotalKotor() - $totalSetelahDiskon;
 
             if ($potongan > 0) {
                 $lines[] = 'Diskon        : -' . $this->formatRupiah($potongan);
             }
+        }
+
+        $pajak = $this->transaksi->getPajak();
+
+        if ($pajak > 0) {
+            $lines[] = 'Pajak (PPN)   : ' . $this->formatRupiah($pajak);
         }
 
         $lines[] = 'TOTAL         : ' . $this->formatRupiah($this->transaksi->getTotal());
@@ -134,7 +165,7 @@ class Struk implements Observer
         }
 
         $lines[] = '==================================';
-        $lines[] = 'Terima kasih atas kunjungan Anda!';
+        $lines[] = $footer;
 
         return implode("\n", $lines) . "\n";
     }
@@ -157,7 +188,7 @@ class Struk implements Observer
             $items[] = [
                 'nama'     => $item->getProduk()->getNama(),
                 'qty'      => $item->getQty(),
-                'harga'    => $item->getProduk()->getHarga(),
+                'harga'    => $item->getProduk()->getHargaEfektif(),
                 'subtotal' => $item->getSubtotal(),
             ];
         }
@@ -166,14 +197,24 @@ class Struk implements Observer
             'no_transaksi' => $transaksi->getId(),
             'tanggal'      => $transaksi->getTanggal()->format('d-m-Y H:i'),
             'kasir'        => $transaksi->getKasirNama(),
+            'member'       => $transaksi->getMemberNama(),
             'items'        => $items,
             'subtotal'     => $this->subtotalKotor(),
             'diskon'       => $transaksi->getDiskon()?->getNilai() ?? 0.0,
+            'pajak'        => $transaksi->getPajak(),
             'total'        => $transaksi->getTotal(),
             'metode'       => $pembayaran?->getNamaMetode() ?? '',
             'dibayar'      => $pembayaran?->getJumlah() ?? 0.0,
             'kembalian'    => $kembalian,
         ];
+    }
+
+    /** Format qty: angka utuh tanpa desimal, angka pecahan dengan 2 desimal. */
+    private function formatQty(float $qty): string
+    {
+        return fmod($qty, 1) === 0.0
+            ? (string) (int) $qty
+            : rtrim(rtrim(number_format($qty, 2, ',', '.'), '0'), ',');
     }
 
     /** Subtotal seluruh item sebelum diskon. */

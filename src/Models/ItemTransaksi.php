@@ -14,6 +14,7 @@ class ItemTransaksi
     private Produk $produk;
     private float $qty = 0.0;
     private float $subtotal = 0.0;
+    private float $hargaBeliSatuan = 0.0;
 
     public function __construct(array $data = [])
     {
@@ -39,6 +40,9 @@ class ItemTransaksi
         }
         if (isset($data['subtotal'])) {
             $this->subtotal = (float) $data['subtotal'];
+        }
+        if (isset($data['harga_beli_satuan'])) {
+            $this->hargaBeliSatuan = (float) $data['harga_beli_satuan'];
         }
     }
 
@@ -67,17 +71,24 @@ class ItemTransaksi
         return $this->subtotal;
     }
 
+    /** Harga beli per satuan saat transaksi (snapshot HPP historis). */
+    public function getHargaBeliSatuan(): float
+    {
+        return $this->hargaBeliSatuan;
+    }
+
     public function simpan(int $transaksiId): void
     {
         $stmt = Database::connect()->prepare(
-            'INSERT INTO item_transaksi (transaksi_id, produk_id, qty, subtotal)
-             VALUES (:transaksi_id, :produk_id, :qty, :subtotal)'
+            'INSERT INTO item_transaksi (transaksi_id, produk_id, qty, subtotal, harga_beli_satuan)
+             VALUES (:transaksi_id, :produk_id, :qty, :subtotal, :harga_beli_satuan)'
         );
         $stmt->execute([
-            ':transaksi_id' => $transaksiId,
-            ':produk_id'    => $this->produk->getId(),
-            ':qty'          => $this->qty,
-            ':subtotal'     => $this->subtotal,
+            ':transaksi_id'      => $transaksiId,
+            ':produk_id'         => $this->produk->getId(),
+            ':qty'               => $this->qty,
+            ':subtotal'          => $this->subtotal,
+            ':harga_beli_satuan' => $this->produk->getHargaBeli(),
         ]);
 
         $this->id = (string) Database::connect()->lastInsertId();
@@ -94,7 +105,7 @@ class ItemTransaksi
     public static function untukTransaksi(int $transaksiId): array
     {
         $rows = Database::connect()->query(
-            'SELECT id, transaksi_id, produk_id, qty, subtotal
+            'SELECT id, transaksi_id, produk_id, qty, subtotal, harga_beli_satuan
              FROM item_transaksi
              WHERE transaksi_id = ' . $transaksiId . '
              ORDER BY id ASC'
