@@ -1,0 +1,36 @@
+{
+  "permissions": {
+    "allow": [
+      "Shell(dir /s /b C:\\laragon\\bin\\mysql\\*\\bin\\mysql.exe 2>nul & dir /s /b C:\\laragon\\bin\\php\\*\\php.exe 2>nul)",
+      "Shell(dir:*)",
+      "Shell(where:*)",
+      "Shell(mkdir C:\\laragon\\www\\aplikasi-kasir\\src\\Models 2>nul & mysql -u root < C:\\laragon\\www\\aplikasi-kasir\\database\\schema.sql && echo SCHEMA_OK)",
+      "Shell(mysql:*)",
+      "Shell(mysql -u root -e \"DROP DATABASE IF EXISTS kasir_minimarket;\" && mysql -u root < C:\\laragon\\www\\aplikasi-kasir\\database\\schema.sql && echo SCHEMA_OK)",
+      "Shell(php C:\\laragon\\www\\aplikasi-kasir\\public\\index.php)",
+      "Shell(for:*)",
+      "Shell(php -r \"echo password_hash(kasir123, PASSWORD_DEFAULT);\":*)",
+      "Shell(do:*)",
+      "Shell(php \"C:\\Users\\DELLLA~1\\AppData\\Local\\Temp\\commandcode\\C--laragon-www-aplikasi-kasir\\741012ae-cd20-4bdd-8aa8-9bcdf54e0ca8\\scratchpad\\test-user.php\")",
+      "Shell(php \"C:\\Users\\DELLLA~1\\AppData\\Local\\Temp\\commandcode\\C--laragon-www-aplikasi-kasir\\741012ae-cd20-4bdd-8aa8-9bcdf54e0ca8\\scratchpad\\test-produk.php\")",
+      "Shell(mysql -u root < C:\\laragon\\www\\aplikasi-kasir\\database\\migration_status.sql && mysql -u root -e \"SHOW COLUMNS FROM transaksi;\" kasir_minimarket)",
+      "Shell(php \"C:\\Users\\DELLLA~1\\AppData\\Local\\Temp\\commandcode\\C--laragon-www-aplikasi-kasir\\741012ae-cd20-4bdd-8aa8-9bcdf54e0ca8\\scratchpad\\test-transaksi.php\")",
+      "Shell(php \"C:\\Users\\DELLLA~1\\AppData\\Local\\Temp\\commandcode\\C--laragon-www-aplikasi-kasir\\741012ae-cd20-4bdd-8aa8-9bcdf54e0ca8\\scratchpad\\test-tambahitem.php\")",
+      "Shell(php \"C:\\Users\\DELLLA~1\\AppData\\Local\\Temp\\commandcode\\C--laragon-www-aplikasi-kasir\\741012ae-cd20-4bdd-8aa8-9bcdf54e0ca8\\scratchpad\\test-struk.php\")",
+      "Shell(php \"C:\\Users\\DELLLA~1\\AppData\\Local\\Temp\\commandcode\\C--laragon-www-aplikasi-kasir\\741012ae-cd20-4bdd-8aa8-9bcdf54e0ca8\\scratchpad\\test-laporan.php\")",
+      "Shell(php \"C:\\Users\\DELLLA~1\\AppData\\Local\\Temp\\commandcode\\C--laragon-www-aplikasi-kasir\\741012ae-cd20-4bdd-8aa8-9bcdf54e0ca8\\scratchpad\\test-retur.php\")",
+      "Shell(php \"C:\\Users\\DELLLA~1\\AppData\\Local\\Temp\\commandcode\\C--laragon-www-aplikasi-kasir\\741012ae-cd20-4bdd-8aa8-9bcdf54e0ca8\\scratchpad\\test-orkestrasi.php\")",
+      "Shell(php -l C:laragonwwwaplikasi-kasirsrcAuthSessionGuard.php)",
+      "Shell(php -l C:laragonwwwaplikasi-kasirpubliclogin.php)",
+      "Shell(php -l C:laragonwwwaplikasi-kasirpubliclogout.php)",
+      "Shell(php -l C:laragonwwwaplikasi-kasirpublicindex.php)",
+      "Shell(php -l C:laragonwwwaplikasi-kasirviewslayoutsheader.php)",
+      "Shell(php -l C:laragonwwwaplikasi-kasirviewslayoutsfooter.php)",
+      "Shell(php -l C:laragonwwwaplikasi-kasirviewslayoutssidebar-kasir.php)",
+      "Shell(php -l C:laragonwwwaplikasi-kasirviewslayoutssidebar-admin.php)",
+      "Shell(php -r \"require 'C:/laragon/www/aplikasi-kasir/bootstrap/autoload.php'; $p = Database::getInstance()->getConnection(); $h = password_hash('ui123', PASSWORD_DEFAULT); $p->exec(\\\"INSERT INTO users (nama, username, password, role) VALUES ('Kasir UI', 'kasir_ui', '$h', 'kasir'), ('Admin UI', 'admin_ui', '$h', 'admin')\\\"); echo 'SEED_OK';\")"
+    ],
+    "deny": [],
+    "defaultMode": "default"
+  }
+}
