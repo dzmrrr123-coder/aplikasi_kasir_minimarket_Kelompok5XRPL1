@@ -109,10 +109,7 @@ CREATE TABLE IF NOT EXISTS retur_barang (
         ON UPDATE CASCADE ON DELETE RESTRICT,
     CONSTRAINT fk_retur_supplier
         FOREIGN KEY (supplier_id) REFERENCES supplier(id)
-        ON UPDATE CASCADE ON DELETE RESTRICT,
-    CONSTRAINT fk_retur_pembelian
-        FOREIGN KEY (pembelian_id) REFERENCES pembelian(id)
-        ON UPDATE CASCADE ON DELETE SET NULL
+        ON UPDATE CASCADE ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS rekap_penjualan (
