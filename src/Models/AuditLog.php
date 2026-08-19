@@ -134,8 +134,10 @@ class AuditLog implements DataReporter
         $bind = [];
 
         if ($cari !== '') {
-            $where = 'WHERE a.aksi LIKE :cari OR a.tabel LIKE :cari OR u.nama LIKE :cari';
-            $bind[':cari'] = '%' . $cari . '%';
+            $where = 'WHERE a.aksi LIKE :cari_aksi OR a.tabel LIKE :cari_tabel OR u.nama LIKE :cari_nama';
+            $bind[':cari_aksi'] = '%' . $cari . '%';
+            $bind[':cari_tabel'] = '%' . $cari . '%';
+            $bind[':cari_nama'] = '%' . $cari . '%';
         }
 
         $pdo = Database::connect();

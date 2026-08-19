@@ -61,6 +61,12 @@ unset($_SESSION['pesan']);
 
 function redirectSelf(string $pesan): never
 {
+    if (strtolower((string) ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'fetch') {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['pesan' => $pesan]);
+        exit;
+    }
+
     $_SESSION['pesan'] = $pesan;
     header('Location: supplier.php');
     exit;
@@ -270,6 +276,7 @@ $aktif = 'supplier';
 <script src="assets/vendor/datatables/dataTables.min.js"></script>
 <script src="assets/vendor/datatables/dataTables.bootstrap5.min.js"></script>
 <script src="assets/theme.js"></script>
+<script src="assets/supplier.js"></script>
 <script>
     // Tabel supplier via DataTables server-side (api.php → InventarisController → Supplier::getDataTabel).
     (function () {

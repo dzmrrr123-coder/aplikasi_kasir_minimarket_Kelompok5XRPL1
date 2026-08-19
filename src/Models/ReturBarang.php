@@ -371,8 +371,10 @@ class ReturBarang implements DataReporter
         $bind = [];
 
         if ($cari !== '') {
-            $where = 'WHERE p.nama LIKE :cari OR s.nama LIKE :cari OR r.alasan LIKE :cari';
-            $bind[':cari'] = '%' . $cari . '%';
+            $where = 'WHERE p.nama LIKE :cari_produk OR s.nama LIKE :cari_supplier OR r.alasan LIKE :cari_alasan';
+            $bind[':cari_produk'] = '%' . $cari . '%';
+            $bind[':cari_supplier'] = '%' . $cari . '%';
+            $bind[':cari_alasan'] = '%' . $cari . '%';
         }
 
         $pdo = Database::connect();

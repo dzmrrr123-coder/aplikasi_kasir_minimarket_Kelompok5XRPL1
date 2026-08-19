@@ -330,8 +330,9 @@ class LaporanPenjualan implements Observer, DataReporter
         ];
 
         if ($cari !== '') {
-            $where .= ' AND (CAST(t.id AS CHAR) LIKE :cari OR u.nama LIKE :cari)';
-            $bind[':cari'] = '%' . $cari . '%';
+            $where .= ' AND (CAST(t.id AS CHAR) LIKE :cari_id OR u.nama LIKE :cari_nama)';
+            $bind[':cari_id'] = '%' . $cari . '%';
+            $bind[':cari_nama'] = '%' . $cari . '%';
         }
 
         $pdo = Database::connect();

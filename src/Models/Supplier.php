@@ -163,8 +163,10 @@ class Supplier implements DataReporter
         $bind = [];
 
         if ($cari !== '') {
-            $where = 'WHERE nama LIKE :cari OR kontak LIKE :cari OR alamat LIKE :cari';
-            $bind[':cari'] = '%' . $cari . '%';
+            $where = 'WHERE nama LIKE :cari_nama OR kontak LIKE :cari_kontak OR alamat LIKE :cari_alamat';
+            $bind[':cari_nama'] = '%' . $cari . '%';
+            $bind[':cari_kontak'] = '%' . $cari . '%';
+            $bind[':cari_alamat'] = '%' . $cari . '%';
         }
 
         $pdo = Database::connect();

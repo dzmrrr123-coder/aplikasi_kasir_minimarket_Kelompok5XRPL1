@@ -331,13 +331,20 @@ class Transaksi implements Subject
                 // Mencegah dua kasir menjual stok terakhir bersamaan (race).
                 // Catatan: named parameter tidak boleh dipakai 2x saat
                 // emulasi prepare nonaktif, jadi pakai nama berbeda.
+                //
+                // Stok disimpan sebagai bilangan bulat (pcs/gram), sedangkan
+                // qty produk curah boleh pecahan. Mutasi stok dibulatkan ke
+                // satuan terkecil supaya konsisten dan tidak menimbulkan drift
+                // saat pembulatan dilakukan oleh MySQL (mis. jual 125.5 g lalu
+                // batal). Minimum 1 agar UPDATE tidak menjadi no-op.
                 $qtyItem = $item->getQty();
+                $qtyStok = max(1, (int) round($qtyItem));
                 $update = $pdo->prepare(
                     'UPDATE produk SET stok = stok - :qty WHERE id = :id AND stok >= :qty_cek'
                 );
                 $update->execute([
-                    ':qty'     => $qtyItem,
-                    ':qty_cek' => $qtyItem,
+                    ':qty'     => $qtyStok,
+                    ':qty_cek' => $qtyStok,
                     ':id'      => (int) $produk->getId(),
                 ]);
 
@@ -415,9 +422,12 @@ class Transaksi implements Subject
                 $produk = $item->getProduk();
 
                 // Kembalikan stok secara atomik (tidak mungkin negatif saat restore).
+                // Bulatkan ke satuan stok integer, minimal 1 agar konsisten
+                // dengan pengurangan stok saat transaksi dibuat.
+                $qtyStok = max(1, (int) round($item->getQty()));
                 $update = $pdo->prepare('UPDATE produk SET stok = stok + :qty WHERE id = :id');
                 $update->execute([
-                    ':qty' => $item->getQty(),
+                    ':qty' => $qtyStok,
                     ':id'  => (int) $produk->getId(),
                 ]);
             }

@@ -198,16 +198,18 @@ $aktif = 'dashboard';
             <div class="card pos-card h-100">
                 <div class="card-header bg-white"><span>Produk Terlaris</span></div>
                 <div class="card-body p-0">
-                    <table class="table table-hover align-middle mb-0" id="tabel-terlaris">
-                        <thead class="table-light">
-                            <tr>
-                                <th class="text-center">#</th>
-                                <th>Produk</th>
-                                <th class="text-center">Qty</th>
-                                <th class="text-end">Total</th>
-                            </tr>
-                        </thead>
-                    </table>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0" id="tabel-terlaris">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="text-center">#</th>
+                                    <th>Produk</th>
+                                    <th class="text-center">Qty</th>
+                                    <th class="text-end">Total</th>
+                                </tr>
+                            </thead>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>

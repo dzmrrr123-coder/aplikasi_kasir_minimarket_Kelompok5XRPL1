@@ -532,8 +532,10 @@ class Produk implements DataReporter
         $bind = [];
 
         if ($cari !== '') {
-            $where .= ' AND (p.nama LIKE :cari OR p.barcode LIKE :cari OR k.nama LIKE :cari)';
-            $bind[':cari'] = '%' . $cari . '%';
+            $where .= ' AND (p.nama LIKE :cari_nama OR p.barcode LIKE :cari_barcode OR k.nama LIKE :cari_kategori)';
+            $bind[':cari_nama'] = '%' . $cari . '%';
+            $bind[':cari_barcode'] = '%' . $cari . '%';
+            $bind[':cari_kategori'] = '%' . $cari . '%';
         }
 
         $pdo = Database::connect();

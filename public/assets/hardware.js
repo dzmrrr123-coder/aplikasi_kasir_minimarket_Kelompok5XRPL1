@@ -13,7 +13,10 @@
     'use strict';
 
     var state = {
-        config: { timbangan: { baudRate: 9600, dataBits: 8, stopBits: 1, parity: 'none' }, printer: { baudRate: 9600, charset: 'utf8' } },
+        config: {
+            timbangan: { baudRate: 9600, dataBits: 8, stopBits: 1, parity: 'none' },
+            printer: { baudRate: 9600, dataBits: 8, stopBits: 1, parity: 'none', charset: 'utf8' }
+        },
         timbangan: null,   // SerialPort
         printer: null,     // SerialPort
         beratTerakhirGram: 0,
@@ -113,8 +116,12 @@
         var s = line.trim();
         if (s === '') return;
 
+        // Abaikan baris yang jelas-jelas bukan pembacaan stabil:
+        // UNST/US = belum stabil, OL = overload, ERR/E = error timbangan.
+        if (/^(UNST|US\b|OL|ERR|E\b|----)/i.test(s)) return;
+
         // Deteksi stabil: ST/STABLE/GS/= di awal menandakan terbaca stabil.
-        var stabil = /^(ST|STABLE|GS|UNST|OL|=====|[\s=])/i.test(s);
+        var stabil = /^(ST|STABLE|GS|=====|[\s=])/i.test(s);
         // Ambil angka desimal + satuan (kg/g).
         var m = s.match(/(-?\d+(?:[.,]\d+)?)\s*(kg|g|gr|gram)?/i);
 

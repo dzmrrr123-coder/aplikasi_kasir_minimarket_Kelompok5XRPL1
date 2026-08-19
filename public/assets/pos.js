@@ -70,6 +70,8 @@
             fragKiri.innerHTML = '';
             fragKiri.appendChild(kiri);
         }
+        var kioskKanan = document.querySelector('.kiosk-kanan');
+
         if (kanan) {
             // Panel kanan kiosk: userbar + ringkasan + numpad.
             fragKanan.innerHTML = tmp.querySelector('.kiosk-userbar').parentElement
@@ -77,20 +79,15 @@
                 : '';
             initNumpad();
             syncNumpadMetode();
+            // Panel kanan sempat disembunyikan (d-none) saat wajib buka kas;
+            // tampilkan kembali sekarang karena fragment punya panel kanan.
+            if (kioskKanan) kioskKanan.classList.remove('d-none');
         } else {
             // Fragment tidak berisi panel kanan (shift belum/sudah tutup) —
-            // kosongkan isi lama supaya tidak ada sisa yang menggantung.
+            // kosongkan isi lama & sembunyikan kolom kanan supaya tidak ada
+            // sisa panel menggantung.
             fragKanan.innerHTML = '';
-        }
-
-        // Panel kanan sempat disembunyikan (d-none) saat wajib buka kas.
-        // Begitu ada interaksi yang menghasilkan fragment, tampilkan kembali —
-        // TAPI hanya kalau fragment masih berisi panel kanan (server render
-        // ulang). Kalau tidak (mis. shift baru saja ditutup, panel kanan
-        // memang harus hilang), biarkan state-nya apa adanya.
-        var kioskKanan = document.querySelector('.kiosk-kanan');
-        if (kioskKanan && kanan) {
-            kioskKanan.classList.remove('d-none');
+            if (kioskKanan) kioskKanan.classList.add('d-none');
         }
 
         initKembalian();
@@ -160,6 +157,12 @@
     // Scan barcode: fokus otomatis saat halaman dimuat, dan setelah
     // submit, kosongkan + refokus supaya bisa scan produk berikutnya.
     function fokusBarcode() {
+        // Bila overlay buka kas masih tampil, biarkan fokus di input modal awal.
+        var bukaKas = document.getElementById('card-buka-kas');
+        if (bukaKas && !bukaKas.classList.contains('d-none')) {
+            return;
+        }
+
         var barcode = document.getElementById('input-barcode');
         if (barcode && !document.getElementById('area-struk').classList.contains('d-none')) {
             // Struk sedang tampil — jangan rebut fokus.
@@ -191,7 +194,10 @@
 
         // Disable tombol submit SEBELUM fetch supaya tidak bisa dobel-tap.
         var tombol = aksiDisableTombol.indexOf(aksi) >= 0 ? tombolSubmit(form) : null;
-        if (tombol) tombol.disabled = true;
+        if (tombol) {
+            tombol.disabled = true;
+            tombol.classList.add('is-loading');
+        }
 
         fetch('transaksi.php', {
             method: 'POST',
@@ -203,6 +209,7 @@
                 return r.json();
             })
             .then(function (res) {
+                if (tombol) tombol.classList.remove('is-loading');
                 tampilkanFlash(res.pesan, res.tipe);
 
                 if (aksi === 'scan') {
@@ -215,9 +222,16 @@
                 }
 
                 if (aksi === 'buka_kas') {
-                    // Kas sudah terbuka — sembunyikan card "Buka Kas".
-                    var cardBukaKas = document.getElementById('card-buka-kas');
-                    if (cardBukaKas) cardBukaKas.classList.add('d-none');
+                    // Hanya sembunyikan overlay bila kas berhasil dibuka.
+                    // Kalau gagal (mis. modal negatif / masih ada shift),
+                    // overlay wajib tetap tampil supaya kasir bisa coba lagi.
+                    if (res.tipe === 'success') {
+                        var cardBukaKas = document.getElementById('card-buka-kas');
+                        if (cardBukaKas) cardBukaKas.classList.add('d-none');
+                    } else {
+                        var modalAwal = document.getElementById('modal-awal');
+                        if (modalAwal) modalAwal.focus();
+                    }
                 }
 
                 if (aksi === 'tutup_kas') {
@@ -230,6 +244,12 @@
                     }
                     if (res.tipe === 'success') {
                         tampilkanFlash(res.pesan + ' Kas kembali terkunci.', 'success');
+                        // Kembalikan tampilan ke kondisi "belum buka kas":
+                        // tampilkan card Buka Kas, sembunyikan kolom kanan.
+                        var cardBukaKas = document.getElementById('card-buka-kas');
+                        if (cardBukaKas) cardBukaKas.classList.remove('d-none');
+                        var kioskKanan = document.querySelector('.kiosk-kanan');
+                        if (kioskKanan) kioskKanan.classList.add('d-none');
                     }
                 }
 
@@ -251,6 +271,13 @@
                     if (area) area.classList.add('d-none');
                 }
 
+                // Grid produk di-refresh dari server (mis. setelah bayar)
+                // supaya stok yang tampil selalu sesuai DB tanpa reload.
+                if (res.produk) {
+                    var fragProduk = document.getElementById('fragmen-produk');
+                    if (fragProduk) fragProduk.outerHTML = res.produk;
+                }
+
                 // Setelah fragment diganti, elemen tombol lama kemungkinan besar
                 // ikut ke-replace oleh render server. Kalau ternyata nyangkut
                 // (masih disabled), aktifkan kembali supaya tidak macet.
@@ -259,6 +286,7 @@
                 }
             })
             .catch(function (err) {
+                if (tombol) tombol.classList.remove('is-loading');
                 tampilkanFlash('Terjadi kesalahan: ' + err.message, 'danger');
                 // Request gagal — aktifkan kembali tombol.
                 if (tombol) tombol.disabled = false;
@@ -286,12 +314,26 @@
         });
     }
 
-    // Cetak struk: hanya area struk yang tercetak (lihat @media print).
+    // Cetak struk: bila printer thermal terhubung, kirim langsung ke ESC/POS;
+    // kalau tidak, fallback ke dialog print browser (lihat @media print).
     var cetakStruk = document.getElementById('cetak-struk');
     if (cetakStruk) {
         cetakStruk.addEventListener('click', function () {
             var area = document.getElementById('area-struk');
             if (!area) return;
+            var pre = area.querySelector('pre');
+            var teks = pre ? pre.textContent : '';
+
+            if (teks !== '' && window.POSHardware) {
+                var st = POSHardware.getStatus();
+                if (st.printer) {
+                    POSHardware.cetakStruk(teks).catch(function (e) {
+                        tampilkanFlash('Gagal cetak ke printer: ' + e.message, 'danger');
+                    });
+                    return;
+                }
+            }
+
             window.print();
         });
     }
@@ -304,14 +346,27 @@
     // Modal void: isi produk id & nama dari tombol yang diklik.
     var modalVoid = document.getElementById('modal-void');
     if (modalVoid) {
-        modalVoid.addEventListener('show.bs.modal', function (e) {
-            var btn = e.relatedTarget;
+        // Satu sumber kebenaran: klik tombol Void mengisi id & nama sebelum
+        // modal dibuka. Jangan reset di show.bs.modal karena bisa menghapus
+        // nilai yang sudah benar.
+        document.addEventListener('click', function (e) {
+            var btn = e.target.closest('[data-bs-target="#modal-void"]');
             if (!btn) return;
-            document.getElementById('void-produk-id').value = btn.getAttribute('data-produk-id') || '';
+            var idInput = document.getElementById('void-produk-id');
             var nama = document.getElementById('void-produk-nama');
+            if (idInput) idInput.value = btn.getAttribute('data-produk-id') || '';
             if (nama) nama.innerHTML = 'Hapus item: <strong>' + (btn.getAttribute('data-produk-nama') || '') + '</strong>';
+        });
+
+        modalVoid.addEventListener('show.bs.modal', function () {
             var pin = document.getElementById('void-pin');
             if (pin) { pin.value = ''; setTimeout(function () { pin.focus(); }, 300); }
+        });
+
+        // Kembalikan fokus ke kolom barcode setelah modal void ditutup.
+        modalVoid.addEventListener('hidden.bs.modal', function () {
+            var barcode = document.getElementById('input-barcode');
+            if (barcode) barcode.focus();
         });
     }
 
@@ -323,7 +378,7 @@
         var hint = document.getElementById('tutup-kas-hint');
         if (!wadah) return;
 
-        wadah.innerHTML = '<div class="text-muted small py-2">Memuat riwayat shift...</div>';
+        wadah.innerHTML = '<div class="text-muted small py-2 d-flex align-items-center gap-2"><span class="spinner"></span>Memuat riwayat shift...</div>';
 
         var meta = document.querySelector('meta[name="csrf-token"]');
         var token = meta ? meta.getAttribute('content') : '';
@@ -383,5 +438,10 @@
     var modalTutupKas = document.getElementById('modal-tutup-kas');
     if (modalTutupKas) {
         modalTutupKas.addEventListener('show.bs.modal', muatRingkasanTutupKas);
+        // Kembalikan fokus ke tombol "Tutup Kas" setelah modal ditutup.
+        modalTutupKas.addEventListener('hidden.bs.modal', function () {
+            var trigger = document.querySelector('[data-bs-target="#modal-tutup-kas"]');
+            if (trigger) trigger.focus();
+        });
     }
 })();

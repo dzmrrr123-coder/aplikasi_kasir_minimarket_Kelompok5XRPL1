@@ -79,6 +79,14 @@ if (isset($_GET['batal_edit_produk'])) {
 
 function redirectSelf(string $pesan): never
 {
+    // Permintaan fetch dari admin.js tidak boleh di-redirect; kembalikan
+    // status ringkas supaya client langsung reload tabel tanpa navigasi.
+    if (strtolower((string) ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'fetch') {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['pesan' => $pesan]);
+        exit;
+    }
+
     $_SESSION['pesan'] = $pesan;
     header('Location: admin.php');
     exit;
@@ -86,6 +94,12 @@ function redirectSelf(string $pesan): never
 
 function redirectSelfDenganEdit(string $pesan, int $editProdukId, int $editKategoriId): never
 {
+    if (strtolower((string) ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'fetch') {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['pesan' => $pesan]);
+        exit;
+    }
+
     $_SESSION['pesan'] = $pesan;
     $_SESSION['edit_produk_id'] = $editProdukId;
     $_SESSION['edit_kategori_id'] = $editKategoriId;
@@ -804,9 +818,11 @@ $stokMenipis = Produk::cariStokMenipis();
 <script src="assets/vendor/datatables/dataTables.min.js"></script>
 <script src="assets/vendor/datatables/dataTables.bootstrap5.min.js"></script>
 <script src="assets/theme.js"></script>
+<script src="assets/admin.js"></script>
 <script>
-    // Tabel produk via DataTables server-side (api.php → InventarisController → Produk::getDataTabel).
-    (function () {
+    // Idempotent init: setelah hx-boost mengganti isi body, init dipanggil
+    // ulang. DataTable lama didestroy dulu supaya tidak dobel.
+    function initAdmin() {
         if (!window.jQuery || !window.DataTable) return;
 
         function rupiah(n) {
@@ -816,60 +832,60 @@ $stokMenipis = Produk::cariStokMenipis();
             });
         }
 
-        jQuery('#tabel-produk').DataTable({
-            serverSide: true,
-            ajax: { url: 'api.php?aksi=produk.tabel', data: function (d) { d.draw = d.draw || 0; } },
-            pageLength: 10,
-            lengthChange: false,
-            order: [],
-            columns: [
-                { data: 'nama' },
-                { data: 'kategori' },
-                { data: 'barcode', render: function (d) { return d ? '<span class="font-num small">' + d + '</span>' : '<span class="text-muted">—</span>'; } },
-                { data: 'supplier_nama', render: function (d) { return d ? d : '<span class="text-muted">—</span>'; } },
-                { data: 'harga', className: 'text-end font-num', render: function (d) { return rupiah(d); } },
-                {
-                    data: 'stok',
-                    className: 'text-center',
-                    render: function (d, t, row) {
-                        var stok = Number(d);
-                        var min = Number(row.stok_minimum) || 10; // fallback ambang umum
-                        if (stok <= min) {
-                            return '<span class="' + (stok <= 0 ? 'stok-habis' : 'stok-menipis') + '">' + stok + '</span>' +
-                                (stok <= 0 ? ' (habis)' : ' (menipis)');
+        var tabel = jQuery('#tabel-produk');
+        if (tabel.length && !jQuery.fn.DataTable.isDataTable(tabel)) {
+            tabel.DataTable({
+                serverSide: true,
+                ajax: { url: 'api.php?aksi=produk.tabel', data: function (d) { d.draw = d.draw || 0; } },
+                pageLength: 10,
+                lengthChange: false,
+                order: [],
+                columns: [
+                    { data: 'nama' },
+                    { data: 'kategori' },
+                    { data: 'barcode', render: function (d) { return d ? '<span class="font-num small">' + d + '</span>' : '<span class="text-muted">—</span>'; } },
+                    { data: 'supplier_nama', render: function (d) { return d ? d : '<span class="text-muted">—</span>'; } },
+                    { data: 'harga', className: 'text-end font-num', render: function (d) { return rupiah(d); } },
+                    {
+                        data: 'stok',
+                        className: 'text-center',
+                        render: function (d, t, row) {
+                            var stok = Number(d);
+                            var min = Number(row.stok_minimum) || 10; // fallback ambang umum
+                            if (stok <= min) {
+                                return '<span class="' + (stok <= 0 ? 'stok-habis' : 'stok-menipis') + '">' + stok + '</span>' +
+                                    (stok <= 0 ? ' (habis)' : ' (menipis)');
+                            }
+                            return stok;
                         }
-                        return stok;
+                    },
+                    {
+                        data: 'id',
+                        className: 'text-center',
+                        orderable: false,
+                        render: function (d) {
+                            return '<span class="d-inline-flex gap-1">' +
+                                '<form method="post" class="d-inline">' +
+                                '<input type="hidden" name="aksi" value="edit_produk">' +
+                                '<input type="hidden" name="produk_id" value="' + d + '">' +
+                                '<button type="submit" class="btn btn-sm btn-outline-primary" title="Edit"><i class="bi bi-pencil me-1"></i>Edit</button>' +
+                                '</form>' +
+                                '<form method="post" class="d-inline" onsubmit="return confirm(\'Hapus produk ini?\');">' +
+                                '<input type="hidden" name="aksi" value="hapus_produk">' +
+                                '<input type="hidden" name="produk_id" value="' + d + '">' +
+                                '<button type="submit" class="btn btn-sm btn-outline-danger" title="Hapus"><i class="bi bi-trash me-1"></i>Hapus</button>' +
+                                '</form></span>';
+                        }
                     }
-                },
-                {
-                    data: 'id',
-                    className: 'text-center',
-                    orderable: false,
-                    render: function (d) {
-                        return '<span class="d-inline-flex gap-1">' +
-                            '<form method="post" class="d-inline">' +
-                            '<input type="hidden" name="aksi" value="edit_produk">' +
-                            '<input type="hidden" name="produk_id" value="' + d + '">' +
-                            '<button type="submit" class="btn btn-sm btn-outline-primary" title="Edit"><i class="bi bi-pencil me-1"></i>Edit</button>' +
-                            '</form>' +
-                            '<form method="post" class="d-inline" onsubmit="return confirm(\'Hapus produk ini?\');">' +
-                            '<input type="hidden" name="aksi" value="hapus_produk">' +
-                            '<input type="hidden" name="produk_id" value="' + d + '">' +
-                            '<button type="submit" class="btn btn-sm btn-outline-danger" title="Hapus"><i class="bi bi-trash me-1"></i>Hapus</button>' +
-                            '</form></span>';
-                    }
+                ],
+                language: {
+                    url: 'assets/vendor/datatables/id.json'
                 }
-            ],
-            language: {
-                url: 'assets/vendor/datatables/id.json'
-            }
-        });
-    })();
+            });
+        }
 
-    // Toggle field "Harga per gram" sesuai satuan yang dipilih.
-    (function () {
-        var pilih = document.querySelectorAll('select[name="satuan"]');
-        pilih.forEach(function (sel) {
+        // Toggle field "Harga per gram" sesuai satuan yang dipilih.
+        document.querySelectorAll('select[name="satuan"]').forEach(function (sel) {
             function sinkron() {
                 var blok = document.getElementById('blok-harga-per-gram');
                 if (!blok) return;
@@ -881,43 +897,33 @@ $stokMenipis = Produk::cariStokMenipis();
             sel.addEventListener('change', sinkron);
             sinkron();
         });
-    })();
 
-    // Harga beli otomatis: saat supplier dipilih, ambil harga beli terakhir
-    // produk dari supplier itu (riwayat pembelian) lalu isi field-nya.
-    (function () {
+        // Harga beli otomatis: saat supplier dipilih, ambil harga beli terakhir.
         var supplier = document.querySelector('select[name="supplier_id"]');
         var hargaBeli = document.getElementById('harga-beli-produk');
-        if (!supplier || !hargaBeli) return;
+        if (supplier && hargaBeli) {
+            function ambilProdukId() {
+                var meta = document.querySelector('meta[name="produk-id-edit"]');
+                return meta ? parseInt(meta.getAttribute('content'), 10) : 0;
+            }
 
-        // Produk yang sedang diedit (edit mode) — untuk tahu produk_id.
-        function ambilProdukId() {
-            // Form edit: produk_id tidak ada di form; pakai id dari tombol
-            // edit yang disimpan di session server. Untuk tambah: 0 (kosong).
-            var meta = document.querySelector('meta[name="produk-id-edit"]');
-            return meta ? parseInt(meta.getAttribute('content'), 10) : 0;
+            function sinkronHargaBeli() {
+                var supplierId = parseInt(supplier.value, 10) || 0;
+                var produkId = ambilProdukId();
+                if (produkId <= 0) return;
+                fetch('api.php?aksi=produk.harga_beli&produk_id=' + produkId + '&supplier_id=' + supplierId)
+                    .then(function (r) { return r.json(); })
+                    .then(function (d) {
+                        if (d && typeof d.harga_beli === 'number') hargaBeli.value = d.harga_beli;
+                    })
+                    .catch(function () { /* biarkan */ });
+            }
+
+            supplier.addEventListener('change', sinkronHargaBeli);
         }
+    }
 
-        function sinkronHargaBeli() {
-            var supplierId = parseInt(supplier.value, 10) || 0;
-            var produkId = ambilProdukId();
-
-            // Kalau bukan mode edit, tidak ada produk yang dipilih —
-            // harga beli diisi dari supplier saja tidak bisa (butuh produk).
-            if (produkId <= 0) return;
-
-            fetch('api.php?aksi=produk.harga_beli&produk_id=' + produkId + '&supplier_id=' + supplierId)
-                .then(function (r) { return r.json(); })
-                .then(function (d) {
-                    if (d && typeof d.harga_beli === 'number') {
-                        hargaBeli.value = d.harga_beli;
-                    }
-                })
-                .catch(function () { /* biarkan */ });
-        }
-
-        supplier.addEventListener('change', sinkronHargaBeli);
-    })();
+    document.addEventListener('DOMContentLoaded', initAdmin);
 </script>
 </body>
 </html>

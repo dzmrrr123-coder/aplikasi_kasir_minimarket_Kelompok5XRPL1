@@ -97,6 +97,106 @@ function renderFragmentKeranjang(): string
 }
 
 /**
+ * Render grid "Produk Lain" dari DB (stok aktual). Dipakai ulang setelah
+ * pembayaran supaya stok di daftar cepat ikut ter-refresh tanpa reload.
+ */
+function renderFragmentProduk(): string
+{
+    $produkSemua = Produk::semua();
+
+    ob_start();
+    ?>
+    <div id="fragmen-produk">
+    <div class="card pos-card">
+        <div class="card-header bg-white">Produk Lain</div>
+        <div class="card-body">
+            <?php if ($produkSemua === []): ?>
+                <div class="text-muted small">Belum ada produk tersimpan.</div>
+            <?php else: ?>
+                <div class="row g-3">
+                    <?php foreach ($produkSemua as $p): ?>
+                        <div class="col-sm-6 col-md-4 col-xl-3">
+                            <div class="kiosk-produk d-flex flex-column gap-1 h-100">
+                                <?php if ($p->getGambar() !== ''): ?>
+                                    <img
+                                        src="uploads/<?= htmlspecialchars($p->getGambar()) ?>"
+                                        alt="<?= htmlspecialchars($p->getNama()) ?>"
+                                        class="kiosk-produk-gambar rounded"
+                                        loading="lazy"
+                                        onerror="this.style.display='none';"
+                                    >
+                                <?php endif; ?>
+                                <div class="kiosk-produk-nama text-truncate" title="<?= htmlspecialchars($p->getNama()) ?>">
+                                    <?= htmlspecialchars($p->getNama()) ?>
+                                </div>
+                                <div class="kiosk-produk-harga font-num">
+                                    <?= $p->getSatuan() === 'gram'
+                                        ? formatRupiah($p->getHargaPerGram()) . '/gr'
+                                        : formatRupiah($p->getHarga()) ?>
+                                </div>
+                                <div class="small <?= $p->getStok() > 0 ? 'text-success' : 'text-danger' ?>">
+                                    stok <?= $p->getStok() ?> <?= $p->getSatuan() === 'gram' ? 'gr' : '' ?>
+                                </div>
+                                <form method="post" class="d-flex flex-column gap-1 mt-auto" data-aksi="tambah_item">
+                                    <input type="hidden" name="aksi" value="tambah_item">
+                                    <input type="hidden" name="produk_id" value="<?= $p->getId() ?>">
+                                    <?php if ($p->getSatuan() === 'gram'): ?>
+                                        <div class="d-flex gap-1">
+                                            <input
+                                                type="number"
+                                                name="qty"
+                                                class="form-control form-control-sm qty-input"
+                                                value="100"
+                                                min="1"
+                                                step="0.001"
+                                                max="<?= max(1, $p->getStok()) ?>"
+                                                placeholder="Berat (gr)"
+                                                required
+                                                data-produk-gram="<?= $p->getId() ?>"
+                                            >
+                                            <button
+                                                type="button"
+                                                class="btn btn-sm btn-outline-primary flex-shrink-0"
+                                                data-timbang="<?= $p->getId() ?>"
+                                                title="Ambil berat dari timbangan"
+                                            >
+                                                <i class="bi bi-bullseye"></i>
+                                            </button>
+                                        </div>
+                                    <?php else: ?>
+                                        <div class="d-flex gap-1">
+                                            <input
+                                                type="number"
+                                                name="qty"
+                                                class="form-control form-control-sm qty-input"
+                                                value="1"
+                                                min="1"
+                                                max="<?= max(1, $p->getStok()) ?>"
+                                                required
+                                            >
+                                            <button
+                                                type="submit"
+                                                class="btn btn-sm btn-success flex-shrink-0"
+                                                <?= $p->getStok() < 1 ? 'disabled' : '' ?>
+                                            >
+                                                <i class="bi bi-cart-plus"></i>
+                                            </button>
+                                        </div>
+                                    <?php endif; ?>
+                                </form>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
+    </div>
+    <?php
+    return (string) ob_get_clean();
+}
+
+/**
  * Render card keranjang (kolom kiri) dari session.
  */
 function renderFragmentKeranjangKiri(): string
@@ -403,6 +503,7 @@ function renderFragmentKananKiosk(): string
                         class="form-control form-control-sm font-num"
                         placeholder="Scan telepon member"
                         autocomplete="off"
+                        aria-label="Scan telepon member"
                     >
                     <button type="submit" class="btn btn-sm btn-outline-primary flex-shrink-0" title="Pasang member">
                         <i class="bi bi-person-plus"></i>
@@ -630,7 +731,7 @@ function aksiTambahItem(int $produkId, float $qty, int $kasirId): void
         $keranjang[$kunci] = [
             'produk_id' => $produkId,
             'nama'      => $produk->getNama(),
-            'harga'     => $produk->getHarga(),
+            'harga'     => $produk->getHargaEfektif(),
             'satuan'    => $produk->getSatuan(),
             'qty'       => $qty,
             'stok'      => $produk->getStok(),
@@ -688,78 +789,85 @@ function aksiBayar(string $metode, float $jumlahDibayar, int $kasirId, string $n
 
     $_SESSION['bayar_lock'] = true;
 
-    $transaksi = new Transaksi(['kasir_id' => $kasirId]);
+    try {
+        $transaksi = new Transaksi(['kasir_id' => $kasirId]);
 
-    // Member transaksi (bila dipasang lewat scan telepon).
-    $memberId = (int) ($_SESSION['member_id'] ?? 0);
+        // Member transaksi (bila dipasang lewat scan telepon).
+        $memberId = (int) ($_SESSION['member_id'] ?? 0);
 
-    if ($memberId > 0) {
-        $transaksi->setMemberId($memberId);
-    }
-
-    foreach ($keranjang as $item) {
-        $produk = Produk::cari($item['produk_id']);
-
-        if ($produk === null) {
-            redirectSelf('Produk tidak ditemukan, keranjang tidak valid.', 'danger');
+        if ($memberId > 0) {
+            $transaksi->setMemberId($memberId);
         }
 
-        $transaksi->tambahItem($produk, $item['qty']);
-    }
+        foreach ($keranjang as $item) {
+            $produk = Produk::cari($item['produk_id']);
 
-    // Diskon hanya dipakai bila masih valid dan kodenya tersimpan.
-    $diskonId = $_SESSION['diskon_id'] ?? null;
+            if ($produk === null) {
+                throw new \RuntimeException('Produk tidak ditemukan, keranjang tidak valid.');
+            }
 
-    if ($diskonId !== null) {
-        $diskon = Diskon::cari((int) $diskonId);
-
-        if ($diskon !== null) {
-            $transaksi->terapkanDiskon($diskon);
+            $transaksi->tambahItem($produk, $item['qty']);
         }
+
+        // Diskon hanya dipakai bila masih valid dan kodenya tersimpan.
+        $diskonId = $_SESSION['diskon_id'] ?? null;
+
+        if ($diskonId !== null) {
+            $diskon = Diskon::cari((int) $diskonId);
+
+            if ($diskon !== null) {
+                $transaksi->terapkanDiskon($diskon);
+            }
+        }
+
+        // Hitung total SEKALI setelah item & diskon diset. hitungTotal() bersifat
+        // idempotent (diskon & pajak diterapkan dari state saat ini), jadi
+        // memanggilnya di prosesPembayaran() tidak akan mendobel diskon.
+        $transaksi->hitungTotal();
+
+        $pembayaran = $metode === 'non_tunai'
+            ? new PembayaranNonTunai(['jumlah' => $jumlahDibayar])
+            : new PembayaranTunai(['jumlah' => $jumlahDibayar]);
+
+        // Strategy Pattern: injeksi strategi pembayaran via setter (DI).
+        $transaksi->setMetodePembayaran($pembayaran);
+
+        // Observer Pattern: daftarkan observer pasca-penyelesaian.
+        // Struk menyiapkan JSON struk, LaporanPenjualan mencatat rekap ke DB.
+        $strukObserver = new Struk($transaksi);
+        $transaksi->attach($strukObserver);
+        $transaksi->attach(new LaporanPenjualan());
+
+        // Jalur sukses: proses pembayaran -> simpan + update stok + struk.
+        $kasir = new Kasir(['id' => $kasirId, 'nama' => $namaUser]);
+        $kasir->prosesTransaksi($transaksi);
+        $selesai = $transaksi->prosesPembayaran();
+
+        if (!$selesai) {
+            unset($_SESSION['bayar_lock']);
+            redirectSelf('Pembayaran gagal diproses.', 'danger');
+        }
+
+        // Struk observer sudah menyiapkan JSON via notify(); teks struk
+        // tetap dihasilkan dari objek Struk yang sama.
+        $struk = $strukObserver->cetak();
+
+        // Keranjang & diskon dibersihkan setelah transaksi selesai.
+        $_SESSION['keranjang'] = [];
+        unset(
+            $_SESSION['diskon_id'],
+            $_SESSION['diskon_jenis'],
+            $_SESSION['diskon_nilai'],
+            $_SESSION['member_id'],
+            $_SESSION['struk'],
+            $_SESSION['bayar_lock']
+        );
+        $_SESSION['struk'] = $struk;
+    } catch (\Throwable $e) {
+        // Pastikan lock dilepas supaya kasir tidak terjebak state "sedang diproses".
+        unset($_SESSION['bayar_lock']);
+        redirectSelf(pesanErrorRamah($e), 'danger');
     }
-
-    // Hitung total SEKALI setelah item & diskon diset. hitungTotal() bersifat
-    // idempotent (diskon & pajak diterapkan dari state saat ini), jadi
-    // memanggilnya di prosesPembayaran() tidak akan mendobel diskon.
-    $transaksi->hitungTotal();
-
-    $pembayaran = $metode === 'non_tunai'
-        ? new PembayaranNonTunai(['jumlah' => $jumlahDibayar])
-        : new PembayaranTunai(['jumlah' => $jumlahDibayar]);
-
-    // Strategy Pattern: injeksi strategi pembayaran via setter (DI).
-    $transaksi->setMetodePembayaran($pembayaran);
-
-    // Observer Pattern: daftarkan observer pasca-penyelesaian.
-    // Struk menyiapkan JSON struk, LaporanPenjualan mencatat rekap ke DB.
-    $strukObserver = new Struk($transaksi);
-    $transaksi->attach($strukObserver);
-    $transaksi->attach(new LaporanPenjualan());
-
-    // Jalur sukses: proses pembayaran -> simpan + update stok + struk.
-    $kasir = new Kasir(['id' => $kasirId, 'nama' => $namaUser]);
-    $kasir->prosesTransaksi($transaksi);
-    $selesai = $transaksi->prosesPembayaran();
-
-    if (!$selesai) {
-        redirectSelf('Pembayaran gagal diproses.', 'danger');
-    }
-
-    // Struk observer sudah menyiapkan JSON via notify(); teks struk
-    // tetap dihasilkan dari objek Struk yang sama.
-    $struk = $strukObserver->cetak();
-
-    // Keranjang & diskon dibersihkan setelah transaksi selesai.
-    $_SESSION['keranjang'] = [];
-    unset(
-        $_SESSION['diskon_id'],
-        $_SESSION['diskon_jenis'],
-        $_SESSION['diskon_nilai'],
-        $_SESSION['member_id'],
-        $_SESSION['struk'],
-        $_SESSION['bayar_lock']
-    );
-    $_SESSION['struk'] = $struk;
 
     // AJAX: kirim struk + fragment keranjang kosong supaya UI langsung
     // menampilkan struk tanpa reload. Non-AJAX: redirect seperti biasa.
@@ -769,12 +877,17 @@ function aksiBayar(string $metode, float $jumlahDibayar, int $kasirId, string $n
         redirectSelf('Pembayaran berhasil. Struk siap dicetak.', 'success');
     }
 
+    // Jangan bawa nominal pembayaran ke fragment kosong — nanti "Kembalian"
+    // tampak sebesar nominal bayar padahal keranjang sudah kosong/total 0.
+    unset($_POST['jumlah_dibayar']);
+
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode([
         'pesan'    => 'Pembayaran berhasil. Struk siap dicetak.',
         'tipe'     => 'success',
         'struk'    => $struk,
         'fragment' => renderFragmentKeranjang(),
+        'produk'   => renderFragmentProduk(),
     ]);
     exit;
 }
@@ -860,11 +973,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $kasFisik = (float) ($_POST['kas_fisik'] ?? 0);
                 $catatan = trim((string) ($_POST['catatan_shift'] ?? ''));
                 $shiftAktif->tutup($kasFisik, $catatan);
+                $selisih = (float) $shiftAktif->getSelisih();
                 \App\Models\AuditLog::catat('tutup_kas', 'shift_kasir', (int) $shiftAktif->getId(), [
                     'kas_fisik' => $kasFisik,
-                    'selisih'   => $shiftAktif->getSelisih(),
+                    'selisih'   => $selisih,
                 ]);
-                redirectSelf('Kas ditutup. Selisih: ' . formatRupiah((float) $shiftAktif->getSelisih()), 'success');
+                // Refresh global shiftAktif jadi null supaya fragment AJAX
+                // merender panel kanan kosong (kas sudah terkunci), bukan
+                // memakai objek shift lama yang statusnya sudah "tutup".
+                $shiftAktif = ShiftKasir::shiftAktif($userId);
+                redirectSelf('Kas ditutup. Selisih: ' . formatRupiah($selisih), 'success');
             } catch (\Throwable $e) {
                 redirectSelf(pesanErrorRamah($e), 'danger');
             }
@@ -994,18 +1112,95 @@ $produkSemua = Produk::semua();
     <meta name="csrf-token" content="<?= htmlspecialchars(csrf_token()) ?>">
     <link href="assets/vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
     <link href="assets/vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
-    <link href="assets/theme.css" rel="stylesheet">
+    <link href="assets/theme.css?v=20260818" rel="stylesheet">
     <style>
         .qty-input { max-width: 4.5rem; }
         .summary-total { font-size: 1.75rem; font-weight: 700; }
         .hasil-cari { min-height: 4.5rem; }
+        /* Toolbar pencarian kompak: barcode & pencarian nama terpisah. */
+        .pos-toolbar {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 0.75rem;
+            padding: 1rem;
+        }
+        .pos-toolbar-row {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        .pos-toolbar-row + .pos-toolbar-row {
+            margin-top: 0.75rem;
+            padding-top: 0.75rem;
+            border-top: 1px dashed var(--border);
+        }
+        .pos-toolbar-label {
+            flex: 0 0 auto;
+            min-width: 5rem;
+            margin: 0;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-muted);
+        }
+        .pos-toolbar-form {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+        /* Mobile: susun vertikal supaya tidak ada tombol yang terpotong. */
+        @media (max-width: 575.98px) {
+            .pos-toolbar-row {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .pos-toolbar-label {
+                min-width: 0;
+            }
+            .pos-toolbar-form {
+                flex-direction: column;
+                align-items: stretch;
+                width: 100%;
+            }
+            .pos-toolbar-form input {
+                width: 100%;
+                min-width: 0;
+            }
+            .pos-toolbar-form button {
+                width: 100%;
+            }
+        }
         @media (max-width: 991.98px) {
             .ringkasan { margin-top: 1.5rem; }
+        }
+        /* Overlay wajib buka kas: menutupi seluruh layar dengan blur,
+           tidak ada tombol tutup — hanya bisa ditutup setelah kas dibuka. */
+        .buka-kas-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 1080;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            background: rgba(15, 23, 42, 0.55);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+        }
+        .buka-kas-overlay.d-none { display: none !important; }
+        .buka-kas-card {
+            width: 100%;
+            max-width: 480px;
+            border: 0;
+            border-radius: 1rem;
+            box-shadow: 0 1.5rem 3rem rgba(0, 0, 0, 0.35);
+            overflow: hidden;
         }
         /* Print: hanya tampilkan struk terakhir */
         @media print {
             body { background: #fff; color: #000; }
-            .kiosk-wrapper, .kiosk-kiri, .kiosk-kanan, #flash-pesan { display: none !important; }
+            .kiosk-wrapper, .kiosk-kiri, .kiosk-kanan, #flash-pesan, .buka-kas-overlay { display: none !important; }
             #area-struk { display: block !important; border: 0; box-shadow: none; }
             #area-struk .card-header { display: none; }
             #area-struk pre {
@@ -1033,17 +1228,136 @@ $produkSemua = Produk::semua();
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Tutup"></button>
     </div>
 
-    <?php if ($wajibBukaKas): ?>
-        <!-- Wajib buka kas sebelum transaksi -->
-        <div class="card pos-card mb-4 border-warning" id="card-buka-kas">
+    <div class="pos-toolbar mb-4">
+        <div class="pos-toolbar-row">
+            <span class="pos-toolbar-label"><i class="bi bi-upc-scan me-1"></i>Barcode</span>
+            <form method="post" data-aksi="scan" class="pos-toolbar-form">
+                <input type="hidden" name="aksi" value="scan">
+                <input
+                    type="text"
+                    id="input-barcode"
+                    name="barcode"
+                    class="form-control font-num"
+                    placeholder="Scan barcode... (Enter untuk tambah)"
+                    autocomplete="off"
+                    aria-label="Scan barcode"
+                >
+                <button type="submit" class="btn btn-outline-primary text-nowrap" title="Tambah produk dari barcode">
+                    <i class="bi bi-upc-scan me-1"></i>Scan
+                </button>
+                <button
+                    type="button"
+                    id="btn-kamera-barcode"
+                    class="btn btn-success text-nowrap"
+                    title="Scan barcode pakai kamera"
+                >
+                    <i class="bi bi-camera me-1"></i>Kamera
+                </button>
+            </form>
+        </div>
+        <div id="kamera-status" class="small text-muted mb-0 d-none"></div>
+
+        <div class="pos-toolbar-row">
+            <span class="pos-toolbar-label"><i class="bi bi-search me-1"></i>Cari</span>
+            <form method="get" class="pos-toolbar-form">
+                <input
+                    type="search"
+                    name="cari"
+                    class="form-control"
+                    placeholder="Ketik nama produk lalu Enter..."
+                    value="<?= htmlspecialchars($_GET['cari'] ?? '') ?>"
+                    aria-label="Cari produk"
+                >
+                <button type="submit" class="btn btn-primary text-nowrap"><i class="bi bi-search me-1"></i>Cari</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="hasil-cari mb-4">
+        <?php if (isset($_GET['cari']) && trim($_GET['cari']) !== ''): ?>
+            <?php if ($produkDitemukan === null): ?>
+                <div class="text-danger">Produk tidak ditemukan.</div>
+            <?php else: ?>
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 border rounded p-2">
+                    <div class="d-flex align-items-center gap-2">
+                        <?php if ($produkDitemukan->getGambar() !== ''): ?>
+                            <img
+                                src="uploads/<?= htmlspecialchars($produkDitemukan->getGambar()) ?>"
+                                alt="<?= htmlspecialchars($produkDitemukan->getNama()) ?>"
+                                class="rounded border"
+                                style="width: 48px; height: 48px; object-fit: contain;"
+                                onerror="this.style.display='none';"
+                            >
+                        <?php endif; ?>
+                        <div>
+                            <strong><?= htmlspecialchars($produkDitemukan->getNama()) ?></strong>
+                            <span class="text-muted ms-2">
+                                <?= $produkDitemukan->getSatuan() === 'gram'
+                                    ? formatRupiah($produkDitemukan->getHargaPerGram()) . '/gr'
+                                    : formatRupiah($produkDitemukan->getHarga()) ?>
+                            </span>
+                            <span class="badge text-bg-<?= $produkDitemukan->getStok() > 0 ? 'success' : 'danger' ?> ms-2">
+                                stok <?= $produkDitemukan->getStok() ?> <?= $produkDitemukan->getSatuan() === 'gram' ? 'gr' : '' ?>
+                            </span>
+                        </div>
+                    </div>
+                    <form method="post" class="d-flex gap-2" data-aksi="tambah_item">
+                        <input type="hidden" name="aksi" value="tambah_item">
+                        <input type="hidden" name="produk_id" value="<?= $produkDitemukan->getId() ?>">
+                        <?php if ($produkDitemukan->getSatuan() === 'gram'): ?>
+                            <input
+                                type="number"
+                                name="qty"
+                                class="form-control qty-input"
+                                value="100"
+                                min="0.001"
+                                step="0.001"
+                                max="<?= max(1, $produkDitemukan->getStok()) ?>"
+                                placeholder="Berat (gr)"
+                                required
+                                data-produk-gram="<?= $produkDitemukan->getId() ?>"
+                            >
+                        <?php else: ?>
+                            <input
+                                type="number"
+                                name="qty"
+                                class="form-control qty-input"
+                                value="1"
+                                min="1"
+                                max="<?= max(1, $produkDitemukan->getStok()) ?>"
+                                required
+                            >
+                        <?php endif; ?>
+                        <button
+                            type="submit"
+                            class="btn btn-success text-nowrap"
+                            <?= $produkDitemukan->getStok() < 1 ? 'disabled' : '' ?>
+                        >
+                            <i class="bi bi-cart-plus me-1"></i>Tambah
+                        </button>
+                    </form>
+                </div>
+            <?php endif; ?>
+        <?php else: ?>
+            <div class="text-muted small">Gunakan kolom di atas untuk mencari produk, atau pilih dari daftar cepat di bawah.</div>
+        <?php endif; ?>
+    </div>
+
+    <!-- Overlay wajib buka kas: selalu ada di DOM dan disembunyikan via d-none
+         bila shift sudah terbuka. Dengan demikian pos.js dapat menampilkannya
+         kembali setelah tutup kas (aksi AJAX) tanpa reload penuh — sehingga
+         card "Buka Kas" tidak lagi tak muncul / tidak muncul berulang kali
+         ketika kasir keluar (logout) sebelum menutup shift. -->
+    <div class="buka-kas-overlay<?= $wajibBukaKas ? '' : ' d-none' ?>" id="card-buka-kas" role="dialog" aria-modal="true" aria-labelledby="buka-kas-judul">
+        <div class="card pos-card buka-kas-card">
             <div class="card-header bg-warning-subtle text-warning-emphasis">
-                <i class="bi bi-cash-stack me-1"></i>Buka Kas
+                <i class="bi bi-cash-stack me-1"></i><span id="buka-kas-judul">Buka Kas</span>
             </div>
-            <div class="card-body">
-                <p class="mb-3">Anda harus <strong>buka kas</strong> dulu sebelum mulai transaksi. Isi modal awal (uang di laci) untuk memulai shift.</p>
-                <form method="post" class="row g-2" data-aksi="buka_kas">
+            <div class="card-body p-4">
+                <p class="mb-4">Anda harus <strong>buka kas</strong> dulu sebelum mulai transaksi. Isi modal awal (uang di laci) untuk memulai shift.</p>
+                <form method="post" data-aksi="buka_kas">
                     <input type="hidden" name="aksi" value="buka_kas">
-                    <div class="col-md-4">
+                    <div class="mb-4">
                         <label for="modal-awal" class="form-label">Modal awal (Rp)</label>
                         <input
                             type="number"
@@ -1054,17 +1368,16 @@ $produkSemua = Produk::semua();
                             class="form-control form-control-lg font-num"
                             placeholder="cth: 100000"
                             required
+                            <?= $wajibBukaKas ? 'autofocus' : '' ?>
                         >
                     </div>
-                    <div class="col-md-8 d-flex align-items-end">
-                        <button type="submit" class="btn btn-success btn-lg">
-                            <i class="bi bi-cash-coin me-1"></i>Buka Kas & Mulai Transaksi
-                        </button>
-                    </div>
+                    <button type="submit" class="btn btn-success btn-lg w-100">
+                        <i class="bi bi-cash-coin me-1"></i>Buka Kas & Mulai Transaksi
+                    </button>
                 </form>
             </div>
         </div>
-    <?php endif; ?>
+    </div>
 
     <?php if ($struk !== ''): ?>
         <div class="card pos-card mb-4" id="area-struk">
@@ -1098,199 +1411,9 @@ $produkSemua = Produk::semua();
         </div>
     <?php endif; ?>
 
-    <div class="card pos-card mb-4">
-        <div class="card-header bg-white">Cari Produk</div>
-        <div class="card-body">
-            <!-- Scan barcode: auto-fokus & auto-submit saat Enter -->
-            <form method="post" data-aksi="scan" class="row g-2 mb-3">
-                <input type="hidden" name="aksi" value="scan">
-                <label for="input-barcode" class="col-auto col-form-label">
-                    <i class="bi bi-upc-scan"></i>
-                </label>
-                <div class="col">
-                    <input
-                        type="text"
-                        id="input-barcode"
-                        name="barcode"
-                        class="form-control font-num"
-                        placeholder="Scan barcode... (Enter untuk tambah)"
-                        autocomplete="off"
-                        aria-label="Scan barcode"
-                    >
-                </div>
-                <div class="col-auto">
-                    <button type="submit" class="btn btn-outline-primary" title="Tambah produk dari barcode">
-                        <i class="bi bi-upc-scan me-1"></i>Scan
-                    </button>
-                </div>
-                <div class="col-auto">
-                    <button
-                        type="button"
-                        id="btn-kamera-barcode"
-                        class="btn btn-success"
-                        title="Scan barcode pakai kamera"
-                    >
-                        <i class="bi bi-camera me-1"></i>Kamera
-                    </button>
-                </div>
-            </form>
-            <div id="kamera-status" class="small text-muted mb-2 d-none"></div>
-
-            <form method="get" class="row g-2">
-                <div class="col">
-                    <input
-                        type="search"
-                        name="cari"
-                        class="form-control"
-                        placeholder="Ketik nama produk lalu Enter..."
-                        value="<?= htmlspecialchars($_GET['cari'] ?? '') ?>"
-                        aria-label="Cari produk"
-                    >
-                </div>
-                <div class="col-auto">
-                    <button type="submit" class="btn btn-primary"><i class="bi bi-search me-1"></i>Cari</button>
-                </div>
-            </form>
-
-            <div class="hasil-cari mt-3">
-                <?php if (isset($_GET['cari']) && trim($_GET['cari']) !== ''): ?>
-                    <?php if ($produkDitemukan === null): ?>
-                        <div class="text-danger">Produk tidak ditemukan.</div>
-                    <?php else: ?>
-                        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 border rounded p-2">
-                            <div class="d-flex align-items-center gap-2">
-                                <?php if ($produkDitemukan->getGambar() !== ''): ?>
-                                    <img
-                                        src="uploads/<?= htmlspecialchars($produkDitemukan->getGambar()) ?>"
-                                        alt="<?= htmlspecialchars($produkDitemukan->getNama()) ?>"
-                                        class="rounded border"
-                                        style="width: 48px; height: 48px; object-fit: contain;"
-                                        onerror="this.style.display='none';"
-                                    >
-                                <?php endif; ?>
-                                <div>
-                                    <strong><?= htmlspecialchars($produkDitemukan->getNama()) ?></strong>
-                                    <span class="text-muted ms-2"><?= formatRupiah($produkDitemukan->getHarga()) ?></span>
-                                    <span class="badge text-bg-<?= $produkDitemukan->getStok() > 0 ? 'success' : 'danger' ?> ms-2">
-                                        stok <?= $produkDitemukan->getStok() ?>
-                                    </span>
-                                </div>
-                            </div>
-                            <form method="post" class="d-flex gap-2" data-aksi="tambah_item">
-                                <input type="hidden" name="aksi" value="tambah_item">
-                                <input type="hidden" name="produk_id" value="<?= $produkDitemukan->getId() ?>">
-                                <input
-                                    type="number"
-                                    name="qty"
-                                    class="form-control qty-input"
-                                    value="1"
-                                    min="1"
-                                    max="<?= max(1, $produkDitemukan->getStok()) ?>"
-                                    required
-                                >
-                                <button
-                                    type="submit"
-                                    class="btn btn-success"
-                                    <?= $produkDitemukan->getStok() < 1 ? 'disabled' : '' ?>
-                                >
-                                    <i class="bi bi-cart-plus me-1"></i>Tambah
-                                </button>
-                            </form>
-                        </div>
-                    <?php endif; ?>
-                <?php else: ?>
-                    <div class="text-muted small">Gunakan kolom di atas untuk mencari produk, atau pilih dari daftar cepat di bawah.</div>
-                <?php endif; ?>
-            </div>
-        </div>
-    </div>
-
     <div id="fragmen-keranjang-kiri"><?= renderFragmentKeranjangKiri() ?></div>
 
-    <div class="card pos-card">
-        <div class="card-header bg-white">Produk Lain</div>
-        <div class="card-body">
-            <?php if ($produkSemua === []): ?>
-                <div class="text-muted small">Belum ada produk tersimpan.</div>
-            <?php else: ?>
-                <div class="row g-2">
-                    <?php foreach ($produkSemua as $p): ?>
-                        <div class="col-sm-6 col-md-4 col-xl-3">
-                            <div class="kiosk-produk d-flex flex-column gap-1 h-100">
-                                <?php if ($p->getGambar() !== ''): ?>
-                                    <img
-                                        src="uploads/<?= htmlspecialchars($p->getGambar()) ?>"
-                                        alt="<?= htmlspecialchars($p->getNama()) ?>"
-                                        class="kiosk-produk-gambar rounded"
-                                        loading="lazy"
-                                        onerror="this.style.display='none';"
-                                    >
-                                <?php endif; ?>
-                                <div class="kiosk-produk-nama text-truncate" title="<?= htmlspecialchars($p->getNama()) ?>">
-                                    <?= htmlspecialchars($p->getNama()) ?>
-                                </div>
-                                <div class="kiosk-produk-harga font-num">
-                                    <?= $p->getSatuan() === 'gram'
-                                        ? formatRupiah($p->getHargaPerGram()) . '/gr'
-                                        : formatRupiah($p->getHarga()) ?>
-                                </div>
-                                <div class="small <?= $p->getStok() > 0 ? 'text-success' : 'text-danger' ?>">
-                                    stok <?= $p->getStok() ?> <?= $p->getSatuan() === 'gram' ? 'gr' : '' ?>
-                                </div>
-                                <form method="post" class="d-flex flex-column gap-1 mt-auto" data-aksi="tambah_item">
-                                    <input type="hidden" name="aksi" value="tambah_item">
-                                    <input type="hidden" name="produk_id" value="<?= $p->getId() ?>">
-                                    <?php if ($p->getSatuan() === 'gram'): ?>
-                                        <div class="d-flex gap-1">
-                                            <input
-                                                type="number"
-                                                name="qty"
-                                                class="form-control form-control-sm qty-input"
-                                                value="100"
-                                                min="1"
-                                                step="0.001"
-                                                max="<?= max(1, $p->getStok()) ?>"
-                                                placeholder="Berat (gr)"
-                                                required
-                                                data-produk-gram="<?= $p->getId() ?>"
-                                            >
-                                            <button
-                                                type="button"
-                                                class="btn btn-sm btn-outline-primary flex-shrink-0"
-                                                data-timbang="<?= $p->getId() ?>"
-                                                title="Ambil berat dari timbangan"
-                                            >
-                                                <i class="bi bi-bullseye"></i>
-                                            </button>
-                                        </div>
-                                    <?php else: ?>
-                                        <div class="d-flex gap-1">
-                                            <input
-                                                type="number"
-                                                name="qty"
-                                                class="form-control form-control-sm qty-input"
-                                                value="1"
-                                                min="1"
-                                                max="<?= max(1, $p->getStok()) ?>"
-                                                required
-                                            >
-                                            <button
-                                                type="submit"
-                                                class="btn btn-sm btn-success flex-shrink-0"
-                                                <?= $p->getStok() < 1 ? 'disabled' : '' ?>
-                                            >
-                                                <i class="bi bi-cart-plus"></i>
-                                            </button>
-                                        </div>
-                                    <?php endif; ?>
-                                </form>
-                            </div>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
-            <?php endif; ?>
-        </div>
-    </div>
+    <?= renderFragmentProduk() ?>
 
     </div><!-- /.kiosk-kiri -->
 
@@ -1302,9 +1425,9 @@ $produkSemua = Produk::semua();
 
 
 <script src="assets/vendor/bootstrap/bootstrap.bundle.min.js"></script>
-<script src="assets/pos.js?v=3"></script>
-<script src="assets/hardware.js"></script>
-<script src="assets/hardware-pos.js"></script>
+<script src="assets/pos.js?v=20260818c"></script>
+<script src="assets/hardware.js?v=20260818"></script>
+<script src="assets/hardware-pos.js?v=20260818"></script>
 
 <!-- Modal void item (butuh PIN supervisor) -->
 <div class="modal fade" id="modal-void" tabindex="-1" aria-labelledby="modal-void-label" aria-hidden="true">
@@ -1422,7 +1545,7 @@ $produkSemua = Produk::semua();
 </div>
 
 <script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
-<script src="assets/scanner-pos.js"></script>
-<script src="assets/theme.js"></script>
+<script src="assets/scanner-pos.js?v=20260818"></script>
+<script src="assets/theme.js?v=20260818"></script>
 </body>
 </html>

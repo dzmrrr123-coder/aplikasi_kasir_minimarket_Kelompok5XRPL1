@@ -392,8 +392,10 @@ class Member implements DataReporter
         $bind = [];
 
         if ($cari !== '') {
-            $where = 'WHERE nama LIKE :cari OR telepon LIKE :cari OR nomor_member LIKE :cari';
-            $bind[':cari'] = '%' . $cari . '%';
+            $where = 'WHERE nama LIKE :cari_nama OR telepon LIKE :cari_telepon OR nomor_member LIKE :cari_nomor';
+            $bind[':cari_nama'] = '%' . $cari . '%';
+            $bind[':cari_telepon'] = '%' . $cari . '%';
+            $bind[':cari_nomor'] = '%' . $cari . '%';
         }
 
         $pdo = Database::connect();

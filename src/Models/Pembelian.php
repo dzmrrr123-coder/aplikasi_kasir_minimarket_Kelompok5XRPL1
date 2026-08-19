@@ -177,9 +177,14 @@ class Pembelian implements DataReporter
                     ':subtotal'     => $row['subtotal'],
                 ]);
 
+                // Stok kolom integer, qty boleh pecahan (produk gram).
+                // Bulatkan ke satuan terkecil & minimum 1 supaya mutasi stok
+                // konsisten, tidak bergantung pembulatan implisit MySQL.
+                $qtyStok = max(1, (int) round($row['qty']));
+
                 // Update stok & harga beli produk secara atomik.
                 $stmtUpdateStok->execute([
-                    ':qty'        => $row['qty'],
+                    ':qty'        => $qtyStok,
                     ':harga_beli' => $row['harga_beli'],
                     ':id'         => (int) $row['produk']->getId(),
                 ]);
@@ -296,8 +301,9 @@ class Pembelian implements DataReporter
         $bind = [];
 
         if ($cari !== '') {
-            $where = 'WHERE s.nama LIKE :cari OR p.keterangan LIKE :cari';
-            $bind[':cari'] = '%' . $cari . '%';
+            $where = 'WHERE s.nama LIKE :cari_nama OR p.keterangan LIKE :cari_keterangan';
+            $bind[':cari_nama'] = '%' . $cari . '%';
+            $bind[':cari_keterangan'] = '%' . $cari . '%';
         }
 
         $pdo = Database::connect();

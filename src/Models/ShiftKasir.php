@@ -323,8 +323,9 @@ class ShiftKasir implements DataReporter
         $bind = [];
 
         if ($cari !== '') {
-            $where = 'WHERE u.nama LIKE :cari OR s.status LIKE :cari';
-            $bind[':cari'] = '%' . $cari . '%';
+            $where = 'WHERE u.nama LIKE :cari_nama OR s.status LIKE :cari_status';
+            $bind[':cari_nama'] = '%' . $cari . '%';
+            $bind[':cari_status'] = '%' . $cari . '%';
         }
 
         $pdo = Database::connect();

@@ -59,6 +59,13 @@ $nama = $_SESSION['nama'] ?? 'Admin';
 $pesan = $_SESSION['pesan'] ?? '';
 unset($_SESSION['pesan']);
 
+// Batal edit (via tautan).
+if (isset($_GET['batal_edit'])) {
+    unset($_SESSION['edit_member_id']);
+    header('Location: member.php');
+    exit;
+}
+
 function redirectSelf(string $pesan): never
 {
     $_SESSION['pesan'] = $pesan;
@@ -276,7 +283,7 @@ $aktif = 'member';
                                 <?= $editMember !== null ? 'Simpan Perubahan' : 'Tambah Member' ?>
                             </button>
                             <?php if ($editMember !== null): ?>
-                                <a href="member.php" class="btn btn-outline-secondary"><i class="bi bi-x-lg me-1"></i>Batal</a>
+                                <a href="?batal_edit=1" class="btn btn-outline-secondary"><i class="bi bi-x-lg me-1"></i>Batal</a>
                             <?php endif; ?>
                         </div>
                     </form>
@@ -317,6 +324,7 @@ $aktif = 'member';
 <script src="assets/vendor/datatables/dataTables.min.js"></script>
 <script src="assets/vendor/datatables/dataTables.bootstrap5.min.js"></script>
 <script src="assets/theme.js"></script>
+<script src="assets/crud-reload.js"></script>
 <script>
     // Tabel member via DataTables server-side.
     (function () {

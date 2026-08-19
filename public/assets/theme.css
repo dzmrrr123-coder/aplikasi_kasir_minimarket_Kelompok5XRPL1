@@ -60,6 +60,20 @@
 
     --font-base: "Segoe UI", system-ui, -apple-system, sans-serif;
     --font-num: "Consolas", "SF Mono", "JetBrains Mono", "Courier New", monospace;
+
+    /* Type scale — product UI: hirarki kompak dengan kontras berat & warna,
+       bukan lompatan ukuran dramatis. */
+    --text-xs: 0.75rem;
+    --text-sm: 0.875rem;
+    --text-base: 0.95rem;
+    --text-md: 1.125rem;
+    --text-lg: 1.375rem;
+    --text-xl: 1.75rem;
+    --leading-tight: 1.25;
+    --leading-base: 1.5;
+    --leading-relaxed: 1.65;
+    --measure-body: 68ch;
+
     --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.06);
     --shadow-hover: 0 0.5rem 1.25rem rgba(15, 23, 42, 0.12);
 }
@@ -97,15 +111,40 @@ body {
     background-color: var(--bg);
     color: var(--text);
     font-family: var(--font-base);
-    font-size: 0.95rem;
+    font-size: var(--text-base);
+    line-height: var(--leading-base);
     -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
     transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Operator yang meminta gerakan minimal tidak menerima transisi dekoratif. */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
 }
 
 h1, h2, h3, h4, h5, h6 {
     color: var(--text);
     font-weight: 700;
     letter-spacing: -0.01em;
+    line-height: var(--leading-tight);
+    text-wrap: balance;
+}
+
+h1 { font-size: var(--text-xl); }
+h2 { font-size: var(--text-lg); }
+h3 { font-size: var(--text-md); }
+h4, h5, h6 { font-size: var(--text-base); }
+
+p {
+    max-width: var(--measure-body);
 }
 
 a {
@@ -121,13 +160,15 @@ a:hover {
     font-weight: 700;
     font-variant-numeric: tabular-nums;
     letter-spacing: -0.02em;
+    line-height: var(--leading-tight);
 }
 
 /* ============================================================
    NAVBAR
    ============================================================ */
 .pos-navbar {
-    background: linear-gradient(90deg, var(--brand-primary-darker) 0%, var(--brand-primary-dark) 55%, var(--brand-primary) 100%);
+    background: var(--brand-primary-darker);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
 }
 
@@ -251,7 +292,7 @@ a:hover {
 }
 
 .pos-card > .card-header.bg-success {
-    background: linear-gradient(90deg, var(--brand-success-dark) 0%, var(--brand-success) 100%) !important;
+    background: var(--brand-success-dark) !important;
     color: #ffffff;
     border-bottom: 0;
 }
@@ -269,10 +310,59 @@ a:hover {
 .btn {
     border-radius: var(--radius);
     font-weight: 600;
-    transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.05s ease;
+    transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+}
+.btn:hover {
+    transform: translateY(-1px);
 }
 .btn:active {
-    transform: translateY(1px);
+    transform: translateY(0) scale(0.98);
+}
+
+/* Disabled: tidak tersentuh, dengan kursor yang menjelaskan status. */
+.btn:disabled,
+.btn.disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Loading inline: teks berubah jadi "Memproses..." dengan titik berjalan. */
+.btn.is-loading {
+    position: relative;
+    color: transparent !important;
+    pointer-events: none;
+}
+.btn.is-loading::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    color: var(--text, #fff);
+    font-size: 0.875rem;
+    animation: btn-loading-dots 1.2s steps(4, end) infinite;
+}
+@keyframes btn-loading-dots {
+    0%   { content: ""; }
+    25%  { content: "."; }
+    50%  { content: ".."; }
+    75%  { content: "..."; }
+    100% { content: "..."; }
+}
+
+/* Spinner kecil untuk area menunggu (fetch riwayat, dsb.).
+   Rotasi 800ms konsisten dengan timing reference motion. */
+.spinner {
+    width: 1rem;
+    height: 1rem;
+    border: 2px solid var(--border);
+    border-top-color: var(--brand-primary);
+    border-radius: 50%;
+    animation: pos-spin 0.8s linear infinite;
+}
+@keyframes pos-spin {
+    to { transform: rotate(360deg); }
 }
 
 .btn-primary {
@@ -394,6 +484,30 @@ a:hover {
     color: var(--text);
 }
 
+/* Tombol: fokus kasat mata & konsisten dengan bahasa form-control. */
+.btn:focus-visible {
+    outline: 2px solid var(--brand-primary);
+    outline-offset: 2px;
+}
+
+/* Tombol kecil yang hanya berisi ikon tetap mudah disentuh di layar kasir. */
+.btn-sm:not(:has(span, .text-nowrap)):not(:empty) {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Mobile (<640px): form controls minimal 16px supaya iOS Safari
+   tidak auto-zoom saat fokus. */
+@media (max-width: 639.98px) {
+    .form-control,
+    .form-select {
+        font-size: 1rem;
+    }
+}
+
 /* ============================================================
    TABEL
    ============================================================ */
@@ -407,10 +521,11 @@ a:hover {
     color: var(--text-muted);
     background-color: var(--surface-2) !important;
     border-bottom: 1px solid var(--border);
-    font-size: 0.75rem;
+    font-size: var(--text-xs);
     text-transform: uppercase;
     letter-spacing: 0.05em;
     font-weight: 600;
+    line-height: var(--leading-tight);
 }
 .table tbody tr:hover {
     background-color: rgba(13, 148, 136, 0.04);
@@ -437,8 +552,15 @@ a:hover {
 
 .alert {
     border-radius: var(--radius);
-    border-left: 0.25rem solid;
     box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    animation: pos-reveal 0.2s ease-out both;
+}
+
+/* Flash pesan yang sudah tampil ulang (AJAX) tetap terasa responsif,
+   tanpa menggeser layout (opacity + translate kecil). */
+@keyframes pos-reveal {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
 }
 .alert-info {
     background-color: #e0f2fe;
@@ -520,10 +642,11 @@ a:hover {
 }
 .stat-card .stat-label {
     color: var(--text-muted);
-    font-size: 0.8125rem;
+    font-size: var(--text-sm);
     font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.04em;
+    line-height: var(--leading-tight);
 }
 .chart-container {
     position: relative;
@@ -545,7 +668,7 @@ a:hover {
     flex: 0 0 70%;
     max-width: 70%;
     overflow-y: auto;
-    padding: 1rem 1.25rem;
+    padding: 1.5rem 2rem;
     background-color: var(--bg);
 }
 .kiosk-body .kiosk-kanan {
@@ -554,8 +677,9 @@ a:hover {
     display: flex;
     flex-direction: column;
     background-color: var(--surface);
-    border-left: 1px solid var(--border);
-    padding: 1rem;
+    border-inline-start: 1px solid var(--border);
+    padding: 1.5rem;
+    padding-inline-end: max(1.5rem, env(safe-area-inset-right));
     overflow-y: auto;
 }
 
@@ -579,7 +703,7 @@ a:hover {
     .kiosk-body .kiosk-kanan {
         flex: 1 1 auto;
         max-width: 100%;
-        border-left: 0;
+        border-inline-start: 0;
         border-top: 1px solid var(--border);
         overflow-y: visible;
     }
@@ -649,9 +773,10 @@ a:hover {
 /* Ringkasan kiosk */
 .kiosk-ringkasan .kiosk-total-label {
     color: var(--text-muted);
-    font-size: 0.8rem;
+    font-size: var(--text-sm);
     text-transform: uppercase;
     letter-spacing: 0.05em;
+    line-height: var(--leading-tight);
 }
 .kiosk-ringkasan .kiosk-total-nilai {
     font-family: var(--font-num);
@@ -672,13 +797,14 @@ a:hover {
 .kiosk-produk {
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    padding: 0.6rem;
+    padding: 0.85rem;
     background-color: var(--surface);
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
 }
 .kiosk-produk:hover {
     border-color: var(--brand-primary);
     box-shadow: var(--shadow-hover);
+    transform: translateY(-2px);
 }
 .kiosk-produk .kiosk-produk-nama {
     font-weight: 600;
@@ -701,6 +827,11 @@ a:hover {
     background-color: #ffffff;
     border: 1px solid var(--border-soft);
     padding: 0.25rem;
+}
+
+/* Struk muncul dengan gerakan turun halus setelah pembayaran. */
+#area-struk:not(.d-none) {
+    animation: pos-reveal 0.25s ease-out both;
 }
 
 /* ------------------------------------------------------------
@@ -798,7 +929,8 @@ a:hover {
    ------------------------------------------------------------ */
 @media (max-width: 991.98px) {
     .kiosk-kiri .kiosk-produk-grid .col-sm-6,
-    .kiosk-kiri .row.g-2 > [class*='col-'] {
+    .kiosk-kiri .row.g-2 > [class*='col-'],
+    .kiosk-kiri .row.g-3 > [class*='col-'] {
         /* kartu produk sedikit lebih lebar di tablet */
         flex: 0 0 33.3333%;
         max-width: 33.3333%;
@@ -817,7 +949,8 @@ a:hover {
 /* Tablet kecil / HP landscape (<768px): kartu produk 2 kolom */
 @media (max-width: 767.98px) {
     .kiosk-kiri .kiosk-produk-grid .col-sm-6,
-    .kiosk-kiri .row.g-2 > [class*='col-'] {
+    .kiosk-kiri .row.g-2 > [class*='col-'],
+    .kiosk-kiri .row.g-3 > [class*='col-'] {
         flex: 0 0 50%;
         max-width: 50%;
     }

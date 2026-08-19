@@ -141,6 +141,12 @@ function aksiHapusPembelian(int $id): void
 /** Redirect kembali ke halaman ini dengan pesan flash. */
 function redirectSelf(string $pesan, string $tipe = 'info'): never
 {
+    if (strtolower((string) ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'fetch') {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['pesan' => $pesan]);
+        exit;
+    }
+
     $_SESSION['pesan'] = $pesan;
     header('Location: pembelian.php');
     exit;
@@ -308,6 +314,7 @@ $aktif = 'pembelian';
 <script src="assets/vendor/datatables/dataTables.min.js"></script>
 <script src="assets/vendor/datatables/dataTables.bootstrap5.min.js"></script>
 <script src="assets/theme.js"></script>
+<script src="assets/pembelian.js"></script>
 <script>
     // Tambah/hapus baris produk di form.
     (function () {

@@ -337,5 +337,6 @@ function formatRupiah(float $jumlah): string
 </div>
 <script src="assets/vendor/bootstrap/bootstrap.bundle.min.js"></script>
 <script src="assets/theme.js"></script>
+<script src="assets/crud-reload.js"></script>
 </body>
 </html>

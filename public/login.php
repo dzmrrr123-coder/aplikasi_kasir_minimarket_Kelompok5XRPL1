@@ -57,10 +57,15 @@ if (is_file($fileGagal)) {
     if (is_array($data)) {
         $percobaan = (int) ($data['percobaan'] ?? 0);
         $terkunciSampai = (int) ($data['terkunci_sampai'] ?? 0);
-    }
-    // Reset percobaan kalau sudah lewat jendela 5 menit.
-    if ($terkunciSampai === 0 && time() - (int) ($data['waktu'] ?? 0) > 300) {
-        $percobaan = 0;
+
+        // Masa kunci sudah lewat -> reset counter sepenuhnya.
+        if ($terkunciSampai > 0 && time() > $terkunciSampai) {
+            $percobaan = 0;
+            $terkunciSampai = 0;
+        } elseif ($terkunciSampai === 0 && time() - (int) ($data['waktu'] ?? 0) > 300) {
+            // Belum pernah terkunci tapi jendela 5 menit sudah lewat.
+            $percobaan = 0;
+        }
     }
 }
 
