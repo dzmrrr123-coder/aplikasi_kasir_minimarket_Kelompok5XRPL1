@@ -1,0 +1,24 @@
+# Coding Style Preferences
+
+- Prefers PHP native (OOP) without external dependencies — no Composer, no ORM, no framework. Confidence: 0.9
+- Prefers PDO native for database access, with `PDO::ATTR_ERRMODE` set to `PDO::ERRMODE_EXCEPTION`. Confidence: 0.8
+- Always uses prepared statements for SQL queries — never concatenates user input directly into SQL strings (anti-SQL-injection). Confidence: 0.9
+- Error handling philosophy: methods with `bool` return type should return `false` for expected/domain failures (e.g., wrong password) — never throw. Exceptions are reserved for unexpected system errors (e.g., DB connection failure) and should be caught by the caller/controller. Confidence: 0.9
+- Prefers brief doc comments above every method describing its purpose. Confidence: 0.75
+- Prefers inline comments that explain the "why" behind non-obvious design decisions (e.g., why stock is reduced at payment time rather than at add-item time, or what assumptions a method makes about its call context). Confidence: 0.8
+- When incrementally building against forward-referenced classes that don't exist yet: keep the exact type-hinted method signatures from the spec and use `// TODO: implementasi di langkah X` stub bodies — never weaken or remove return types just to avoid parse-time errors. Confidence: 0.8
+- Prefers Singleton pattern for database connection classes. Confidence: 0.75
+- Prefers `spl_autoload_register` for native autoloading instead of Composer's autoloader. Confidence: 0.7
+- When spec/class-diagram types differ from DB column types, spec types take priority — cast DB values at the constructor boundary (e.g., INT id from DB → string property). Confidence: 0.8
+- Prefers named custom exception classes (extending `Exception`) for domain-specific errors (e.g., `StokTidakCukupException`) rather than throwing generic `Exception`. Confidence: 0.8
+- When a domain error applies across multiple classes/contexts, prefers reusing the existing custom exception rather than creating a near-duplicate for each use site. Confidence: 0.8
+- When adding items to a cart/transaction that tracks quantity, prefers merging same-product entries into a single row (combining qty and recalculating subtotal) instead of creating separate entries — keeps receipts clean, one product per line. Confidence: 0.85
+- When fixing a bug in an existing class, prefers making the minimal surgical change to only the affected method(s) — explicitly avoids touching other methods or classes not directly involved in the fix. Confidence: 0.7
+- When validating stock for cart/collection additions, always checks the cumulative quantity (existing cart qty + new qty) against the available limit, not just the incremental addition in isolation. Confidence: 0.8
+- When extending an existing class with a new related object (e.g., associating Struk with Transaksi), prefers adding a property + getter over changing the return type of existing methods — keeps the spec-mandated method signatures intact and the public API stable, even when both approaches are viable. Confidence: 0.8
+- Output-generation methods (like receipt printing) should re-read fresh data from the database rather than relying on potentially stale in-memory object state — supports idempotent re-generation from just an ID. Confidence: 0.7
+- When a method performs multiple database write operations that must succeed or fail as a unit, always wraps them in a PDO transaction (`beginTransaction`/`commit`/`rollback`) — never allows partial state (e.g., stock reduced but retur record missing). The `rollback` goes in a `catch (Throwable $e)` block, then re-throws. Confidence: 0.9
+- Validates all preconditions before performing any state mutation — the "fail fast, validate first" pattern. If a multi-step operation has checks at different points, all checks must pass before the first write begins, so no partial state exists to unwind if a later check fails. Confidence: 0.85
+- Prefers `password_hash()` with `PASSWORD_DEFAULT` for password hashing when storing user credentials. Confidence: 0.8
+- When a spec method is a vague authorization marker without concrete logic (e.g., `kelolaProduk()`, `kelolaUser()`), keeps it as documentation — a body comment explaining the actor's role — and adds separate concrete helper methods (e.g., `tambahProdukBaru()`, `tambahKasirBaru()`) for specific operations rather than stuffing all logic into the marker method. Confidence: 0.7
+- Willing to pragmatically extend method signatures beyond what the spec/class-diagram shows when the original design is incomplete for a real implementation — treats it as a "necessary extension" (perluasan yang diperlukan), not a deviation from the spec. Confidence: 0.7
