@@ -955,3 +955,362 @@ a:hover {
         max-width: 50%;
     }
 }
+
+/* ============================================================
+   SIDEBAR KASIR (OFFCANVAS POS & DRAWER) - MODERN PREMIUM DESIGN
+   ============================================================ */
+
+#sidebarKasir.offcanvas {
+    width: 380px;
+    max-width: 90vw;
+    border-top-left-radius: 1.25rem;
+    border-bottom-left-radius: 1.25rem;
+    border: none;
+    box-shadow: -12px 0 35px rgba(15, 23, 42, 0.18);
+    background-color: var(--surface);
+    overflow: hidden;
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dark-mode #sidebarKasir.offcanvas {
+    box-shadow: -12px 0 35px rgba(0, 0, 0, 0.6);
+    background-color: var(--surface);
+}
+
+/* Offcanvas Header */
+#sidebarKasir .offcanvas-header {
+    background: linear-gradient(135deg, var(--brand-primary-darker) 0%, var(--brand-primary) 100%);
+    color: #ffffff;
+    padding: 1.25rem 1.25rem 1rem 1.25rem;
+    position: relative;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+#sidebarKasir .offcanvas-header .btn-close {
+    filter: invert(1) grayscale(100%) brightness(200%);
+    opacity: 0.85;
+    transition: transform 0.2s ease, opacity 0.2s ease;
+    padding: 0.5rem;
+    margin: -0.25rem -0.25rem 0 0;
+}
+
+#sidebarKasir .offcanvas-header .btn-close:hover {
+    opacity: 1;
+    transform: rotate(90deg) scale(1.1);
+}
+
+/* Avatar & User Header Profile */
+.sidebar-user-card {
+    background: rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: var(--radius-lg);
+    padding: 0.85rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    margin-top: 0.85rem;
+}
+
+.sidebar-avatar {
+    width: 2.85rem;
+    height: 2.85rem;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #a7f3d0 0%, #2dd4bf 100%);
+    color: var(--brand-primary-darker);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    font-weight: 800;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    flex-shrink: 0;
+}
+
+.sidebar-user-info {
+    min-width: 0;
+    flex: 1;
+}
+
+.sidebar-user-name {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #ffffff;
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sidebar-user-role {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.72rem;
+    color: rgba(255, 255, 255, 0.95);
+    background: rgba(255, 255, 255, 0.18);
+    padding: 0.15rem 0.55rem;
+    border-radius: 1rem;
+    font-weight: 600;
+    margin-top: 0.25rem;
+}
+
+/* Status dot pulse */
+.status-dot-pulse {
+    width: 7px;
+    height: 7px;
+    background-color: #34d399;
+    border-radius: 50%;
+    display: inline-block;
+    box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.7);
+    animation: pulse-green 2s infinite;
+}
+
+@keyframes pulse-green {
+    0% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.7);
+    }
+    70% {
+        transform: scale(1);
+        box-shadow: 0 0 0 6px rgba(52, 211, 153, 0);
+    }
+    100% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(52, 211, 153, 0);
+    }
+}
+
+/* Shift Info Banner Card */
+.sidebar-shift-card {
+    background: var(--surface-2);
+    border: 1px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 0.75rem 1rem;
+    margin: 0.85rem 1.25rem 0.35rem 1.25rem;
+}
+
+.sidebar-shift-card .shift-title {
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 700;
+    color: var(--brand-primary);
+    margin-bottom: 0.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.sidebar-shift-card .shift-detail {
+    font-size: 0.825rem;
+    color: var(--text);
+    font-weight: 500;
+}
+
+/* Menu Group Section Titles */
+.sidebar-section-title {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    padding: 0.85rem 1.25rem 0.35rem 1.25rem;
+}
+
+/* List Menu Links */
+.sidebar-menu-list {
+    padding: 0 1rem;
+    margin: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.sidebar-menu-item-link {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    padding: 0.65rem 0.85rem;
+    border-radius: var(--radius);
+    color: var(--text);
+    text-decoration: none;
+    background-color: transparent;
+    border: 1px solid transparent;
+    transition: all 0.18s ease;
+    cursor: pointer;
+    width: 100%;
+}
+
+.sidebar-menu-item-link:hover,
+.sidebar-menu-item-link:focus {
+    background-color: var(--surface-2);
+    border-color: var(--border-soft);
+    color: var(--brand-primary);
+    transform: translateX(4px);
+}
+
+.sidebar-menu-item-link.danger-link:hover,
+.sidebar-menu-item-link.danger-link:focus {
+    background-color: rgba(220, 38, 38, 0.08);
+    border-color: rgba(220, 38, 38, 0.2);
+    color: var(--brand-danger);
+}
+
+.sidebar-menu-item-link.warning-link:hover,
+.sidebar-menu-item-link.warning-link:focus {
+    background-color: rgba(245, 158, 11, 0.08);
+    border-color: rgba(245, 158, 11, 0.2);
+    color: var(--brand-accent-dark);
+}
+
+/* Icon Bubble Containers */
+.sidebar-icon-bubble {
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.05rem;
+    flex-shrink: 0;
+    transition: transform 0.2s ease, background-color 0.2s ease;
+}
+
+.sidebar-menu-item-link:hover .sidebar-icon-bubble {
+    transform: scale(1.08);
+}
+
+.icon-teal {
+    background-color: var(--brand-primary-lighter);
+    color: var(--brand-primary);
+}
+
+.dark-mode .icon-teal {
+    background-color: rgba(13, 148, 136, 0.2);
+    color: #2dd4bf;
+}
+
+.icon-indigo {
+    background-color: #e0e7ff;
+    color: #4f46e5;
+}
+
+.dark-mode .icon-indigo {
+    background-color: rgba(79, 70, 229, 0.2);
+    color: #818cf8;
+}
+
+.icon-amber {
+    background-color: #fef3c7;
+    color: #d97706;
+}
+
+.dark-mode .icon-amber {
+    background-color: rgba(217, 119, 6, 0.2);
+    color: #fbbf24;
+}
+
+.icon-rose {
+    background-color: #ffe4e6;
+    color: #e11d48;
+}
+
+.dark-mode .icon-rose {
+    background-color: rgba(225, 29, 72, 0.2);
+    color: #fb7185;
+}
+
+.icon-sky {
+    background-color: #e0f2fe;
+    color: #0284c7;
+}
+
+.dark-mode .icon-sky {
+    background-color: rgba(2, 132, 199, 0.2);
+    color: #38bdf8;
+}
+
+.icon-purple {
+    background-color: #f3e8ff;
+    color: #9333ea;
+}
+
+.dark-mode .icon-purple {
+    background-color: rgba(147, 51, 234, 0.2);
+    color: #c084fc;
+}
+
+/* Subtitle & Title */
+.sidebar-link-content {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+}
+
+.sidebar-link-title {
+    font-size: 0.88rem;
+    font-weight: 600;
+    line-height: 1.25;
+}
+
+.sidebar-link-sub {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    font-weight: 400;
+    margin-top: 0.1rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sidebar-chevron {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    opacity: 0.4;
+    transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.sidebar-menu-item-link:hover .sidebar-chevron {
+    opacity: 1;
+    transform: translateX(3px);
+}
+
+/* Sidebar Footer Metadata */
+.sidebar-footer {
+    margin-top: auto;
+    padding: 0.85rem 1.25rem 1rem 1.25rem;
+    border-top: 1px solid var(--border-soft);
+    background-color: var(--surface-2);
+}
+
+.sidebar-footer-info {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.sidebar-footer-badges {
+    display: flex;
+    gap: 0.35rem;
+}
+
+.kbd-shortcut {
+    display: inline-block;
+    padding: 0.15rem 0.35rem;
+    font-size: 0.68rem;
+    font-family: var(--font-num);
+    line-height: 1;
+    color: var(--text-muted);
+    vertical-align: middle;
+    background-color: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.1);
+}
+

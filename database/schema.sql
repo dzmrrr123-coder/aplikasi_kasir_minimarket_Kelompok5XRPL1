@@ -199,6 +199,22 @@ CREATE TABLE IF NOT EXISTS shift_kasir (
         ON UPDATE CASCADE ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
+-- Device pairing per kasir (printer / timbangan Web Serial)
+CREATE TABLE IF NOT EXISTS user_devices (
+    id         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id    INT UNSIGNED  NOT NULL,
+    tipe       ENUM('timbangan','printer') NOT NULL,
+    label      VARCHAR(100)  NOT NULL,
+    urutan     INT           NOT NULL DEFAULT 0,
+    is_aktif   TINYINT(1)    NOT NULL DEFAULT 1,
+    dibuat_pada DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    diubah_pada DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_user_device
+        FOREIGN KEY (user_id) REFERENCES users(id)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+    UNIQUE KEY uq_user_tipe (user_id, tipe)
+) ENGINE=InnoDB;
+
 -- Audit log: riwayat perubahan data penting (harga produk, void, dll.)
 CREATE TABLE IF NOT EXISTS audit_log (
     id         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,

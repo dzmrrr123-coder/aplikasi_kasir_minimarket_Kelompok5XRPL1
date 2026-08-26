@@ -28,6 +28,7 @@ use App\Controllers\LabaController;
 use App\Controllers\LaporanController;
 use App\Controllers\ReturController;
 use App\Controllers\ShiftController;
+use App\Models\User;
 
 if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
@@ -47,7 +48,7 @@ $aksi = (string) ($_GET['aksi'] ?? ($_POST['aksi'] ?? ''));
 
 // Aksi yang boleh diakses kasir (data milik kasir sendiri / konfigurasi
 // hardware POS yang tidak sensitif). Sisanya khusus admin.
-$aksiKasir = ['hardware.config', 'shift.ringkasan'];
+$aksiKasir = ['hardware.config', 'shift.ringkasan', 'device.list', 'device.set', 'device.remove'];
 
 if ($_SESSION['role'] !== 'admin' && !in_array($aksi, $aksiKasir, true)) {
     http_response_code(403);
@@ -86,6 +87,55 @@ $shift = new ShiftController();
 $hasil = null;
 
 switch ($aksi) {
+    case 'device.list':
+        // Daftar device yang terpasang kasir yang login (GET, tidak butuh CSRF).
+        $hasil = ['printer' => null, 'timbangan' => null, 'semua' => []];
+        $user = User::cariBerdasarkanId((int) $_SESSION['user_id']);
+        if ($user !== null) {
+            foreach ($user->getDevices() as $d) {
+                if (!(bool) $d['is_aktif']) {
+                    continue; // skip yang sudah dilepas
+                }
+                $hasil['semua'][] = $d;
+                $hasil[$d['tipe']] = $d;
+            }
+        }
+        break;
+
+    case 'device.set':
+        // Simpan / ganti device pairing (POST, butuh CSRF).
+        if (!csrf_valid()) {
+            http_response_code(403);
+            echo json_encode(['error' => 'invalid csrf token']);
+            exit;
+        }
+        $tipe = (string) ($params['tipe'] ?? '');
+        $label = trim((string) ($params['label'] ?? ''));
+        $user = User::cariBerdasarkanId((int) $_SESSION['user_id']);
+        if ($user === null) {
+            http_response_code(401);
+            echo json_encode(['error' => 'user tidak ditemukan']);
+            exit;
+        }
+        $user->setDevice($tipe, $label);
+        $hasil = ['status' => 'ok', 'device' => $user->getDeviceByTipe($tipe)];
+        break;
+
+    case 'device.remove':
+        // Lepas device pairing (POST, butuh CSRF).
+        if (!csrf_valid()) {
+            http_response_code(403);
+            echo json_encode(['error' => 'invalid csrf token']);
+            exit;
+        }
+        $tipe = (string) ($params['tipe'] ?? '');
+        $user = User::cariBerdasarkanId((int) $_SESSION['user_id']);
+        if ($user !== null) {
+            $user->removeDevice($tipe);
+        }
+        $hasil = ['status' => 'ok'];
+        break;
+
     case 'hardware.config':
         // Konfigurasi Web Serial (timbangan & printer) untuk frontend.
         $hardware = require __DIR__ . '/../config/hardware.php';

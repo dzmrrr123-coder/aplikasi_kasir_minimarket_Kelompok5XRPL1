@@ -79,6 +79,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'footer_struk'=> trim((string) ($_POST['footer_struk'] ?? '')),
                 'pajak'       => trim((string) ($_POST['pajak'] ?? '0')),
                 'pin_supervisor' => trim((string) ($_POST['pin_supervisor'] ?? '0000')),
+                // Notifikasi WhatsApp tiap transaksi via n8n.
+                // Kosongkan wa_webhook_url = fitur dimatikan (tidak ada queue).
+                'wa_webhook_url'   => trim((string) ($_POST['wa_webhook_url'] ?? '')),
+                'wa_tujuan_nomor'  => trim((string) ($_POST['wa_tujuan_nomor'] ?? '')),
             ];
 
             if ($data['nama_toko'] === '') {
@@ -98,6 +102,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 break;
             }
 
+            // Notifikasi WA: bila webhook URL diisi, wajib http(s)://.
+            if ($data['wa_webhook_url'] !== ''
+                && !preg_match('#^https?://#i', $data['wa_webhook_url'])
+            ) {
+                $pesan = 'URL webhook n8n harus diawali http:// atau https://.';
+                break;
+            }
+
             $data['pajak'] = (string) $pajak;
             Pengaturan::simpan($data);
             $pesan = 'Pengaturan toko disimpan.';
@@ -113,6 +125,8 @@ $telepon = $pengaturan['telepon'] ?? '';
 $footer = $pengaturan['footer_struk'] ?? '';
 $pajak = $pengaturan['pajak'] ?? '0';
 $pinSupervisor = $pengaturan['pin_supervisor'] ?? '0000';
+$waWebhookUrl = $pengaturan['wa_webhook_url'] ?? '';
+$waTujuanNomor = $pengaturan['wa_tujuan_nomor'] ?? '';
 
 $aktif = 'pengaturan';
 ?>
@@ -222,6 +236,55 @@ $aktif = 'pengaturan';
                                 placeholder="cth: Terima kasih atas kunjungan Anda!"
                             >
                         </div>
+
+                        <hr class="my-4">
+
+                        <div class="col-12">
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <i class="bi bi-whatsapp text-success"></i>
+                                <span class="fw-semibold mb-0">Notifikasi WhatsApp (via n8n)</span>
+                                <span class="badge text-bg-<?= $waWebhookUrl === '' ? 'secondary' : 'success' ?>">
+                                    <?= $waWebhookUrl === '' ? 'Non-aktif' : 'Aktif' ?>
+                                </span>
+                            </div>
+                            <div class="alert alert-light border mb-3">
+                                <div class="small">
+                                    Setiap transaksi penjualan berhasil akan dikirim ke nomor ini
+                                    lewat workflow <strong>n8n</strong>. Kosongkan URL webhook untuk
+                                    menonaktifkan. Nomor WA pakai format internasional
+                                    tanpa <code>+</code> (cth: <code>6282123456789</code>).
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-12">
+                            <label for="wa-webhook-url" class="form-label">URL Webhook n8n</label>
+                            <input
+                                type="url"
+                                id="wa-webhook-url"
+                                name="wa_webhook_url"
+                                class="form-control font-num"
+                                value="<?= htmlspecialchars($waWebhookUrl) ?>"
+                                placeholder="https://your-n8n.example.com/webhook/nama-workflow"
+                                autocomplete="off"
+                            >
+                            <div class="form-text">Production Webhook URL dari trigger Webhook (POST) di n8n.</div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label for="wa-tujuan-nomor" class="form-label">Nomor WA tujuan</label>
+                            <input
+                                type="text"
+                                id="wa-tujuan-nomor"
+                                name="wa_tujuan_nomor"
+                                class="form-control font-num"
+                                value="<?= htmlspecialchars($waTujuanNomor) ?>"
+                                placeholder="cth: 6282123456789"
+                                autocomplete="off"
+                            >
+                            <div class="form-text">Nomor WhatsApp tujuan notifikasi (62…, tanpa +).</div>
+                        </div>
+
                         <div class="col-12 d-flex gap-2">
                             <button type="submit" class="btn btn-primary">
                                 <i class="bi bi-check-circle me-1"></i>Simpan Pengaturan

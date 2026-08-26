@@ -256,6 +256,67 @@ class Database
                 ) ENGINE=InnoDB'
             );
         }
+
+        // ------------------------------------------------------------
+        // ------------------------------------------------------------
+        // Migrasi v10 (device pairing per kasir):
+        //   - tabel baru user_devices (printer / timbangan Web Serial)
+        // Dipasangkan karena schema.sql sudah CREATE TABLE IF NOT EXISTS,
+        // tetapi di sini tetap dikelola idempotent supaya DB existing pun aman.
+        // ------------------------------------------------------------
+        if (!self::tabelAda($pdo, $db['dbname'], 'user_devices')) {
+            $pdo->exec(
+                "CREATE TABLE user_devices (
+                    id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                    user_id     INT UNSIGNED  NOT NULL,
+                    tipe        ENUM('timbangan','printer') NOT NULL,
+                    label       VARCHAR(100)  NOT NULL,
+                    urutan      INT           NOT NULL DEFAULT 0,
+                    is_aktif    TINYINT(1)    NOT NULL DEFAULT 1,
+                    dibuat_pada DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    diubah_pada DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP
+                                    ON UPDATE CURRENT_TIMESTAMP,
+                    CONSTRAINT fk_user_device
+                        FOREIGN KEY (user_id) REFERENCES users(id)
+                        ON UPDATE CASCADE ON DELETE CASCADE,
+                    UNIQUE KEY uq_user_tipe (user_id, tipe)
+                ) ENGINE=InnoDB"
+            );
+        }
+        if (self::tabelAda($pdo, $db['dbname'], 'user_devices')
+            && !self::constraintAda($pdo, $db['dbname'], 'uq_user_tipe')) {
+            $pdo->exec('ALTER TABLE user_devices ADD UNIQUE KEY uq_user_tipe (user_id, tipe)');
+        }
+
+        // ------------------------------------------------------------
+        // Migrasi v9 (notifikasi WA via n8n): outbox transaksional.
+        // Observer NotifikasiWhatsApp meng-INSERT baris PENDING ini di
+        // dalam DB transaction (sebelum commit) sehingga ikut ter-roll-back
+        // bila transaksi penjualan gagal. Baris dikirim ke webhook n8n
+        // (status 'sent'/'failed') oleh NotifikasiAntrian::proses() SETELAH
+        // commit — jauh dari jalur transaksi agar tidak menghambat kasir.
+        // ------------------------------------------------------------
+        if (!self::tabelAda($pdo, $db['dbname'], 'notifikasi_queue')) {
+            $pdo->exec(
+                "CREATE TABLE notifikasi_queue (
+                    id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                    transaksi_id  INT UNSIGNED  NOT NULL,
+                    webhook_url   VARCHAR(255)  NOT NULL,
+                    nomor_tujuan  VARCHAR(30)   NOT NULL,
+                    payload       JSON          NOT NULL,
+                    status        ENUM('pending','sent','failed')
+                                  NOT NULL DEFAULT 'pending',
+                    upaya         INT           NOT NULL DEFAULT 0,
+                    error         TEXT          NULL,
+                    dibuat_pada   DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    dikirim_pada  DATETIME      NULL,
+                    INDEX idx_status_dibuat (status, dibuat_pada),
+                    CONSTRAINT fk_notif_transaksi
+                        FOREIGN KEY (transaksi_id) REFERENCES transaksi(id)
+                        ON UPDATE CASCADE ON DELETE CASCADE
+                ) ENGINE=InnoDB"
+            );
+        }
     }
 
     /** Cek apakah kolom ada di tabel tertentu. */

@@ -355,4 +355,108 @@ abstract class User
             throw new \RuntimeException('Username sudah dipakai.');
         }
     }
+
+    // ------------------------------------------------------------
+    // Device pairing (printer / timbangan Web Serial) per kasir.
+    // Disimpan di tabel user_devices, maksimal satu per tipe tiap user
+    // (UNIQUE user_id+tipe). Dikelola via halaman profile kasir & API.
+    // ------------------------------------------------------------
+
+    /**
+     * Daftar device yang terpasang user ini, diurut urutan.
+     *
+     * @return array<int, array{id:int, user_id:int, tipe:string, label:string, urutan:int, is_aktif:bool}>
+     */
+    public function getDevices(): array
+    {
+        $id = (int) $this->id;
+        if ($id === 0) {
+            return [];
+        }
+
+        $stmt = Database::connect()->prepare(
+            'SELECT id, user_id, tipe, label, urutan, is_aktif
+               FROM user_devices
+              WHERE user_id = :uid
+           ORDER BY urutan ASC, tipe ASC'
+        );
+        $stmt->execute([':uid' => $id]);
+
+        return $stmt->fetchAll();
+    }
+
+    /**
+     * Device dengan tipe tertentu yang terpasang user ini (jika ada).
+     */
+    public function getDeviceByTipe(string $tipe): ?array
+    {
+        foreach ($this->getDevices() as $d) {
+            if ($d['tipe'] === $tipe && (bool) $d['is_aktif']) {
+                return $d;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Pasang (simpan / ganti) device untuk tipe tertentu.
+     * Pakai INSERT … ON DUPLICATE KEY UPDATE supaya idempotent per tipe.
+     *
+     * @throws \RuntimeException bila tipe tidak valid
+     */
+    public function setDevice(string $tipe, string $label, int $urutan = 0): void
+    {
+        $this->validasiTipeDevice($tipe);
+
+        $id = (int) $this->id;
+        if ($id === 0) {
+            throw new \RuntimeException('User belum terautentikasi.');
+        }
+
+        $label = trim($label);
+        if ($label === '') {
+            throw new \RuntimeException('Nama device tidak boleh kosong.');
+        }
+
+        $stmt = Database::connect()->prepare(
+            'INSERT INTO user_devices (user_id, tipe, label, urutan, is_aktif)
+             VALUES (:uid, :tipe, :label, :urutan, 1)
+             ON DUPLICATE KEY UPDATE
+                 label    = VALUES(label),
+                 urutan   = VALUES(urutan),
+                 is_aktif = 1'
+        );
+        $stmt->execute([
+            ':uid'     => $id,
+            ':tipe'    => $tipe,
+            ':label'   => $label,
+            ':urutan'  => $urutan,
+        ]);
+    }
+
+    /**
+     * Lepas (non-aktifkan) device tipe tertentu.
+     */
+    public function removeDevice(string $tipe): void
+    {
+        $this->validasiTipeDevice($tipe);
+
+        $id = (int) $this->id;
+        if ($id === 0) {
+            return;
+        }
+
+        $stmt = Database::connect()->prepare(
+            'UPDATE user_devices SET is_aktif = 0 WHERE user_id = :uid AND tipe = :tipe'
+        );
+        $stmt->execute([':uid' => $id, ':tipe' => $tipe]);
+    }
+
+    private function validasiTipeDevice(string $tipe): void
+    {
+        if (!in_array($tipe, ['timbangan', 'printer'], true)) {
+            throw new \RuntimeException('Tipe device tidak valid.');
+        }
+    }
 }

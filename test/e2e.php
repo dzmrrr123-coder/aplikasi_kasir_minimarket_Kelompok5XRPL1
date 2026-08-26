@@ -29,6 +29,7 @@ use App\Models\ItemTransaksi;
 use App\Models\Laba;
 use App\Models\LaporanPenjualan;
 use App\Models\Member;
+use App\Models\NotifikasiWhatsApp;
 use App\Models\Pembelian;
 use App\Models\PembayaranNonTunai;
 use App\Models\PembayaranTunai;
@@ -89,7 +90,7 @@ $pdo = Database::connect();
 $pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
 foreach ([
     'audit_log', 'shift_kasir', 'item_pembelian', 'pembelian', 'item_transaksi',
-    'rekap_penjualan', 'transaksi', 'pembayaran', 'diskon', 'retur_barang', 'produk',
+    'rekap_penjualan', 'transaksi', 'notifikasi_queue', 'pembayaran', 'diskon', 'retur_barang', 'produk',
     'kategori', 'supplier', 'users', 'member', 'pengaturan', 'katalog_penukaran',
 ] as $tabel) {
     $pdo->exec("TRUNCATE TABLE $tabel");
@@ -360,6 +361,73 @@ $rekap2 = Database::connect()->prepare(
 );
 $rekap2->execute([':id' => $transaksiDetach->getId()]);
 assertTrue((int) $rekap2->fetchColumn() === 0, 'observer yang di-detach tidak mencatat rekap');
+
+echo "\n== 2d. Notifikasi WA via n8n (observer + outbox) ==\n";
+
+// --- Fitur ON: transaksi valid → 1 baris pending di notifikasi_queue ---
+Pengaturan::simpan([
+    'wa_webhook_url'  => 'http://127.0.0.1:1/n8n-webhook', // dummy; tidak dikirim di sini
+    'wa_tujuan_nomor' => '628123456789',
+]);
+
+$transaksiWa = new Transaksi(['kasir_id' => $kasirId]);
+$transaksiWa->attach(new NotifikasiWhatsApp());
+$transaksiWa->tambahItem($produkSetelah, 1);
+$transaksiWa->hitungTotal();
+assertTrue(
+    $transaksiWa->prosesPembayaran(new PembayaranTunai(['jumlah' => 10000])),
+    'transaksi WA diproses sukses'
+);
+
+$cek = Database::connect()->prepare(
+    'SELECT id, transaksi_id, webhook_url, nomor_tujuan, payload, status
+       FROM notifikasi_queue WHERE transaksi_id = :id LIMIT 1'
+);
+$cek->execute([':id' => (int) $transaksiWa->getId()]);
+$barisWa = $cek->fetch();
+assertTrue($barisWa !== false, 'observer meng-queue 1 baris notifikasi WA');
+assertTrue(
+    (string) $barisWa['transaksi_id'] === (string) $transaksiWa->getId(),
+    'queue merujuk transaksi yang benar'
+);
+assertTrue($barisWa['status'] === 'pending', 'queue baru berstatus pending');
+assertTrue(
+    $barisWa['webhook_url'] === 'http://127.0.0.1:1/n8n-webhook',
+    'queue menyimpan snapshot webhook_url'
+);
+assertTrue(
+    $barisWa['nomor_tujuan'] === '628123456789',
+    'queue menyimpan snapshot nomor_tujuan'
+);
+$payloadWa = json_decode((string) $barisWa['payload'], true);
+assertTrue(
+    is_array($payloadWa) && (string) ($payloadWa['no_transaksi'] ?? '') === (string) $transaksiWa->getId(),
+    'payload berisi no_transaksi yang sesuai'
+);
+assertTrue(
+    is_array($payloadWa['items'] ?? null) && count($payloadWa['items']) === 1,
+    'payload berisi 1 item'
+);
+assertTrue((float) ($payloadWa['total'] ?? 0) > 0, 'payload berisi total');
+
+// --- Fitur OFF: webhook URL kosong → tidak ada baris queue ---
+Pengaturan::simpan(['wa_webhook_url' => '', 'wa_tujuan_nomor' => '']);
+$transaksiOff = new Transaksi(['kasir_id' => $kasirId]);
+$transaksiOff->attach(new NotifikasiWhatsApp());
+$transaksiOff->tambahItem($produkSetelah, 1);
+$transaksiOff->hitungTotal();
+assertTrue(
+    $transaksiOff->prosesPembayaran(new PembayaranTunai(['jumlah' => 10000])),
+    'transaksi (WA off) diproses sukses'
+);
+$cekOff = Database::connect()->prepare(
+    'SELECT COUNT(*) FROM notifikasi_queue WHERE transaksi_id = :id'
+);
+$cekOff->execute([':id' => (int) $transaksiOff->getId()]);
+assertTrue((int) $cekOff->fetchColumn() === 0, 'fitur OFF (webhook kosong) tidak ada baris queue');
+
+// --- Cleanup: jaga agar tidak mengganggu tes berikutnya (mis. double-tap 3b) ---
+Database::connect()->exec('DELETE FROM notifikasi_queue');
 
 echo "\n== 3. Batalkan transaksi ==\n";
 
@@ -1231,7 +1299,7 @@ echo "Gagal: $gagal\n";
 $pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
 foreach ([
     'audit_log', 'shift_kasir', 'item_pembelian', 'pembelian', 'item_transaksi',
-    'rekap_penjualan', 'transaksi', 'pembayaran', 'diskon', 'retur_barang', 'produk',
+    'rekap_penjualan', 'transaksi', 'notifikasi_queue', 'pembayaran', 'diskon', 'retur_barang', 'produk',
     'kategori', 'supplier', 'users', 'member', 'pengaturan', 'katalog_penukaran',
 ] as $tabel) {
     $pdo->exec("TRUNCATE TABLE $tabel");

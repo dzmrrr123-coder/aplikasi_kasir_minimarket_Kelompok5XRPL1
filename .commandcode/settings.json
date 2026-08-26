@@ -255,7 +255,12 @@
       "Shell(php -l src/Models/ShiftKasir.php)",
       "Shell(php -l src/Controllers/ShiftController.php)",
       "Shell(php Database::runSchema)",
-      "Shell(php -r require 'C:/laragon/www/kasir-minimarket/src/autoload.php'; App\\Database\\Database::runSchema();)"
+      "Shell(php -r require 'C:/laragon/www/kasir-minimarket/src/autoload.php'; App\\Database\\Database::runSchema();)",
+      "kasir_run_e2e",
+      "Shell(php -S 127.0.0.1:8799 -t public)",
+      "Shell(curl -s -w \"\\nHTTPCODE:%{http_code}\\n\" http://127.0.0.1:8799/login.php)",
+      "Shell(curl -s -c \"C:\\Users\\DELLLA~1\\AppData\\Local\\Temp\\commandcode\\C--laragon-www-kasir-minimarket\\bbcbbc60-4ac5-4d29-b638-90b3ce984632\\scratchpad\\ck.txt\" -o \"C:\\Users\\DELLLA~1\\AppData\\Local\\Temp\\commandcode\\C--laragon-www-kasir-minimarket\\bbcbbc60-4ac5-4d29-b638-90b3ce984632\\scratchpad\\login.html\" http://127.0.0.1:8799/login.php)",
+      "Shell(curl -s -b \"C:\\Users\\DELLLA~1\\AppData\\Local\\Temp\\commandcode\\C--laragon-www-kasir-minimarket\\bbcbbc60-4ac5-4d29-b638-90b3ce984632\\scratchpad\\ck.txt\" -d \"csrf=bb142f064207b51f52c28101cf933d84801443aabd1135366b9ba2ffcb162e88\" -d \"username=kasir\" -d \"password=kasir123\" -i http://127.0.0.1:8799/login.php)"
     ],
     "deny": [],
     "defaultMode": "default"

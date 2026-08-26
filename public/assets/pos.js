@@ -444,4 +444,22 @@
             if (trigger) trigger.focus();
         });
     }
+
+    // Toggle Layar Penuh (Fullscreen) dari Sidebar Kasir
+    var btnFullscreen = document.getElementById('btn-sidebar-fullscreen');
+    if (btnFullscreen) {
+        btnFullscreen.addEventListener('click', function (e) {
+            e.preventDefault();
+            if (!document.fullscreenElement) {
+                if (document.documentElement.requestFullscreen) {
+                    document.documentElement.requestFullscreen().catch(function () {});
+                }
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen().catch(function () {});
+                }
+            }
+        });
+    }
 })();
+

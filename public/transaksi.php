@@ -32,6 +32,8 @@ use App\Models\Diskon;
 use App\Models\Kasir;
 use App\Models\LaporanPenjualan;
 use App\Models\Member;
+use App\Models\NotifikasiAntrian;
+use App\Models\NotifikasiWhatsApp;
 use App\Models\PembayaranNonTunai;
 use App\Models\PembayaranTunai;
 use App\Models\Produk;
@@ -448,24 +450,22 @@ function renderFragmentKananKiosk(): string
 
     ob_start();
     ?>
-    <!-- Userbar: nama kasir + logout (wajib ada di panel kanan) -->
+    <!-- Userbar: nama kasir + hamburger menu (rawer → sidebar) -->
     <div class="kiosk-userbar">
         <div class="kiosk-user">
             <i class="bi bi-person-circle"></i>
             <span><?= htmlspecialchars($namaUser) ?></span>
         </div>
-        <div class="d-flex align-items-center gap-1">
-            <?php if ($shiftAktif !== null): ?>
-                <button type="button" class="btn btn-sm btn-outline-warning" data-bs-toggle="modal" data-bs-target="#modal-tutup-kas" title="Tutup kas & rekonsiliasi">
-                    <i class="bi bi-cash-coin me-1"></i>Tutup Kas
-                </button>
-            <?php endif; ?>
-            <form method="post" class="d-inline">
-                <input type="hidden" name="aksi" value="logout">
-                <button type="submit" class="btn btn-outline-danger btn-sm">
-                    <i class="bi bi-box-arrow-right me-1"></i>Logout
-                </button>
-            </form>
+        <div class="d-flex align-items-center gap-2">
+            <!-- Status printer (kecil) -->
+            <span class="badge text-bg-secondary" id="badge-printer-pos" title="Status printer"
+                  style="width:0.55rem;height:0.55rem;padding:0;font-size:0"></span>
+            <!-- Hamburger → buka sidebar semua aksi kasir -->
+            <button type="button" class="btn btn-sm btn-outline-primary"
+                    data-bs-toggle="offcanvas" data-bs-target="#sidebarKasir"
+                    aria-label="Buka menu" title="Buka menu">
+                <i class="bi bi-list"></i>
+            </button>
         </div>
     </div>
 
@@ -513,37 +513,7 @@ function renderFragmentKananKiosk(): string
         </div>
     </div>
 
-    <!-- Perangkat: timbangan & printer (Web Serial) -->
-    <div class="card pos-card mb-3">
-        <div class="card-header bg-white py-2"><i class="bi bi-usb-plug me-1"></i>Perangkat</div>
-        <div class="card-body py-2">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <span>
-                    <i class="bi bi-bullseye me-1"></i>Timbangan
-                    <span class="badge text-bg-secondary ms-1" id="status-timbangan">Belum</span>
-                </span>
-                <div class="d-flex gap-1">
-                    <button type="button" class="btn btn-sm btn-outline-primary" id="btn-timbangan">
-                        <i class="bi bi-plug me-1"></i>Hubungkan
-                    </button>
-                </div>
-            </div>
-            <div class="d-flex justify-content-between align-items-center">
-                <span>
-                    <i class="bi bi-printer me-1"></i>Printer
-                    <span class="badge text-bg-secondary ms-1" id="status-printer">Belum</span>
-                </span>
-                <div class="d-flex gap-1">
-                    <button type="button" class="btn btn-sm btn-outline-primary" id="btn-printer">
-                        <i class="bi bi-plug me-1"></i>Hubungkan
-                    </button>
-                </div>
-            </div>
-            <div class="small text-muted mt-2" id="hw-kompatibilitas">
-                Web Serial: Chrome/Edge desktop + HTTPS/localhost.
-            </div>
-        </div>
-    </div>
+    <!-- Perangkat dikelola lewat modal di userbar (ikon printer) & halaman Profil. -->
 
     <!-- Ringkasan -->
     <div class="kiosk-ringkasan">
@@ -837,6 +807,10 @@ function aksiBayar(string $metode, float $jumlahDibayar, int $kasirId, string $n
         $strukObserver = new Struk($transaksi);
         $transaksi->attach($strukObserver);
         $transaksi->attach(new LaporanPenjualan());
+        // Notifikasi WA ke n8n: observer ini HANYA meng-INSERT baris pending ke
+        // notifikasi_queue (di dalam transaction yang sama, atomic). Pengiriman
+        // HTTP kejakan dilakukan setelah commit di bawah lewat NotifikasiAntrian.
+        $transaksi->attach(new NotifikasiWhatsApp());
 
         // Jalur sukses: proses pembayaran -> simpan + update stok + struk.
         $kasir = new Kasir(['id' => $kasirId, 'nama' => $namaUser]);
@@ -863,6 +837,15 @@ function aksiBayar(string $metode, float $jumlahDibayar, int $kasirId, string $n
             $_SESSION['bayar_lock']
         );
         $_SESSION['struk'] = $struk;
+
+        // Kirim notifikasi WA ke n8n (best-effort, POST-commit). Transaksi sudah
+        // ter-commit & tersimpan; notifikasi gagal tidak boleh mengganggu respons
+        // struk ke kasir. Error ditelan & dicatat di kolom `error` outbox saja.
+        try {
+            NotifikasiAntrian::proses(10, 5, 3000);
+        } catch (\Throwable $eWa) {
+            // diamkan — penjualan sudah selesai & tercatat.
+        }
     } catch (\Throwable $e) {
         // Pastikan lock dilepas supaya kasir tidak terjebak state "sedang diproses".
         unset($_SESSION['bayar_lock']);
@@ -1423,8 +1406,159 @@ $produkSemua = Produk::semua();
     </div><!-- /.kiosk-kanan -->
 </div><!-- /.kiosk-wrapper -->
 
+<!-- Sidebar kiosk (offcanvas): semua aksi kasir → rapi & modern -->
+<div class="offcanvas offcanvas-end" tabindex="-1" id="sidebarKasir" aria-labelledby="sidebarKasirLabel">
+    <div class="offcanvas-header flex-column align-items-stretch pb-3">
+        <div class="d-flex justify-content-between align-items-center w-100">
+            <h5 class="offcanvas-title d-flex align-items-center gap-2 fw-bold text-white fs-6 mb-0" id="sidebarKasirLabel">
+                <i class="bi bi-shield-lock-fill text-warning"></i> Menu Kasir POS
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Tutup menu"></button>
+        </div>
 
-<script src="assets/vendor/bootstrap/bootstrap.bundle.min.js"></script>
+        <!-- Card Profile User -->
+        <div class="sidebar-user-card">
+            <div class="sidebar-avatar">
+                <?= strtoupper(substr($namaUser, 0, 1)) ?>
+            </div>
+            <div class="sidebar-user-info">
+                <div class="sidebar-user-name" title="<?= htmlspecialchars($namaUser) ?>">
+                    <?= htmlspecialchars($namaUser) ?>
+                </div>
+                <div class="sidebar-user-role">
+                    <span class="status-dot-pulse"></span>
+                    <?= ucfirst((string)($_SESSION['role'] ?? 'Kasir')) ?> Online
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="offcanvas-body d-flex flex-column px-0 py-2">
+        <?php if ($shiftAktif !== null): ?>
+            <!-- Shift Info Active Card -->
+            <div class="sidebar-shift-card">
+                <div class="shift-title">
+                    <i class="bi bi-cash-stack"></i> Shift Kasir Aktif
+                </div>
+                <div class="shift-detail d-flex justify-content-between align-items-center mt-1">
+                    <span><i class="bi bi-clock me-1 text-muted"></i>Buka <?= date('H:i', strtotime($shiftAktif->getDibukaPada())) ?> WIB</span>
+                    <span class="badge text-bg-success font-num"><?= formatRupiah($shiftAktif->getModalAwal()) ?></span>
+                </div>
+            </div>
+        <?php endif; ?>
+
+        <!-- Section: Navigasi Utama -->
+        <div class="sidebar-section-title">Navigasi Utama</div>
+        <ul class="sidebar-menu-list">
+            <li>
+                <a class="sidebar-menu-item-link" href="profile.php">
+                    <div class="sidebar-icon-bubble icon-teal">
+                        <i class="bi bi-person-gear"></i>
+                    </div>
+                    <div class="sidebar-link-content">
+                        <span class="sidebar-link-title">Profil Saya</span>
+                        <span class="sidebar-link-sub">Pengaturan akun & kata sandi</span>
+                    </div>
+                    <i class="bi bi-chevron-right sidebar-chevron"></i>
+                </a>
+            </li>
+            <li>
+                <a class="sidebar-menu-item-link" href="#"
+                   data-bs-toggle="modal" data-bs-target="#modalPerangkat"
+                   data-bs-dismiss="offcanvas">
+                    <div class="sidebar-icon-bubble icon-indigo">
+                        <i class="bi bi-printer-fill"></i>
+                    </div>
+                    <div class="sidebar-link-content">
+                        <span class="sidebar-link-title">Hubungkan Perangkat</span>
+                        <span class="sidebar-link-sub">Printer thermal & scanner POS</span>
+                    </div>
+                    <i class="bi bi-chevron-right sidebar-chevron"></i>
+                </a>
+            </li>
+            <li>
+                <a class="sidebar-menu-item-link" href="laporan.php">
+                    <div class="sidebar-icon-bubble icon-sky">
+                        <i class="bi bi-receipt-cutoff"></i>
+                    </div>
+                    <div class="sidebar-link-content">
+                        <span class="sidebar-link-title">Laporan Penjualan</span>
+                        <span class="sidebar-link-sub">Riwayat & rekap transaksi</span>
+                    </div>
+                    <i class="bi bi-chevron-right sidebar-chevron"></i>
+                </a>
+            </li>
+            <li>
+                <a class="sidebar-menu-item-link" href="#" id="btn-sidebar-fullscreen">
+                    <div class="sidebar-icon-bubble icon-purple">
+                        <i class="bi bi-arrows-fullscreen"></i>
+                    </div>
+                    <div class="sidebar-link-content">
+                        <span class="sidebar-link-title">Mode Layar Penuh</span>
+                        <span class="sidebar-link-sub">Fokus transaksi minimarket</span>
+                    </div>
+                    <span class="badge text-bg-light border small text-muted">F11</span>
+                </a>
+            </li>
+        </ul>
+
+        <?php if ($shiftAktif !== null): ?>
+            <!-- Section: Shift & Kas -->
+            <div class="sidebar-section-title">Manajemen Shift</div>
+            <ul class="sidebar-menu-list">
+                <li>
+                    <a class="sidebar-menu-item-link warning-link" href="#"
+                       data-bs-toggle="modal" data-bs-target="#modal-tutup-kas"
+                       data-bs-dismiss="offcanvas">
+                        <div class="sidebar-icon-bubble icon-amber">
+                            <i class="bi bi-cash-coin"></i>
+                        </div>
+                        <div class="sidebar-link-content">
+                            <span class="sidebar-link-title text-warning-emphasis">Tutup Kas Shift</span>
+                            <span class="sidebar-link-sub">Rekonsiliasi kas fisik & sistem</span>
+                        </div>
+                        <i class="bi bi-chevron-right sidebar-chevron"></i>
+                    </a>
+                </li>
+            </ul>
+        <?php endif; ?>
+
+        <!-- Section: Sesi & Keamanan -->
+        <div class="sidebar-section-title">Sesi & Keamanan</div>
+        <ul class="sidebar-menu-list">
+            <li>
+                <form method="post" action="logout.php" class="w-100">
+                    <button type="submit" class="sidebar-menu-item-link danger-link border-0 text-start">
+                        <div class="sidebar-icon-bubble icon-rose">
+                            <i class="bi bi-box-arrow-right"></i>
+                        </div>
+                        <div class="sidebar-link-content">
+                            <span class="sidebar-link-title text-danger">Keluar (Logout)</span>
+                            <span class="sidebar-link-sub">Selesaikan sesi petugas kasir</span>
+                        </div>
+                        <i class="bi bi-chevron-right sidebar-chevron"></i>
+                    </button>
+                </form>
+            </li>
+        </ul>
+
+        <!-- Sidebar Footer Metadata -->
+        <div class="sidebar-footer">
+            <div class="sidebar-footer-info">
+                <span>Kasir Minimarket v2.0</span>
+                <div class="sidebar-footer-badges">
+                    <span class="kbd-shortcut" title="Tombol Cari">F2</span>
+                    <span class="kbd-shortcut" title="Tombol Bayar">F9</span>
+                    <span class="kbd-shortcut" title="Tutup Menu">ESC</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+
+<script src="assets/vendor/bootstrap/bootstrap.bundle.min.js"></script></script>
 <script src="assets/pos.js?v=20260818c"></script>
 <script src="assets/hardware.js?v=20260818"></script>
 <script src="assets/hardware-pos.js?v=20260818"></script>
@@ -1540,6 +1674,74 @@ $produkSemua = Produk::semua();
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal perangkat (printer & timbangan) -->
+<div class="modal fade" id="modalPerangkat" tabindex="-1" aria-labelledby="modalPerangkatLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="form-device">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalPerangkatLabel"><i class="bi bi-usb-plug me-1"></i>Perangkat</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small mb-3">
+                        Hubungkan printer &amp; timbangan. Label disimpan per-akun kasir & otomatis
+                        tersedia tiap login (Chrome/Edge desktop, localhost).
+                    </p>
+
+                    <!-- Printer -->
+                    <div class="border rounded p-2 mb-2">
+                        <div class="d-flex justify-content-between align-items-center small mb-1">
+                            <span><i class="bi bi-printer me-1"></i>Printer</span>
+                            <span class="badge text-bg-secondary ms-auto" id="status-printer">Belum</span>
+                        </div>
+                        <input type="text" id="label-printer" class="form-control form-control-sm mb-1"
+                               list="list-printer" placeholder="Pilih / ketik label printer">
+                        <datalist id="list-printer">
+                            <option>Printer Kasir</option>
+                            <option>Printer Dapur</option>
+                            <option>Printer Nota</option>
+                        </datalist>
+                        <div class="d-flex gap-1">
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="btn-printer">
+                                <i class="bi bi-plug me-1"></i>Hubungkan
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-danger d-none" id="btn-lepas-printer">
+                                <i class="bi bi-x-lg"></i> Lepas
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Timbangan -->
+                    <div class="border rounded p-2">
+                        <div class="d-flex justify-content-between align-items-center small mb-1">
+                            <span><i class="bi bi-bullseye me-1"></i>Timbangan</span>
+                            <span class="badge text-bg-secondary ms-auto" id="status-timbangan">Belum</span>
+                        </div>
+                        <input type="text" id="label-timbangan" class="form-control form-control-sm mb-1"
+                               list="list-timbangan" placeholder="Pilih / ketik label timbangan">
+                        <datalist id="list-timbangan">
+                            <option>Timbangan Kasir</option>
+                            <option>Timbangan Dapur</option>
+                        </datalist>
+                        <div class="d-flex gap-1">
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="btn-timbangan">
+                                <i class="bi bi-plug me-1"></i>Hubungkan
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-danger d-none" id="btn-lepas-timbangan">
+                                <i class="bi bi-x-lg"></i> Lepas
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>

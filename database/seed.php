@@ -30,8 +30,8 @@ $pdo = Database::connect();
 $pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
 foreach ([
     'audit_log', 'shift_kasir', 'item_pembelian', 'pembelian', 'item_transaksi',
-    'rekap_penjualan', 'transaksi', 'pembayaran', 'diskon', 'retur_barang', 'produk',
-    'kategori', 'supplier', 'users', 'member', 'pengaturan', 'katalog_penukaran',
+    'rekap_penjualan', 'transaksi', 'notifikasi_queue', 'pembayaran', 'diskon', 'retur_barang', 'produk',
+    'kategori', 'supplier', 'users', 'member', 'pengaturan', 'katalog_penukaran', 'user_devices',
 ] as $tabel) {
     $pdo->exec("TRUNCATE TABLE $tabel");
 }
@@ -123,13 +123,16 @@ foreach ($supplierData as [$nama, $kontak, $alamat]) {
 (new Diskon(['kode' => 'HEMAT2K', 'jenis' => 'nominal', 'nilai' => 2000]))->simpan(); // Rp 2.000
 
 // ---- Pengaturan toko ----
-\App\Models\Pengaturan::simpan([
+Pengaturan::simpan([
     'nama_toko'    => 'Minimarket Plaza',
     'alamat'       => 'Jl. Sudirman No. 1, Jakarta',
     'telepon'      => '021-5551234',
     'footer_struk' => 'Terima kasih sudah berbelanja!',
     'pajak'        => '11',
     'pin_supervisor' => '1234',
+    // Notifikasi WA: kosong = fitur dimatikan (setelah migrasi v9 tabel ready).
+    'wa_webhook_url'   => '',
+    'wa_tujuan_nomor'  => '',
 ]);
 
 // ---- Member demo ----
