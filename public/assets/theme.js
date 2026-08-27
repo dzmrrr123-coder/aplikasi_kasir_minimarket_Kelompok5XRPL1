@@ -144,4 +144,39 @@
         });
         obs.observe(document.body, { childList: true, subtree: true });
     }
+
+    /* ============================================================
+       GLOBAL BACKDROP & MODAL SANITIZER
+       Mencegah bug backdrop abu-abu menggantung ketika modal/offcanvas ditutup
+       ============================================================ */
+    function bersihkanBackdropGantung() {
+        setTimeout(function () {
+            var openModals = document.querySelectorAll('.modal.show');
+            var openOffcanvases = document.querySelectorAll('.offcanvas.show');
+            if (openModals.length === 0 && openOffcanvases.length === 0) {
+                document.querySelectorAll('.modal-backdrop, .offcanvas-backdrop').forEach(function (el) {
+                    el.remove();
+                });
+                document.body.classList.remove('modal-open');
+                document.body.style.removeProperty('overflow');
+                document.body.style.removeProperty('padding-right');
+            }
+        }, 120);
+    }
+
+    document.addEventListener('hidden.bs.modal', bersihkanBackdropGantung);
+    document.addEventListener('hidden.bs.offcanvas', bersihkanBackdropGantung);
+    document.addEventListener('hide.bs.modal', bersihkanBackdropGantung);
+    document.addEventListener('hide.bs.offcanvas', bersihkanBackdropGantung);
+
+    // Emergency click listener on orphan backdrops
+    document.addEventListener('click', function (e) {
+        if (e.target && (e.target.classList.contains('modal-backdrop') || e.target.classList.contains('offcanvas-backdrop'))) {
+            var openModals = document.querySelectorAll('.modal.show');
+            var openOffcanvases = document.querySelectorAll('.offcanvas.show');
+            if (openModals.length === 0 && openOffcanvases.length === 0) {
+                bersihkanBackdropGantung();
+            }
+        }
+    });
 })();

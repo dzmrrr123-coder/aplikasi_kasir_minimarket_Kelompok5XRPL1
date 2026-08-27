@@ -929,10 +929,23 @@
             }
         });
         modalTutupKas.addEventListener('hidden.bs.modal', function () {
-            var trigger = document.querySelector('[data-bs-target="#modal-tutup-kas"]');
-            if (trigger) trigger.focus();
+            fokusBarcode();
         });
     }
+
+    // Handle modal triggers from within sidebar offcanvas
+    document.addEventListener('click', function (e) {
+        var sidebarModalTrigger = e.target.closest('#sidebarKasir [data-bs-toggle="modal"]');
+        if (sidebarModalTrigger) {
+            var sidebarEl = document.getElementById('sidebarKasir');
+            if (sidebarEl && typeof bootstrap !== 'undefined' && bootstrap.Offcanvas) {
+                var offcanvasInstance = bootstrap.Offcanvas.getInstance(sidebarEl);
+                if (offcanvasInstance) {
+                    offcanvasInstance.hide();
+                }
+            }
+        }
+    });
 
     initDenominationCalc();
     initLiveSearch();

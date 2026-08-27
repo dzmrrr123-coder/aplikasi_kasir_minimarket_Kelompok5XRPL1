@@ -1882,8 +1882,7 @@ $produkSemua = Produk::semua();
         <ul class="sidebar-menu-list">
             <li>
                 <a class="sidebar-menu-item-link" href="#"
-                   data-bs-toggle="modal" data-bs-target="#modal-pos-settings"
-                   data-bs-dismiss="offcanvas">
+                   data-bs-toggle="modal" data-bs-target="#modal-pos-settings">
                     <div class="sidebar-icon-bubble icon-amber">
                         <i class="bi bi-sliders"></i>
                     </div>
@@ -1896,8 +1895,7 @@ $produkSemua = Produk::semua();
             </li>
             <li>
                 <a class="sidebar-menu-item-link" href="#"
-                   data-bs-toggle="modal" data-bs-target="#modalPerangkat"
-                   data-bs-dismiss="offcanvas">
+                   data-bs-toggle="modal" data-bs-target="#modalPerangkat">
                     <div class="sidebar-icon-bubble icon-indigo">
                         <i class="bi bi-printer-fill"></i>
                     </div>
@@ -1910,8 +1908,7 @@ $produkSemua = Produk::semua();
             </li>
             <li>
                 <a class="sidebar-menu-item-link" href="#"
-                   data-bs-toggle="modal" data-bs-target="#modal-shortcuts"
-                   data-bs-dismiss="offcanvas">
+                   data-bs-toggle="modal" data-bs-target="#modal-shortcuts">
                     <div class="sidebar-icon-bubble icon-emerald">
                         <i class="bi bi-keyboard"></i>
                     </div>
@@ -1930,8 +1927,7 @@ $produkSemua = Produk::semua();
             <ul class="sidebar-menu-list">
                 <li>
                     <a class="sidebar-menu-item-link warning-link" href="#"
-                       data-bs-toggle="modal" data-bs-target="#modal-tutup-kas"
-                       data-bs-dismiss="offcanvas">
+                       data-bs-toggle="modal" data-bs-target="#modal-tutup-kas">
                         <div class="sidebar-icon-bubble icon-amber">
                             <i class="bi bi-cash-coin"></i>
                         </div>
