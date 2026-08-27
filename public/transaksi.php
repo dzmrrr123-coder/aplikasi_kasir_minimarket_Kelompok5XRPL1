@@ -1947,13 +1947,6 @@ $produkSemua = Produk::semua();
     </div>
 </div>
 
-
-
-<script src="assets/vendor/bootstrap/bootstrap.bundle.min.js"></script>
-<script src="assets/pos.js?v=<?= @filemtime(__DIR__ . '/assets/pos.js') ?: time() ?>"></script>
-<script src="assets/hardware.js?v=<?= @filemtime(__DIR__ . '/assets/hardware.js') ?: time() ?>"></script>
-<script src="assets/hardware-pos.js?v=<?= @filemtime(__DIR__ . '/assets/hardware-pos.js') ?: time() ?>"></script>
-
 <!-- Modal void item (butuh PIN supervisor) -->
 <div class="modal fade" id="modal-void" tabindex="-1" aria-labelledby="modal-void-label" aria-hidden="true">
     <div class="modal-dialog">
@@ -2276,6 +2269,8 @@ $produkSemua = Produk::semua();
     <div class="d-flex align-items-center gap-2">
         <span class="text-muted"><i class="bi bi-lightning-charge-fill text-warning me-1"></i>POS Fast Mode Active</span>
     </div>
+</div>
+
 <!-- Modal QRIS Dynamic Payment Display -->
 <div class="modal fade" id="modal-qris" tabindex="-1" aria-labelledby="modalQrisLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -2382,8 +2377,12 @@ $produkSemua = Produk::semua();
     </div>
 </div>
 
+<script src="assets/vendor/bootstrap/bootstrap.bundle.min.js"></script>
+<script src="assets/pos.js?v=<?= @filemtime(__DIR__ . '/assets/pos.js') ?: time() ?>"></script>
+<script src="assets/hardware.js?v=<?= @filemtime(__DIR__ . '/assets/hardware.js') ?: time() ?>"></script>
+<script src="assets/hardware-pos.js?v=<?= @filemtime(__DIR__ . '/assets/hardware-pos.js') ?: time() ?>"></script>
 <script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
 <script src="assets/scanner-pos.js?v=<?= @filemtime(__DIR__ . '/assets/scanner-pos.js') ?: time() ?>"></script>
-<script src="assets/theme.js?v=<?= @filemtime(__DIR__ . '/assets/theme.css') ?: time() ?>"></script>
+<script src="assets/theme.js?v=<?= @filemtime(__DIR__ . '/assets/theme.js') ?: time() ?>"></script>
 </body>
 </html>
