@@ -161,6 +161,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $editSupplierId = (int) ($_SESSION['edit_supplier_id'] ?? 0);
 $editSupplier = $editSupplierId > 0 ? Supplier::cari($editSupplierId) : null;
 $aktif = 'supplier';
+$breadcrumb = ['Dashboard' => 'dashboard.php', 'Supplier' => ''];
 ?>
 <!DOCTYPE html>
 <html lang="id">

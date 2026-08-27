@@ -66,38 +66,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['aksi'] ?? '') === 'logout'
 use App\Models\Produk;
 $stokMenipis = Produk::cariStokMenipis();
 $aktif = 'dashboard';
+$breadcrumb = ['Dashboard' => ''];
 ?>
 <!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Dashboard - Kasir Minimarket</title>
+    <title>Dashboard — Kasir Minimarket</title>
     <link href="assets/vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
     <link href="assets/vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
-    <link href="assets/theme.css" rel="stylesheet">
+    <link href="assets/theme.css?v=<?= @filemtime(__DIR__ . '/assets/theme.css') ?: time() ?>" rel="stylesheet">
     <link href="assets/vendor/datatables/dataTables.bootstrap5.min.css" rel="stylesheet">
 </head>
 <body>
 <?php require __DIR__ . '/assets/partials/navbar.php'; ?>
 <div class="container py-4">
 
-    <div class="d-flex flex-wrap align-items-center justify-content-between mb-4 gap-2">
+    <div class="d-flex flex-wrap align-items-center justify-content-between mb-4 gap-3">
         <div>
-            <h1 class="h3 mb-1">Dashboard</h1>
-            <span class="text-muted small">Ringkasan performa toko hari ini</span>
+            <h1 class="h3 mb-1 fw-bold text-dark"><i class="bi bi-speedometer2 text-primary me-2"></i>Dashboard</h1>
+            <span class="text-muted small">Ringkasan performa penjualan dan status operasional toko hari ini</span>
         </div>
-        <a href="laporan.php" class="btn btn-outline-primary btn-sm">
-            <i class="bi bi-bar-chart-line me-1"></i>Buka Laporan
-        </a>
+        <div class="d-flex align-items-center gap-2">
+            <a href="laba.php" class="btn btn-outline-success btn-sm">
+                <i class="bi bi-piggy-bank me-1"></i>Laporan Laba
+            </a>
+            <a href="laporan.php" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-bar-chart-line me-1"></i>Laporan Penjualan
+            </a>
+            <a href="transaksi.php" class="btn btn-primary btn-sm">
+                <i class="bi bi-cash-register me-1"></i>Buka Kasir
+            </a>
+        </div>
     </div>
 
     <?php if ($stokMenipis !== []): ?>
-        <div class="alert alert-warning alert-dismissible fade show" role="alert">
+        <div class="alert alert-warning alert-dismissible fade show border-0 shadow-sm" role="alert">
             <div class="d-flex align-items-start gap-2">
-                <i class="bi bi-exclamation-triangle-fill mt-1"></i>
+                <i class="bi bi-exclamation-triangle-fill text-warning fs-5"></i>
                 <div>
-                    <strong>Stok menipis:</strong>
+                    <strong>Peringatan Stok Menipis:</strong>
                     <?php
                     $namaStokMenipis = array_map(
                         static fn ($p) => $p->getNama() . ' (' . $p->getStok() . ')',
@@ -108,57 +117,69 @@ $aktif = 'dashboard';
                     <?php if (count($stokMenipis) > 5): ?>
                         <span class="text-muted">+<?= count($stokMenipis) - 5 ?> lainnya</span>
                     <?php endif; ?>
-                    <a href="admin.php" class="alert-link ms-1">Kelola stok</a>
+                    <a href="admin.php" class="alert-link ms-2">Kelola stok sekarang &raquo;</a>
                 </div>
             </div>
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Tutup"></button>
         </div>
     <?php endif; ?>
 
-    <!-- Stat cards (diisi via AJAX) -->
+    <!-- Stat cards elevated -->
     <div class="row g-3 mb-4">
         <div class="col-sm-6 col-xl-3">
-            <div class="card pos-card stat-card h-100">
-                <div class="card-body d-flex align-items-center gap-3">
-                    <span class="stat-icon bg-brand-soft text-brand"><i class="bi bi-cash-stack"></i></span>
-                    <div>
-                        <div class="stat-nilai font-num" id="stat-total">—</div>
-                        <div class="stat-label">Penjualan Hari Ini</div>
+            <div class="stat-card-elevated p-3 h-100 shadow-sm">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="text-muted small fw-semibold text-uppercase">Penjualan Hari Ini</span>
+                    <div class="stat-icon-bubble bg-teal text-primary">
+                        <i class="bi bi-cash-stack"></i>
                     </div>
                 </div>
+                <div class="stat-nilai font-num fs-4 fw-bold text-dark mb-1" id="stat-total">
+                    <span class="spinner-border spinner-border-sm text-muted"></span>
+                </div>
+                <span class="small text-muted">Omzet kotor hari ini</span>
             </div>
         </div>
         <div class="col-sm-6 col-xl-3">
-            <div class="card pos-card stat-card h-100">
-                <div class="card-body d-flex align-items-center gap-3">
-                    <span class="stat-icon text-bg-primary"><i class="bi bi-receipt"></i></span>
-                    <div>
-                        <div class="stat-nilai font-num" id="stat-jumlah">—</div>
-                        <div class="stat-label">Transaksi</div>
+            <div class="stat-card-elevated card-info p-3 h-100 shadow-sm">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="text-muted small fw-semibold text-uppercase">Total Transaksi</span>
+                    <div class="stat-icon-bubble bg-sky text-info">
+                        <i class="bi bi-receipt"></i>
                     </div>
                 </div>
+                <div class="stat-nilai font-num fs-4 fw-bold text-dark mb-1" id="stat-jumlah">
+                    <span class="spinner-border spinner-border-sm text-muted"></span>
+                </div>
+                <span class="small text-muted">Struk belanja selesai</span>
             </div>
         </div>
         <div class="col-sm-6 col-xl-3">
-            <div class="card pos-card stat-card h-100">
-                <div class="card-body d-flex align-items-center gap-3">
-                    <span class="stat-icon text-bg-success"><i class="bi bi-bag-check"></i></span>
-                    <div>
-                        <div class="stat-nilai font-num" id="stat-item">—</div>
-                        <div class="stat-label">Item Terjual</div>
+            <div class="stat-card-elevated card-success p-3 h-100 shadow-sm">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="text-muted small fw-semibold text-uppercase">Item Terjual</span>
+                    <div class="stat-icon-bubble bg-emerald text-success">
+                        <i class="bi bi-bag-check"></i>
                     </div>
                 </div>
+                <div class="stat-nilai font-num fs-4 fw-bold text-success mb-1" id="stat-item">
+                    <span class="spinner-border spinner-border-sm text-muted"></span>
+                </div>
+                <span class="small text-muted">Total unit produk</span>
             </div>
         </div>
         <div class="col-sm-6 col-xl-3">
-            <div class="card pos-card stat-card h-100">
-                <div class="card-body d-flex align-items-center gap-3">
-                    <span class="stat-icon text-bg-warning"><i class="bi bi-graph-up-arrow"></i></span>
-                    <div>
-                        <div class="stat-nilai font-num" id="stat-rata">—</div>
-                        <div class="stat-label">Rata-rata / Transaksi</div>
+            <div class="stat-card-elevated card-warning p-3 h-100 shadow-sm">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="text-muted small fw-semibold text-uppercase">Rata-rata Struk</span>
+                    <div class="stat-icon-bubble bg-amber text-warning">
+                        <i class="bi bi-graph-up-arrow"></i>
                     </div>
                 </div>
+                <div class="stat-nilai font-num fs-4 fw-bold text-dark mb-1" id="stat-rata">
+                    <span class="spinner-border spinner-border-sm text-muted"></span>
+                </div>
+                <span class="small text-muted">Rata-rata per pelanggan</span>
             </div>
         </div>
     </div>

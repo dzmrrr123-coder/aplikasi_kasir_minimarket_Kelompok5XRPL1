@@ -373,6 +373,7 @@ $editProdukId = (int) ($_SESSION['edit_produk_id'] ?? 0);
 $editKategori = $editKategoriId > 0 ? Kategori::cari($editKategoriId) : null;
 $editProduk = $editProdukId > 0 ? Produk::cari($editProdukId) : null;
 $aktif = 'admin';
+$breadcrumb = ['Dashboard' => 'dashboard.php', 'Produk' => ''];
 
 // ID produk yang sedang diedit (dipakai JS untuk ambil harga beli otomatis).
 $produkEditId = $editProduk?->getId() ?? 0;

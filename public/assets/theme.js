@@ -66,21 +66,82 @@
         // Form yang sudah ada di DOM.
         document.querySelectorAll('form[method="post"], form[method="POST"]').forEach(sisipToken);
 
-        // Form baru (mis. hasil fragment AJAX / DataTables) — pakai observer.
-        if (window.MutationObserver) {
-            var observer = new MutationObserver(function (mutasi) {
-                mutasi.forEach(function (m) {
-                    m.addedNodes.forEach(function (node) {
-                        if (node.nodeType === 1 && node.tagName === 'FORM') {
-                            sisipToken(node);
-                        } else if (node.nodeType === 1) {
-                            node.querySelectorAll &&
-                                node.querySelectorAll('form[method="post"], form[method="POST"]').forEach(sisipToken);
-                        }
-                    });
+    // Form baru (mis. hasil fragment AJAX / DataTables) — pakai observer.
+    if (window.MutationObserver) {
+        var observer = new MutationObserver(function (mutasi) {
+            mutasi.forEach(function (m) {
+                m.addedNodes.forEach(function (node) {
+                    if (node.nodeType === 1 && node.tagName === 'FORM') {
+                        sisipToken(node);
+                    } else if (node.nodeType === 1) {
+                        node.querySelectorAll &&
+                            node.querySelectorAll('form[method="post"], form[method="POST"]').forEach(sisipToken);
+                    }
                 });
             });
-            observer.observe(document.body, { childList: true, subtree: true });
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+    }
+})();
+
+/* ============================================================
+   GLOBAL LOADING STATE
+   - Semua tombol export (.export-btn): ganti teks jadi
+     "Memproses…" + spinner saat klik (sebelum form submit /
+     fetch AJAX selesai).
+   - Semua tabel DataTables (.datatable): tampilkan overlay
+     "Memuat…" saat ajax / draw sedang berjalan.
+   ============================================================ */
+(function () {
+    'use strict';
+
+    // --- Export button loading ---
+    function initExportButtons() {
+        document.querySelectorAll('.export-btn').forEach(function (btn) {
+            if (btn.__exportBound) return;
+            btn.__exportBound = true;
+            btn.addEventListener('click', function () {
+                var asli = btn.innerHTML;
+                btn.disabled = true;
+                btn.setAttribute('data-text-asli', asli);
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Memproses…';
+                // Beberapa detik kemudian, kembalikan (jika fetch tak set disabled lagi).
+                setTimeout(function () {
+                    if (btn.disabled) {
+                        btn.disabled = false;
+                        var txt = btn.getAttribute('data-text-asli') || asli;
+                        btn.innerHTML = txt;
+                    }
+                }, 4000);
+            });
+        });
+    }
+
+    // --- DataTables loading overlay ---
+    function observasiDataTable() {
+        var table = document.querySelector('.datatable');
+        if (!table || table.__dtBound) return;
+        table.__dtBound = true;
+        // Tunggu DataTable inisialisasi (asinkron via ajax).
+        if (window.jQuery && window.jQuery().DataTable) {
+            table.addEventListener('processing.dt', function (e, settings, data) {
+                var el = table.closest('.dataTables_wrapper');
+                if (el) {
+                    el.setAttribute('aria-busy', data);
+                }
+            });
         }
+    }
+
+    // Export buttons
+    initExportButtons();
+
+    // Untuk DataTables yang di-render asinkron, pakai observer.
+    if (window.MutationObserver) {
+        var obs = new MutationObserver(function () {
+            initExportButtons();
+            observasiDataTable();
+        });
+        obs.observe(document.body, { childList: true, subtree: true });
     }
 })();

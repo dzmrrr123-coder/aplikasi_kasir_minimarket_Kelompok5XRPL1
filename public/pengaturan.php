@@ -129,6 +129,7 @@ $waWebhookUrl = $pengaturan['wa_webhook_url'] ?? '';
 $waTujuanNomor = $pengaturan['wa_tujuan_nomor'] ?? '';
 
 $aktif = 'pengaturan';
+$breadcrumb = ['Dashboard' => 'dashboard.php', 'Pengaturan' => ''];
 ?>
 <!DOCTYPE html>
 <html lang="id">

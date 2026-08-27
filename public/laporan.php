@@ -118,6 +118,7 @@ if ($ekspor === 'pdf' || $ekspor === 'csv') {
 // Tabel & grafik periode diambil via api.php (Controller → DataReporter),
 // bukan di-render di view. View murni konsumen JSON.
 $aktif = 'laporan';
+$breadcrumb = ['Dashboard' => 'dashboard.php', 'Laporan Penjualan' => ''];
 
 // Header toko utk cetak laporan (muncul hanya saat print via @media print).
 $namaTokoCetak = \App\Models\Pengaturan::get('nama_toko', 'Minimarket');
@@ -168,46 +169,86 @@ $alamatTokoCetak = \App\Models\Pengaturan::get('alamat', '');
         <?php endif; ?>
     </div>
 
-    <div class="mb-4 no-print">
-        <h1 class="h3 mb-1">Laporan Penjualan</h1>
-        <span class="text-muted small">Admin: <?= htmlspecialchars($nama) ?></span>
+    <div class="d-flex flex-wrap align-items-center justify-content-between mb-4 gap-3 no-print">
+        <div>
+            <h1 class="h3 mb-1 fw-bold text-dark"><i class="bi bi-bar-chart-line text-primary me-2"></i>Laporan Penjualan</h1>
+            <span class="text-muted small">Rekapitulasi transaksi penjualan kasir per periode</span>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <a href="laporan.php?tanggal_mulai=<?= urlencode($tanggalMulai) ?>&tanggal_akhir=<?= urlencode($tanggalAkhir) ?>&ekspor=pdf"
+               class="btn btn-outline-danger btn-sm" title="Unduh PDF">
+                <i class="bi bi-file-earmark-pdf me-1"></i>Unduh PDF
+            </a>
+            <a href="laporan.php?tanggal_mulai=<?= urlencode($tanggalMulai) ?>&tanggal_akhir=<?= urlencode($tanggalAkhir) ?>&ekspor=csv"
+               class="btn btn-outline-success btn-sm" title="Unduh Excel (CSV)">
+                <i class="bi bi-file-earmark-excel me-1"></i>Export CSV
+            </a>
+            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.print()" title="Cetak Halaman">
+                <i class="bi bi-printer me-1"></i>Cetak
+            </button>
+        </div>
     </div>
 
     <?php if ($peringatanTanggal !== ''): ?>
         <div class="alert alert-warning alert-dismissible fade show" role="alert">
-            <?= htmlspecialchars($peringatanTanggal) ?>
+            <i class="bi bi-exclamation-triangle-fill me-1"></i><?= htmlspecialchars($peringatanTanggal) ?>
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Tutup"></button>
         </div>
     <?php endif; ?>
 
-    <div class="card pos-card mb-4">
-        <div class="card-header bg-white"><strong>Filter Periode</strong></div>
-        <div class="card-body">
-            <form method="get" class="row g-2 align-items-end">
-                <div class="col-md-3">
-                    <label for="tanggal-mulai" class="form-label">Dari tanggal</label>
-                    <input
-                        type="date"
-                        id="tanggal-mulai"
-                        name="tanggal_mulai"
-                        class="form-control"
-                        value="<?= htmlspecialchars($tanggalMulai) ?>"
-                        required
-                    >
+    <div class="card pos-card mb-4 border-0 shadow-sm no-print">
+        <div class="card-body p-3 p-md-4">
+            <form method="get" id="form-filter-laporan" class="row g-3 align-items-end">
+                <div class="col-md-4 col-sm-6">
+                    <label for="tanggal-mulai" class="form-label fw-semibold small text-muted">Dari Tanggal</label>
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text bg-light"><i class="bi bi-calendar3"></i></span>
+                        <input
+                            type="date"
+                            id="tanggal-mulai"
+                            name="tanggal_mulai"
+                            class="form-control"
+                            value="<?= htmlspecialchars($tanggalMulai) ?>"
+                            required
+                        >
+                    </div>
                 </div>
-                <div class="col-md-3">
-                    <label for="tanggal-akhir" class="form-label">Sampai tanggal</label>
-                    <input
-                        type="date"
-                        id="tanggal-akhir"
-                        name="tanggal_akhir"
-                        class="form-control"
-                        value="<?= htmlspecialchars($tanggalAkhir) ?>"
-                        required
-                    >
+                <div class="col-md-4 col-sm-6">
+                    <label for="tanggal-akhir" class="form-label fw-semibold small text-muted">Sampai Tanggal</label>
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text bg-light"><i class="bi bi-calendar-check"></i></span>
+                        <input
+                            type="date"
+                            id="tanggal-akhir"
+                            name="tanggal_akhir"
+                            class="form-control"
+                            value="<?= htmlspecialchars($tanggalAkhir) ?>"
+                            required
+                        >
+                    </div>
                 </div>
-                <div class="col-md-auto">
-                    <button type="submit" class="btn btn-primary"><i class="bi bi-funnel me-1"></i>Tampilkan</button>
+                <div class="col-md-4 col-sm-12 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary btn-sm flex-fill">
+                        <i class="bi bi-funnel-fill me-1"></i>Tampilkan
+                    </button>
+                    <a href="laporan.php" class="btn btn-outline-secondary btn-sm" title="Reset filter">
+                        <i class="bi bi-arrow-counterclockwise"></i>
+                    </a>
+                </div>
+
+                <!-- Quick Date Preset Chips -->
+                <div class="col-12 pt-1">
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <span class="small text-muted fw-semibold me-1"><i class="bi bi-lightning-charge me-1"></i>Filter Cepat:</span>
+                        <div class="date-preset-chips mt-0">
+                            <button type="button" class="btn-preset-chip" data-preset="today">Hari Ini</button>
+                            <button type="button" class="btn-preset-chip" data-preset="yesterday">Kemarin</button>
+                            <button type="button" class="btn-preset-chip" data-preset="7days">7 Hari Terakhir</button>
+                            <button type="button" class="btn-preset-chip" data-preset="this_month">Bulan Ini</button>
+                            <button type="button" class="btn-preset-chip" data-preset="last_month">Bulan Lalu</button>
+                            <button type="button" class="btn-preset-chip" data-preset="this_year">Tahun Ini</button>
+                        </div>
+                    </div>
                 </div>
             </form>
         </div>
@@ -302,6 +343,50 @@ $alamatTokoCetak = \App\Models\Pengaturan::get('alamat', '');
         var mulai = <?= json_encode($dMulai->format('Y-m-d')) ?>;
         var akhir = <?= json_encode($dAkhir->format('Y-m-d')) ?>;
         var params = '&tanggal_mulai=' + mulai + '&tanggal_akhir=' + akhir;
+
+        function formatTanggalISO(d) {
+            var y = d.getFullYear();
+            var m = String(d.getMonth() + 1).padStart(2, '0');
+            var day = String(d.getDate()).padStart(2, '0');
+            return y + '-' + m + '-' + day;
+        }
+
+        var inputMulai = document.getElementById('tanggal-mulai');
+        var inputAkhir = document.getElementById('tanggal-akhir');
+        var formFilter = document.getElementById('form-filter-laporan');
+
+        document.addEventListener('click', function (e) {
+            var btn = e.target.closest('.btn-preset-chip');
+            if (!btn) return;
+            var preset = btn.getAttribute('data-preset');
+            var now = new Date();
+            var start = new Date();
+            var end = new Date();
+
+            if (preset === 'today') {
+                // start & end = now
+            } else if (preset === 'yesterday') {
+                start.setDate(now.getDate() - 1);
+                end.setDate(now.getDate() - 1);
+            } else if (preset === '7days') {
+                start.setDate(now.getDate() - 6);
+            } else if (preset === 'this_month') {
+                start = new Date(now.getFullYear(), now.getMonth(), 1);
+                end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+            } else if (preset === 'last_month') {
+                start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                end = new Date(now.getFullYear(), now.getMonth(), 0);
+            } else if (preset === 'this_year') {
+                start = new Date(now.getFullYear(), 0, 1);
+                end = new Date(now.getFullYear(), 11, 31);
+            }
+
+            if (inputMulai && inputAkhir && formFilter) {
+                inputMulai.value = formatTanggalISO(start);
+                inputAkhir.value = formatTanggalISO(end);
+                formFilter.submit();
+            }
+        });
 
         function rupiah(n) {
             return 'Rp ' + Number(n).toLocaleString('id-ID', {

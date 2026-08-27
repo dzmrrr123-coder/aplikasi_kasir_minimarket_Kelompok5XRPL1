@@ -186,6 +186,7 @@ $diskonSemua = Diskon::semua();
 $editDiskonId = (int) ($_SESSION['edit_diskon_id'] ?? 0);
 $editDiskon = $editDiskonId > 0 ? Diskon::cari($editDiskonId) : null;
 $aktif = 'diskon';
+$breadcrumb = ['Dashboard' => 'dashboard.php', 'Diskon' => ''];
 
 function formatRupiah(float $jumlah): string
 {

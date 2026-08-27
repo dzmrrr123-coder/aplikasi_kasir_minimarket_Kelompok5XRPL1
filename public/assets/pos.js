@@ -1,12 +1,88 @@
-// Transaksi tanpa reload: semua form data-aksi dikirim via fetch,
-// server mengembalikan JSON {fragment, struk?, pesan, tipe},
-// lalu UI diperbarui langsung tanpa memuat ulang halaman.
+// Transaksi tanpa reload (Ultra-Fast POS Engine):
+// Audio Feedback, Quick Cash Presets, Qty Steppers, Smart Autofocus,
+// Live Category Filtering, Keyboard Shortcuts (F1-F9, ESC).
 (function () {
     'use strict';
 
     var flash = document.getElementById('flash-pesan');
     var fragKiri = document.getElementById('fragmen-keranjang-kiri');
     var fragKanan = document.getElementById('fragmen-keranjang-kanan');
+
+    /* ============================================================
+       1. WEB AUDIO API SYNTHESIZER (0-Dependency Audio Feedback)
+       ============================================================ */
+    var POSAudio = (function () {
+        var audioCtx = null;
+        var isMuted = localStorage.getItem('pos_sound_muted') === 'true';
+
+        function getContext() {
+            if (!audioCtx) {
+                var AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                if (AudioContextClass) audioCtx = new AudioContextClass();
+            }
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            return audioCtx;
+        }
+
+        function playTone(freq, type, duration, delay) {
+            if (isMuted) return;
+            try {
+                var ctx = getContext();
+                if (!ctx) return;
+                setTimeout(function () {
+                    var osc = ctx.createOscillator();
+                    var gain = ctx.createGain();
+                    osc.type = type || 'sine';
+                    osc.frequency.value = freq;
+                    gain.gain.setValueAtTime(0.12, ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration);
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start(ctx.currentTime);
+                    osc.stop(ctx.currentTime + duration);
+                }, (delay || 0) * 1000);
+            } catch (e) {}
+        }
+
+        return {
+            beep: function () {
+                // Scanner pleasant high beep (880Hz, 70ms)
+                playTone(880, 'sine', 0.07);
+            },
+            chime: function () {
+                // Success payment melodic chime (C5 -> E5 -> G5)
+                playTone(523.25, 'triangle', 0.12, 0);
+                playTone(659.25, 'triangle', 0.12, 0.08);
+                playTone(783.99, 'triangle', 0.22, 0.16);
+            },
+            error: function () {
+                // Warning low tone (220Hz, 120ms x 2)
+                playTone(220, 'sawtooth', 0.12, 0);
+                playTone(180, 'sawtooth', 0.14, 0.12);
+            },
+            toggleMute: function () {
+                isMuted = !isMuted;
+                localStorage.setItem('pos_sound_muted', isMuted ? 'true' : 'false');
+                updateSoundIcon();
+                return isMuted;
+            },
+            isMuted: function () {
+                return isMuted;
+            }
+        };
+    })();
+
+    function updateSoundIcon() {
+        var icon = document.getElementById('icon-sound-pos');
+        if (!icon) return;
+        if (POSAudio.isMuted()) {
+            icon.className = 'bi bi-volume-mute-fill text-danger';
+        } else {
+            icon.className = 'bi bi-volume-up-fill';
+        }
+    }
 
     function rupiah(n) {
         return 'Rp ' + Number(n).toLocaleString('id-ID', {
@@ -28,37 +104,210 @@
         var pre = area.querySelector('pre');
         if (pre) pre.textContent = teks;
         area.classList.remove('d-none');
+        setTimeout(function () {
+            area.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 50);
     }
 
-    // Re-init kembalian live setelah fragment ringkasan diganti.
+    /* ============================================================
+       2. LIVE CALCULATION & GRAND KEMBALIAN DISPLAY
+       ============================================================ */
     function initKembalian() {
         var totalEl = document.getElementById('total-json');
-        if (!totalEl) return;
-        var total = parseFloat(totalEl.textContent) || 0;
         var input = document.getElementById('jumlah-dibayar');
-        var kembalian = document.getElementById('kembalian');
+        var kembalianEl = document.getElementById('kembalian');
+        var changeCard = document.getElementById('kiosk-change-card');
+        var changeStatusLabel = document.getElementById('change-status-label');
+        var changeBadge = document.getElementById('change-badge');
+        var changeVal = document.getElementById('kiosk-change-val');
         var tombol = document.querySelector('#form-bayar button[type="submit"]');
-        if (!input || !kembalian) return;
+        if (!input) return;
 
-        function hitung() {
-            var bayar = parseFloat(input.value) || 0;
-            var selisih = bayar - total;
-            if (selisih < 0) {
-                kembalian.textContent = 'Kurang ' + rupiah(Math.abs(selisih));
-                kembalian.classList.add('text-danger');
-                if (tombol) tombol.disabled = true;
+        var total = totalEl ? parseFloat(totalEl.textContent) || 0 : 0;
+        var bayar = parseFloat(input.value) || 0;
+        var selisih = bayar - total;
+        var isKurang = selisih < 0;
+
+        // Update small summary text
+        if (kembalianEl) {
+            if (isKurang) {
+                kembalianEl.textContent = 'Kurang ' + rupiah(Math.abs(selisih));
+                kembalianEl.className = 'kiosk-sub font-num text-danger';
             } else {
-                kembalian.textContent = rupiah(selisih);
-                kembalian.classList.remove('text-danger');
-                if (tombol && !tombol.dataset.kosong) tombol.disabled = false;
+                kembalianEl.textContent = 'Kembalian ' + rupiah(selisih);
+                kembalianEl.className = 'kiosk-sub font-num text-success';
             }
         }
-        input.addEventListener('input', hitung);
-        hitung();
+
+        // Update grand change card
+        if (changeCard) {
+            changeCard.classList.toggle('is-kurang', isKurang);
+            changeCard.classList.toggle('is-cukup', !isKurang);
+        }
+        if (changeStatusLabel) {
+            changeStatusLabel.textContent = isKurang ? 'Uang Kurang' : 'Kembalian Pelanggan';
+        }
+        if (changeBadge) {
+            changeBadge.textContent = isKurang ? 'Belum Cukup' : 'Siap Selesai';
+            changeBadge.className = 'badge text-bg-' + (isKurang ? 'danger' : 'success') + ' small';
+        }
+        if (changeVal) {
+            changeVal.textContent = isKurang ? 'Kurang ' + rupiah(Math.abs(selisih)) : rupiah(selisih);
+        }
+
+        // Button status
+        if (tombol) {
+            if (isKurang) {
+                tombol.disabled = true;
+            } else {
+                if (!tombol.dataset.kosong) tombol.disabled = false;
+            }
+        }
     }
 
+    // Global live input listener for payment amount
+    document.addEventListener('input', function (e) {
+        if (e.target && e.target.id === 'jumlah-dibayar') {
+            initKembalian();
+        }
+    });
+
+    /* ============================================================
+       3. QUICK CASH PRESETS & NUMPAD (Global Delegated Events)
+       ============================================================ */
+    document.addEventListener('click', function (e) {
+        // Quick Cash Chips (Pecahan Uang Otomatis)
+        var chip = e.target.closest('.btn-cash-chip');
+        if (chip) {
+            e.preventDefault();
+            var input = document.getElementById('jumlah-dibayar');
+            var totalEl = document.getElementById('total-json');
+            if (!input) return;
+
+            var nominal = chip.getAttribute('data-cash');
+            var total = totalEl ? parseFloat(totalEl.textContent) || 0 : 0;
+
+            if (nominal === 'exact') {
+                input.value = String(Math.ceil(total));
+            } else {
+                input.value = String(nominal);
+            }
+
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            initKembalian();
+            POSAudio.beep();
+            return;
+        }
+
+        // Numpad Calculator Buttons
+        var numBtn = e.target.closest('button[data-num]');
+        if (numBtn) {
+            e.preventDefault();
+            var inputNum = document.getElementById('jumlah-dibayar');
+            if (!inputNum) return;
+
+            var aksi = numBtn.getAttribute('data-num');
+            if (aksi === 'hapus') {
+                inputNum.value = inputNum.value.slice(0, -1);
+            } else if (aksi === 'bersih') {
+                inputNum.value = '';
+            } else if (aksi === 'maks') {
+                var totalEl2 = document.getElementById('total-json');
+                var total2 = totalEl2 ? parseFloat(totalEl2.textContent) || 0 : 0;
+                inputNum.value = String(Math.ceil(total2));
+            } else {
+                inputNum.value = (inputNum.value || '') + aksi;
+            }
+
+            inputNum.dispatchEvent(new Event('input', { bubbles: true }));
+            initKembalian();
+            POSAudio.beep();
+            return;
+        }
+    });
+
+    /* ============================================================
+       4. CATEGORY FILTER PILLS (Instant Client Filtering)
+       ============================================================ */
+    function initCategoryPills() {
+        document.addEventListener('click', function (e) {
+            var pill = e.target.closest('.cat-pill');
+            if (!pill) return;
+
+            var targetCat = pill.getAttribute('data-cat');
+            var allPills = document.querySelectorAll('.cat-pill');
+            allPills.forEach(function (p) { p.classList.remove('active'); });
+            pill.classList.add('active');
+
+            var cols = document.querySelectorAll('.kiosk-produk-col');
+            cols.forEach(function (col) {
+                var itemCat = col.getAttribute('data-kategori') || '';
+                if (targetCat === 'all' || itemCat.indexOf(targetCat) !== -1) {
+                    col.style.display = '';
+                } else {
+                    col.style.display = 'none';
+                }
+            });
+            POSAudio.beep();
+        });
+    }
+
+    /* ============================================================
+       5. CART STEPPER (+ / -) QUICK QUANTITY MODIFIER
+       ============================================================ */
+    function kirimAksiUbahQty(produkId, delta) {
+        var meta = document.querySelector('meta[name="csrf-token"]');
+        var token = meta ? meta.getAttribute('content') : '';
+        var data = new FormData();
+        data.set('aksi', 'ubah_qty');
+        data.set('produk_id', String(produkId));
+        data.set('delta', String(delta));
+        data.set('csrf', token);
+
+        fetch('transaksi.php', {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'fetch' },
+            body: data
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (res) {
+                tampilkanFlash(res.pesan, res.tipe);
+                if (res.tipe === 'success') {
+                    POSAudio.beep();
+                } else {
+                    POSAudio.error();
+                }
+                if (res.fragment) gantiFragment(res.fragment);
+                fokusBarcode();
+            })
+            .catch(function (err) {
+                tampilkanFlash('Gagal mengubah jumlah: ' + err.message, 'danger');
+                POSAudio.error();
+            });
+    }
+
+    document.addEventListener('click', function (e) {
+        var plusBtn = e.target.closest('.btn-step-plus');
+        if (plusBtn) {
+            e.preventDefault();
+            var pidPlus = plusBtn.getAttribute('data-produk-id');
+            if (pidPlus) kirimAksiUbahQty(pidPlus, 1);
+            return;
+        }
+
+        var minusBtn = e.target.closest('.btn-step-minus');
+        if (minusBtn) {
+            e.preventDefault();
+            var pidMinus = minusBtn.getAttribute('data-produk-id');
+            if (pidMinus) kirimAksiUbahQty(pidMinus, -1);
+            return;
+        }
+    });
+
+    /* ============================================================
+       6. FRAGMENT REPLACEMENT & SYNC
+       ============================================================ */
     function gantiFragment(fragment) {
-        // Fragment berisi card keranjang (kiri) + panel kanan kiosk.
         if (!fragment || !fragKiri || !fragKanan) return;
         var tmp = document.createElement('div');
         tmp.innerHTML = fragment;
@@ -73,130 +322,161 @@
         var kioskKanan = document.querySelector('.kiosk-kanan');
 
         if (kanan) {
-            // Panel kanan kiosk: userbar + ringkasan + numpad.
             fragKanan.innerHTML = tmp.querySelector('.kiosk-userbar').parentElement
                 ? tmp.querySelector('.kiosk-userbar').parentElement.innerHTML
                 : '';
-            initNumpad();
-            syncNumpadMetode();
-            // Panel kanan sempat disembunyikan (d-none) saat wajib buka kas;
-            // tampilkan kembali sekarang karena fragment punya panel kanan.
+            syncMetodePembayaran();
+            updateSoundIcon();
             if (kioskKanan) kioskKanan.classList.remove('d-none');
         } else {
-            // Fragment tidak berisi panel kanan (shift belum/sudah tutup) —
-            // kosongkan isi lama & sembunyikan kolom kanan supaya tidak ada
-            // sisa panel menggantung.
             fragKanan.innerHTML = '';
             if (kioskKanan) kioskKanan.classList.add('d-none');
         }
 
         initKembalian();
-        // Pertahankan fokus barcode setelah fragment diganti (supaya
-        // operator bisa langsung scan produk berikutnya).
         fokusBarcode();
     }
 
-    // Numpad: isi input jumlah dibayar.
-    function initNumpad() {
-        var input = document.getElementById('jumlah-dibayar');
-        if (!input) return;
-        var grid = document.querySelector('.numpad-grid');
-        if (!grid) return;
-
-        grid.addEventListener('click', function (e) {
-            var btn = e.target.closest('button[data-num]');
-            if (!btn) return;
-            var aksi = btn.getAttribute('data-num');
-
-            if (aksi === 'hapus') {
-                input.value = input.value.slice(0, -1);
-            } else if (aksi === 'bersih') {
-                input.value = '';
-            } else if (aksi === 'maks') {
-                var totalEl = document.getElementById('total-json');
-                var total = totalEl ? parseFloat(totalEl.textContent) || 0 : 0;
-                input.value = String(Math.ceil(total));
-            } else {
-                input.value = (input.value || '') + aksi;
-            }
-
-            // Trigger event input utk hitung kembalian.
-            input.dispatchEvent(new Event('input'));
-        });
+    function metodeAktif() {
+        var el = document.querySelector('input[name="metode"]:checked');
+        return el ? el.value : 'tunai';
     }
 
-    // Numpad (kalkulator) hanya muncul saat kasir memilih metode
-    // pembayaran Tunai — panel kanan tetap lega saat awal / non-tunai.
-    var numpadTampil = false; // default: sembunyi biar panel lega
-    function syncNumpadMetode() {
+    function syncMetodePembayaran() {
+        var tunai = metodeAktif() === 'tunai';
         var numpad = document.getElementById('kiosk-numpad');
-        if (!numpad) return;
-        numpad.classList.toggle('d-none', !numpadTampil);
+        var groupBayar = document.getElementById('jumlah-bayar-group');
+        var infoNonTunai = document.getElementById('info-non-tunai');
+        var changeCard = document.getElementById('kiosk-change-card');
+        if (numpad) numpad.classList.toggle('d-none', !tunai);
+        if (groupBayar) groupBayar.classList.toggle('d-none', !tunai);
+        if (changeCard) changeCard.classList.toggle('d-none', !tunai);
+        if (infoNonTunai) infoNonTunai.classList.toggle('d-none', tunai);
     }
+
     document.addEventListener('change', function (e) {
         if (e.target && e.target.name === 'metode') {
-            // Muncul saat Tunai dipilih; sembunyi saat Non-tunai.
-            numpadTampil = e.target.value === 'tunai';
-            syncNumpadMetode();
+            syncMetodePembayaran();
+            POSAudio.beep();
         }
     });
 
-    // Shortcut keyboard: F1 = fokus pencarian, F2 = fokus jumlah dibayar.
+    /* ============================================================
+       7. KEYBOARD SHORTCUTS (F1-F9, ESC)
+       ============================================================ */
     document.addEventListener('keydown', function (e) {
-        if (e.key === 'F1') {
+        if (e.key === 'Escape') {
+            var areaStruk = document.getElementById('area-struk');
+            if (areaStruk && !areaStruk.classList.contains('d-none')) {
+                var tutup = document.getElementById('tutup-struk');
+                if (tutup) { tutup.click(); } else { areaStruk.classList.add('d-none'); }
+                fokusBarcode();
+                return;
+            }
+        } else if (e.key === 'F1') {
             e.preventDefault();
             var cari = document.querySelector('input[name="cari"]');
-            if (cari) cari.focus();
+            if (cari) { cari.focus(); cari.select(); }
         } else if (e.key === 'F2') {
             e.preventDefault();
-            var bayar = document.getElementById('jumlah-dibayar');
-            if (bayar) bayar.focus();
+            var barcode = document.getElementById('input-barcode');
+            if (barcode) { barcode.focus(); barcode.select(); }
+        } else if (e.key === 'F4') {
+            e.preventDefault();
+            var memberInput = document.getElementById('input-telepon-member');
+            if (memberInput) { memberInput.focus(); memberInput.select(); }
+        } else if (e.key === 'F8') {
+            e.preventDefault();
+            var chipPas = document.querySelector('.btn-cash-chip.chip-exact');
+            if (chipPas) chipPas.click();
+        } else if (e.key === 'F9') {
+            e.preventDefault();
+            var formBayarBtn = document.querySelector('#form-bayar button[type="submit"]');
+            if (formBayarBtn && !formBayarBtn.disabled) formBayarBtn.click();
         }
     });
 
-    // Scan barcode: fokus otomatis saat halaman dimuat, dan setelah
-    // submit, kosongkan + refokus supaya bisa scan produk berikutnya.
+    /* ============================================================
+       8. SMART AUTOFOCUS GUARD
+       ============================================================ */
     function fokusBarcode() {
-        // Bila overlay buka kas masih tampil, biarkan fokus di input modal awal.
         var bukaKas = document.getElementById('card-buka-kas');
-        if (bukaKas && !bukaKas.classList.contains('d-none')) {
-            return;
-        }
+        if (bukaKas && !bukaKas.classList.contains('d-none')) return;
+
+        var areaStruk = document.getElementById('area-struk');
+        if (areaStruk && !areaStruk.classList.contains('d-none')) return;
+
+        var activeModal = document.querySelector('.modal.show');
+        if (activeModal) return;
 
         var barcode = document.getElementById('input-barcode');
-        if (barcode && !document.getElementById('area-struk').classList.contains('d-none')) {
-            // Struk sedang tampil — jangan rebut fokus.
-            return;
-        }
         if (barcode) barcode.focus();
     }
 
-    // Aksi yang tombolnya di-disable selama request AJAX berjalan (cegah
-    // double-tap di layar sentuh). Aksi 'scan' & tambah_item TIDAK di-disable
-    // karena kasir butuh kecepatan scan beruntun.
-    var aksiDisableTombol = ['bayar', 'batalkan', 'buka_kas', 'tutup_kas', 'set_member', 'hapus_member'];
+    var aksiDisableTombol = ['bayar', 'batalkan', 'buka_kas', 'tutup_kas', 'set_member', 'hapus_member', 'void_item'];
+
+    function kunciInputPOS(aktif) {
+        var tombolBayar = document.querySelector('#form-bayar button[type="submit"]');
+        var barcode = document.getElementById('input-barcode');
+        var tombolScan = document.querySelector('#form-scan button[type="submit"]');
+        var groupBayar = document.getElementById('jumlah-bayar-group');
+
+        var elems = [];
+        if (barcode) elems.push(barcode);
+        if (tombolScan) elems.push(tombolScan);
+        if (groupBayar) elems.push(groupBayar);
+        elems.forEach(function (el) {
+            if (aktif) {
+                el.setAttribute('aria-busy', 'true');
+                el.style.pointerEvents = 'none';
+                el.style.opacity = '0.55';
+            } else {
+                el.removeAttribute('aria-busy');
+                el.style.pointerEvents = '';
+                el.style.opacity = '';
+            }
+        });
+
+        if (tombolBayar) {
+            tombolBayar.disabled = aktif;
+            if (aktif) {
+                tombolBayar.classList.add('is-loading', 'btn-processing');
+                tombolBayar.setAttribute('data-text-asli', tombolBayar.innerHTML);
+                tombolBayar.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Memproses…';
+            } else {
+                tombolBayar.classList.remove('is-loading', 'btn-processing');
+                var asli = tombolBayar.getAttribute('data-text-asli');
+                if (asli) tombolBayar.innerHTML = asli;
+            }
+        }
+    }
 
     function tombolSubmit(form) {
         return form ? form.querySelector('button[type="submit"]') : null;
     }
 
+    /* ============================================================
+       9. FORM SUBMISSIONS VIA AJAX
+       ============================================================ */
     document.addEventListener('submit', function (e) {
         var form = e.target;
         var aksi = form.getAttribute('data-aksi');
-        if (!aksi) return; // form biasa (mis. pencarian GET) tetap normal
+        if (!aksi) return;
 
         e.preventDefault();
         var data = new FormData(form);
         data.set('aksi', aksi);
-        // Token CSRF untuk request fetch.
         var meta = document.querySelector('meta[name="csrf-token"]');
         if (meta) data.set('csrf', meta.getAttribute('content'));
 
-        // Disable tombol submit SEBELUM fetch supaya tidak bisa dobel-tap.
         var tombol = aksiDisableTombol.indexOf(aksi) >= 0 ? tombolSubmit(form) : null;
         if (tombol) {
             tombol.disabled = true;
             tombol.classList.add('is-loading');
+        }
+
+        if (aksi === 'bayar') {
+            kunciInputPOS(true);
         }
 
         fetch('transaksi.php', {
@@ -209,11 +489,24 @@
                 return r.json();
             })
             .then(function (res) {
+                if (aksi === 'bayar') {
+                    kunciInputPOS(false);
+                }
                 if (tombol) tombol.classList.remove('is-loading');
                 tampilkanFlash(res.pesan, res.tipe);
 
+                // Audio feedback triggers
+                if (res.tipe === 'success') {
+                    if (aksi === 'bayar') {
+                        POSAudio.chime();
+                    } else {
+                        POSAudio.beep();
+                    }
+                } else if (res.tipe === 'danger' || res.tipe === 'warning') {
+                    POSAudio.error();
+                }
+
                 if (aksi === 'scan') {
-                    // Kosongkan field barcode & refokus untuk scan berikutnya.
                     var barcode = document.getElementById('input-barcode');
                     if (barcode) {
                         barcode.value = '';
@@ -222,9 +515,6 @@
                 }
 
                 if (aksi === 'buka_kas') {
-                    // Hanya sembunyikan overlay bila kas berhasil dibuka.
-                    // Kalau gagal (mis. modal negatif / masih ada shift),
-                    // overlay wajib tetap tampil supaya kasir bisa coba lagi.
                     if (res.tipe === 'success') {
                         var cardBukaKas = document.getElementById('card-buka-kas');
                         if (cardBukaKas) cardBukaKas.classList.add('d-none');
@@ -235,8 +525,6 @@
                 }
 
                 if (aksi === 'tutup_kas') {
-                    // Tutup modal + tampilkan hasil rekonsiliasi yang jelas,
-                    // supaya kasir tidak bingung apakah kas berhasil ditutup.
                     var modalTutup = document.getElementById('modal-tutup-kas');
                     if (modalTutup && window.bootstrap) {
                         var bs = bootstrap.Modal.getInstance(modalTutup);
@@ -244,24 +532,36 @@
                     }
                     if (res.tipe === 'success') {
                         tampilkanFlash(res.pesan + ' Kas kembali terkunci.', 'success');
-                        // Kembalikan tampilan ke kondisi "belum buka kas":
-                        // tampilkan card Buka Kas, sembunyikan kolom kanan.
-                        var cardBukaKas = document.getElementById('card-buka-kas');
-                        if (cardBukaKas) cardBukaKas.classList.remove('d-none');
+                        var cardBukaKas2 = document.getElementById('card-buka-kas');
+                        if (cardBukaKas2) cardBukaKas2.classList.remove('d-none');
                         var kioskKanan = document.querySelector('.kiosk-kanan');
                         if (kioskKanan) kioskKanan.classList.add('d-none');
                     }
                 }
 
-                // Respons error (validasi/guard server) — aktifkan lagi tombol
-                // supaya kasir bisa perbaiki input & coba lagi.
+                if (aksi === 'void_item') {
+                    var mVoid = document.getElementById('modal-void');
+                    if (mVoid && window.bootstrap) {
+                        var bsVoid = bootstrap.Modal.getInstance(mVoid);
+                        if (res.tipe === 'success') {
+                            // Berhasil: tutup modal, reset input
+                            if (bsVoid) bsVoid.hide();
+                            var voidId = document.getElementById('void-produk-id');
+                            if (voidId) voidId.value = '';
+                        } else {
+                            // Gagal (PIN salah / item tidak ada): re-enable tombol, reset PIN
+                            var voidPin = document.getElementById('void-pin');
+                            if (voidPin) { voidPin.value = ''; setTimeout(function () { voidPin.focus(); }, 100); }
+                        }
+                    }
+                }
+
                 if (res.tipe === 'danger' || res.tipe === 'warning') {
                     if (tombol) tombol.disabled = false;
                 }
 
                 if (res.struk) {
                     tampilkanStruk(res.struk);
-                    // Hook hardware: cetak struk otomatis ke printer thermal.
                     if (window.afterBayarSukses) window.afterBayarSukses(res);
                 }
                 if (res.fragment) {
@@ -271,29 +571,37 @@
                     if (area) area.classList.add('d-none');
                 }
 
-                // Grid produk di-refresh dari server (mis. setelah bayar)
-                // supaya stok yang tampil selalu sesuai DB tanpa reload.
                 if (res.produk) {
                     var fragProduk = document.getElementById('fragmen-produk');
                     if (fragProduk) fragProduk.outerHTML = res.produk;
                 }
 
-                // Setelah fragment diganti, elemen tombol lama kemungkinan besar
-                // ikut ke-replace oleh render server. Kalau ternyata nyangkut
-                // (masih disabled), aktifkan kembali supaya tidak macet.
                 if (tombol && tombol.disabled) {
                     tombol.disabled = false;
                 }
             })
             .catch(function (err) {
+                if (aksi === 'bayar') {
+                    kunciInputPOS(false);
+                }
                 if (tombol) tombol.classList.remove('is-loading');
                 tampilkanFlash('Terjadi kesalahan: ' + err.message, 'danger');
-                // Request gagal — aktifkan kembali tombol.
+                POSAudio.error();
                 if (tombol) tombol.disabled = false;
             });
     });
 
-    // Tutup struk via AJAX tanpa reload.
+    // Sound toggle button click
+    document.addEventListener('click', function (e) {
+        var soundBtn = e.target.closest('#btn-toggle-sound');
+        if (soundBtn) {
+            e.preventDefault();
+            var muted = POSAudio.toggleMute();
+            tampilkanFlash(muted ? 'Suara POS dimatikan (Muted)' : 'Suara POS diaktifkan', 'info');
+        }
+    });
+
+    // Tutup struk via AJAX
     var tutupStruk = document.getElementById('tutup-struk');
     if (tutupStruk) {
         tutupStruk.addEventListener('click', function () {
@@ -309,13 +617,13 @@
                     if (res.hapus_struk) {
                         var area = document.getElementById('area-struk');
                         if (area) area.classList.add('d-none');
+                        fokusBarcode();
                     }
                 });
         });
     }
 
-    // Cetak struk: bila printer thermal terhubung, kirim langsung ke ESC/POS;
-    // kalau tidak, fallback ke dialog print browser (lihat @media print).
+    // Cetak struk
     var cetakStruk = document.getElementById('cetak-struk');
     if (cetakStruk) {
         cetakStruk.addEventListener('click', function () {
@@ -338,40 +646,78 @@
         });
     }
 
-    initKembalian();
-    initNumpad();
-    syncNumpadMetode();
-    fokusBarcode();
-
-    // Modal void: isi produk id & nama dari tombol yang diklik.
-    var modalVoid = document.getElementById('modal-void');
-    if (modalVoid) {
-        // Satu sumber kebenaran: klik tombol Void mengisi id & nama sebelum
-        // modal dibuka. Jangan reset di show.bs.modal karena bisa menghapus
-        // nilai yang sudah benar.
-        document.addEventListener('click', function (e) {
-            var btn = e.target.closest('[data-bs-target="#modal-void"]');
-            if (!btn) return;
-            var idInput = document.getElementById('void-produk-id');
-            var nama = document.getElementById('void-produk-nama');
-            if (idInput) idInput.value = btn.getAttribute('data-produk-id') || '';
-            if (nama) nama.innerHTML = 'Hapus item: <strong>' + (btn.getAttribute('data-produk-nama') || '') + '</strong>';
-        });
-
-        modalVoid.addEventListener('show.bs.modal', function () {
-            var pin = document.getElementById('void-pin');
-            if (pin) { pin.value = ''; setTimeout(function () { pin.focus(); }, 300); }
-        });
-
-        // Kembalikan fokus ke kolom barcode setelah modal void ditutup.
-        modalVoid.addEventListener('hidden.bs.modal', function () {
-            var barcode = document.getElementById('input-barcode');
-            if (barcode) barcode.focus();
+    // Transaksi Baru button
+    var btnBaru = document.getElementById('transaksi-baru');
+    if (btnBaru) {
+        btnBaru.addEventListener('click', function () {
+            if (!confirm('Batalkan transaksi ini dan mulai yang baru?')) return;
+            var meta = document.querySelector('meta[name="csrf-token"]');
+            var token = meta ? meta.getAttribute('content') : '';
+            var data = new FormData();
+            data.set('aksi', 'batalkan');
+            data.set('csrf', token);
+            fetch('transaksi.php', {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'fetch' },
+                body: data
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (res.pesan) tampilkanFlash(res.pesan, res.tipe || 'info');
+                    var area = document.getElementById('area-struk');
+                    if (area) area.classList.add('d-none');
+                    if (res.fragment) gantiFragment(res.fragment);
+                    fokusBarcode();
+                })
+                .catch(function (err) {
+                    tampilkanFlash('Gagal memulai transaksi baru: ' + err.message, 'danger');
+                });
         });
     }
 
-    // Modal tutup kas: muat ringkasan & riwayat transaksi shift saat dibuka,
-    // supaya kasir bisa mencocokkan uang di laci dengan transaksi tercatat.
+    /* ============================================================
+       10. INITIALIZATION CALLS
+       ============================================================ */
+    initKembalian();
+    initCategoryPills();
+    syncMetodePembayaran();
+    updateSoundIcon();
+    fokusBarcode();
+
+    // Modal void init — gunakan event.relatedTarget (Bootstrap 5 built-in)
+    // agar produk_id terbaca dari tombol pemicu SEBELUM modal muncul, tanpa race condition.
+    var modalVoid = document.getElementById('modal-void');
+    if (modalVoid) {
+        modalVoid.addEventListener('show.bs.modal', function (event) {
+            var btn = event.relatedTarget; // tombol Void yang diklik
+            var idInput = document.getElementById('void-produk-id');
+            var nama    = document.getElementById('void-produk-nama');
+            var pin     = document.getElementById('void-pin');
+
+            if (btn) {
+                var produkId   = btn.getAttribute('data-produk-id')   || '';
+                var produkNama = btn.getAttribute('data-produk-nama')  || '';
+                if (idInput) idInput.value = produkId;
+                if (nama)    nama.innerHTML = 'Hapus item: <strong>' + produkNama + '</strong>';
+            }
+
+            // Reset PIN setiap modal dibuka
+            if (pin) { pin.value = ''; setTimeout(function () { pin.focus(); }, 300); }
+        });
+
+        modalVoid.addEventListener('hidden.bs.modal', function () {
+            // Reset semua input void saat modal ditutup
+            var voidId   = document.getElementById('void-produk-id');
+            var voidNama = document.getElementById('void-produk-nama');
+            var voidPin  = document.getElementById('void-pin');
+            if (voidId)   voidId.value    = '';
+            if (voidNama) voidNama.innerHTML = '';
+            if (voidPin)  voidPin.value   = '';
+            fokusBarcode();
+        });
+    }
+
+    // Modal tutup kas init
     function muatRingkasanTutupKas() {
         var wadah = document.getElementById('tutup-kas-ringkasan');
         var dibuka = document.getElementById('tutup-kas-dibuka');
@@ -438,14 +784,13 @@
     var modalTutupKas = document.getElementById('modal-tutup-kas');
     if (modalTutupKas) {
         modalTutupKas.addEventListener('show.bs.modal', muatRingkasanTutupKas);
-        // Kembalikan fokus ke tombol "Tutup Kas" setelah modal ditutup.
         modalTutupKas.addEventListener('hidden.bs.modal', function () {
             var trigger = document.querySelector('[data-bs-target="#modal-tutup-kas"]');
             if (trigger) trigger.focus();
         });
     }
 
-    // Toggle Layar Penuh (Fullscreen) dari Sidebar Kasir
+    // Toggle Layar Penuh
     var btnFullscreen = document.getElementById('btn-sidebar-fullscreen');
     if (btnFullscreen) {
         btnFullscreen.addEventListener('click', function (e) {
@@ -462,4 +807,3 @@
         });
     }
 })();
-

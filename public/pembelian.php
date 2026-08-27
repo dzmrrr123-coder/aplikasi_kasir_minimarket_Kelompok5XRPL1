@@ -177,6 +177,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $supplierSemua = Supplier::semua();
 $produkSemua = Produk::semua();
 $aktif = 'pembelian';
+$breadcrumb = ['Dashboard' => 'dashboard.php', 'Stok Masuk' => ''];
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -196,14 +197,24 @@ $aktif = 'pembelian';
 <?php require __DIR__ . '/assets/partials/navbar.php'; ?>
 <div class="container py-4">
 
-    <div class="mb-4">
-        <h1 class="h3 mb-1">Stok Masuk (Pembelian)</h1>
-        <span class="text-muted small">Catat pembelian dari supplier, stok & harga beli produk otomatis diperbarui</span>
+    <div class="d-flex flex-wrap align-items-center justify-content-between mb-4 gap-3">
+        <div>
+            <h1 class="h3 mb-1 fw-bold text-dark"><i class="bi bi-box-arrow-in-down text-primary me-2"></i>Stok Masuk &amp; Pembelian</h1>
+            <span class="text-muted small">Catat pasokan barang dari supplier, stok dan HPP modal otomatis diperbarui</span>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <a href="supplier.php" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-truck me-1"></i>Kelola Supplier
+            </a>
+            <a href="produk.php" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-boxes me-1"></i>Katalog Produk
+            </a>
+        </div>
     </div>
 
     <?php if ($pesan !== ''): ?>
         <div class="alert alert-info alert-dismissible fade show" role="alert">
-            <?= htmlspecialchars($pesan) ?>
+            <i class="bi bi-info-circle me-1"></i><?= htmlspecialchars($pesan) ?>
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Tutup"></button>
         </div>
     <?php endif; ?>
@@ -211,18 +222,19 @@ $aktif = 'pembelian';
     <div class="row g-4">
         <!-- Form stok masuk -->
         <div class="col-lg-5">
-            <div class="card pos-card">
-                <div class="card-header bg-white">
-                    <i class="bi bi-box-arrow-in-down me-1"></i>Form Stok Masuk
+            <div class="card pos-card border-0 shadow-sm">
+                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                    <span class="fw-bold"><i class="bi bi-plus-circle-dotted text-success me-2"></i>Catat Pasokan Baru</span>
+                    <span class="badge text-bg-success small">Restock</span>
                 </div>
-                <div class="card-body">
+                <div class="card-body p-3 p-md-4">
                     <form method="post" class="row g-3" id="form-pembelian">
                         <input type="hidden" name="aksi" value="simpan_pembelian">
 
                         <div class="col-12">
-                            <label for="supplier-pembelian" class="form-label">Supplier</label>
+                            <label for="supplier-pembelian" class="form-label fw-semibold small text-muted">Pilih Supplier (Pemasok)</label>
                             <select id="supplier-pembelian" name="supplier_id" class="form-select">
-                                <option value="0">Tanpa supplier</option>
+                                <option value="0">Tanpa supplier / Pembelian Langsung</option>
                                 <?php foreach ($supplierSemua as $s): ?>
                                     <option value="<?= $s->getId() ?>"><?= htmlspecialchars($s->getNama()) ?></option>
                                 <?php endforeach; ?>
@@ -230,52 +242,67 @@ $aktif = 'pembelian';
                         </div>
 
                         <div class="col-12">
-                            <label class="form-label">Produk & qty</label>
-                            <div id="daftar-baris">
-                                <div class="baris-produk row g-2 mb-2">
-                                    <div class="col-7">
-                                        <select name="produk_id[]" class="form-select form-select-sm" required>
-                                            <option value="">Pilih produk...</option>
-                                            <?php foreach ($produkSemua as $p): ?>
-                                                <option value="<?= $p->getId() ?>">
-                                                    <?= htmlspecialchars($p->getNama()) ?> (stok <?= $p->getStok() ?>)
-                                                </option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                    </div>
-                                    <div class="col-3">
-                                        <input type="number" name="qty[]" class="form-control form-control-sm" placeholder="Qty" min="0.001" step="0.001" required>
-                                    </div>
-                                    <div class="col-2 d-flex gap-1">
-                                        <button type="button" class="btn btn-sm btn-outline-success flex-shrink-0" data-tambah-baris title="Tambah baris produk">
-                                            <i class="bi bi-plus-lg"></i>
-                                        </button>
-                                        <button type="button" class="btn btn-sm btn-outline-danger flex-shrink-0" data-hapus-baris title="Hapus baris">
-                                            <i class="bi bi-x-lg"></i>
-                                        </button>
-                                    </div>
-                                    <div class="col-12 mt-1">
-                                        <input type="number" name="harga_beli[]" class="form-control form-control-sm" placeholder="Harga beli satuan" min="0" step="0.01" required>
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <label class="form-label fw-semibold small text-muted mb-0">Daftar Produk Masuk</label>
+                                <button type="button" class="btn btn-xs btn-outline-primary" data-tambah-baris title="Tambah baris produk">
+                                    <i class="bi bi-plus-lg me-1"></i>Tambah Baris
+                                </button>
+                            </div>
+                            <div id="daftar-baris" class="d-flex flex-column gap-2">
+                                <div class="baris-produk border rounded p-2 bg-light">
+                                    <div class="row g-2 align-items-center">
+                                        <div class="col-12">
+                                            <select name="produk_id[]" class="form-select form-select-sm input-prod" required>
+                                                <option value="" data-harga="0">Pilih produk...</option>
+                                                <?php foreach ($produkSemua as $p): ?>
+                                                    <option value="<?= $p->getId() ?>" data-harga="<?= $p->getHargaBeli() ?>">
+                                                        <?= htmlspecialchars($p->getNama()) ?> (stok saat ini: <?= $p->getStok() ?>)
+                                                    </option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="input-group input-group-sm">
+                                                <span class="input-group-text">Qty</span>
+                                                <input type="number" name="qty[]" class="form-control input-qty" placeholder="Jumlah" min="0.001" step="0.001" value="1" required>
+                                            </div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="input-group input-group-sm">
+                                                <span class="input-group-text">Hrg Beli</span>
+                                                <input type="number" name="harga_beli[]" class="form-control input-harga font-num" placeholder="Rp satuan" min="0" step="0.01" required>
+                                                <button type="button" class="btn btn-outline-danger" data-hapus-baris title="Hapus baris">
+                                                    <i class="bi bi-trash3"></i>
+                                                </button>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                            <div class="form-text">Kosongkan baris yang tidak dipakai; minimal satu baris terisi.</div>
+                        </div>
+
+                        <!-- Grand Total Estimasi Pembelian -->
+                        <div class="col-12">
+                            <div class="border rounded p-2 bg-white d-flex justify-content-between align-items-center">
+                                <span class="small text-muted fw-semibold">Estimasi Total Biaya:</span>
+                                <span class="fw-bold font-num text-primary fs-5" id="total-estimasi-beli">Rp 0</span>
+                            </div>
                         </div>
 
                         <div class="col-12">
-                            <label for="keterangan-pembelian" class="form-label">Keterangan</label>
+                            <label for="keterangan-pembelian" class="form-label fw-semibold small text-muted">Catatan / No. Faktur</label>
                             <input
                                 type="text"
                                 id="keterangan-pembelian"
                                 name="keterangan"
                                 class="form-control"
-                                placeholder="cth: Restock mingguan"
+                                placeholder="cth: Faktur #INV-2026/08/01"
                             >
                         </div>
 
                         <div class="col-12">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="bi bi-check-circle me-1"></i>Simpan Stok Masuk
+                            <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold">
+                                <i class="bi bi-check2-circle me-1"></i>Simpan Stok Masuk
                             </button>
                         </div>
                     </form>
@@ -323,12 +350,34 @@ $aktif = 'pembelian';
 
         var template = daftar.querySelector('.baris-produk');
 
+        function rupiah(n) {
+            return 'Rp ' + Number(n).toLocaleString('id-ID', {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0
+            });
+        }
+
+        function hitungTotalEstimasi() {
+            var total = 0;
+            var barisList = daftar.querySelectorAll('.baris-produk');
+            barisList.forEach(function (b) {
+                var q = parseFloat(b.querySelector('.input-qty').value) || 0;
+                var h = parseFloat(b.querySelector('.input-harga').value) || 0;
+                total += (q * h);
+            });
+            var el = document.getElementById('total-estimasi-beli');
+            if (el) el.textContent = rupiah(total);
+        }
+
         document.getElementById('form-pembelian').addEventListener('click', function (e) {
             var tombolTambah = e.target.closest('[data-tambah-baris]');
             if (tombolTambah) {
                 var klon = template.cloneNode(true);
                 klon.querySelectorAll('select, input').forEach(function (el) { el.value = ''; });
+                var qtyInput = klon.querySelector('.input-qty');
+                if (qtyInput) qtyInput.value = '1';
                 daftar.appendChild(klon);
+                hitungTotalEstimasi();
                 return;
             }
 
@@ -337,7 +386,29 @@ $aktif = 'pembelian';
                 var baris = tombolHapus.closest('.baris-produk');
                 if (daftar.querySelectorAll('.baris-produk').length > 1) {
                     baris.remove();
+                    hitungTotalEstimasi();
                 }
+            }
+        });
+
+        daftar.addEventListener('change', function (e) {
+            if (e.target.classList.contains('input-prod')) {
+                var opt = e.target.options[e.target.selectedIndex];
+                var hrg = opt ? opt.getAttribute('data-harga') : 0;
+                var baris = e.target.closest('.baris-produk');
+                if (baris && hrg) {
+                    var inputHrg = baris.querySelector('.input-harga');
+                    if (inputHrg && (!inputHrg.value || inputHrg.value === '0')) {
+                        inputHrg.value = hrg;
+                    }
+                }
+                hitungTotalEstimasi();
+            }
+        });
+
+        daftar.addEventListener('input', function (e) {
+            if (e.target.classList.contains('input-qty') || e.target.classList.contains('input-harga')) {
+                hitungTotalEstimasi();
             }
         });
     })();

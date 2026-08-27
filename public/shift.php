@@ -58,6 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['aksi'] ?? '') === 'logout'
 }
 
 $aktif = 'shift';
+$breadcrumb = ['Dashboard' => 'dashboard.php', 'Riwayat Shift' => ''];
 ?>
 <!DOCTYPE html>
 <html lang="id">

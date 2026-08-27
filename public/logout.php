@@ -1,15 +1,34 @@
 <?php
-// public/logout.php
-// Proses logout: reset state object user, hancurkan session, balik ke login.
-session_start();
-require_once __DIR__ . '/../bootstrap/autoload.php';
+
+declare(strict_types=1);
+
+/**
+ * public/logout.php
+ * Proses logout: reset state object user, hancurkan session karyawan, balik ke login.
+ */
+
+require __DIR__ . '/../src/autoload.php';
+
+if (session_status() !== PHP_SESSION_ACTIVE) {
+    session_start();
+}
 
 if (!empty($_SESSION['user_id'])) {
-    // Panggil logout() lewat object sesuai role yang tersimpan di session.
-    $user = ($_SESSION['role'] ?? '') === 'admin' ? new Admin() : new Kasir();
+    $role = $_SESSION['role'] ?? '';
+    if ($role === 'admin') {
+        $user = new \App\Models\Admin();
+    } else {
+        $user = new \App\Models\Kasir();
+    }
     $user->logout();
 }
 
-session_destroy();
-header('Location: ' . SessionGuard::baseUrl() . '/login.php');
+logoutKaryawan();
+
+// Sesi dihancurkan bila tidak ada sesi member lain yang aktif
+if (empty($_SESSION['member_id'])) {
+    session_destroy();
+}
+
+header('Location: login.php');
 exit;

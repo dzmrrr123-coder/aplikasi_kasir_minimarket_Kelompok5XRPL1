@@ -106,19 +106,51 @@ function renderFragmentProduk(): string
 {
     $produkSemua = Produk::semua();
 
+    $semuaKategori = [];
+    try {
+        $semuaKategori = \App\Models\Kategori::semua();
+    } catch (\Throwable $e) {
+        $semuaKategori = [];
+    }
+
     ob_start();
     ?>
     <div id="fragmen-produk">
     <div class="card pos-card">
-        <div class="card-header bg-white">Produk Lain</div>
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-grid-3x3-gap me-1"></i>Katalog Cepat Produk</span>
+            <span class="text-muted small"><?= count($produkSemua) ?> produk</span>
+        </div>
         <div class="card-body">
             <?php if ($produkSemua === []): ?>
                 <div class="text-muted small">Belum ada produk tersimpan.</div>
             <?php else: ?>
-                <div class="row g-3">
+                <!-- Category Filter Pills -->
+                <div class="kiosk-cat-pills">
+                    <button type="button" class="cat-pill active" data-cat="all">
+                        <i class="bi bi-grid me-1"></i>Semua
+                    </button>
+                    <?php foreach ($semuaKategori as $kat): ?>
+                        <button type="button" class="cat-pill" data-cat="<?= htmlspecialchars(mb_strtolower($kat->getNama())) ?>">
+                            <?= htmlspecialchars($kat->getNama()) ?>
+                        </button>
+                    <?php endforeach; ?>
+                </div>
+
+                <div class="row g-3 kiosk-produk-grid" id="kiosk-grid-produk">
                     <?php foreach ($produkSemua as $p): ?>
-                        <div class="col-sm-6 col-md-4 col-xl-3">
-                            <div class="kiosk-produk d-flex flex-column gap-1 h-100">
+                        <?php 
+                        $katNama = mb_strtolower($p->getKategori()->getNama() ?: 'umum');
+                        $habis = $p->getStok() < 1; 
+                        ?>
+                        <div class="col-sm-6 col-md-4 col-xl-3 kiosk-produk-col" data-kategori="<?= htmlspecialchars($katNama) ?>">
+                            <div class="kiosk-produk d-flex flex-column gap-1 h-100<?php if ($habis) echo ' kiosk-produk-habis'; ?>"
+                                 data-stok-habis="<?= $habis ? '1' : '0' ?>">
+                                <?php if ($habis): ?>
+                                    <span class="badge bg-danger kiosk-badge-habis" title="Stok habis">
+                                        <i class="bi bi-emoji-x me-1"></i>HABIS
+                                    </span>
+                                <?php endif; ?>
                                 <?php if ($p->getGambar() !== ''): ?>
                                     <img
                                         src="uploads/<?= htmlspecialchars($p->getGambar()) ?>"
@@ -136,7 +168,7 @@ function renderFragmentProduk(): string
                                         ? formatRupiah($p->getHargaPerGram()) . '/gr'
                                         : formatRupiah($p->getHarga()) ?>
                                 </div>
-                                <div class="small <?= $p->getStok() > 0 ? 'text-success' : 'text-danger' ?>">
+                                <div class="small <?= $habis ? 'text-danger fw-semibold' : 'text-success' ?>">
                                     stok <?= $p->getStok() ?> <?= $p->getSatuan() === 'gram' ? 'gr' : '' ?>
                                 </div>
                                 <form method="post" class="d-flex flex-column gap-1 mt-auto" data-aksi="tambah_item">
@@ -155,12 +187,14 @@ function renderFragmentProduk(): string
                                                 placeholder="Berat (gr)"
                                                 required
                                                 data-produk-gram="<?= $p->getId() ?>"
+                                                <?= $habis ? 'disabled' : '' ?>
                                             >
                                             <button
                                                 type="button"
                                                 class="btn btn-sm btn-outline-primary flex-shrink-0"
                                                 data-timbang="<?= $p->getId() ?>"
                                                 title="Ambil berat dari timbangan"
+                                                <?= $habis ? 'disabled' : '' ?>
                                             >
                                                 <i class="bi bi-bullseye"></i>
                                             </button>
@@ -175,11 +209,13 @@ function renderFragmentProduk(): string
                                                 min="1"
                                                 max="<?= max(1, $p->getStok()) ?>"
                                                 required
+                                                <?= $habis ? 'disabled' : '' ?>
                                             >
                                             <button
                                                 type="submit"
                                                 class="btn btn-sm btn-success flex-shrink-0"
-                                                <?= $p->getStok() < 1 ? 'disabled' : '' ?>
+                                                <?= $habis ? 'disabled' : '' ?>
+                                                title="Tambah ke keranjang"
                                             >
                                                 <i class="bi bi-cart-plus"></i>
                                             </button>
@@ -210,19 +246,22 @@ function renderFragmentKeranjangKiri(): string
     <!-- Keranjang -->
     <div class="card pos-card mb-4">
         <div class="card-header bg-white d-flex justify-content-between align-items-center">
-            <span>Keranjang</span>
-            <span class="text-muted small"><?= count($keranjang) ?> item</span>
+            <span><i class="bi bi-cart3 me-1"></i>Keranjang Belanja</span>
+            <span class="badge text-bg-primary"><?= count($keranjang) ?> jenis barang</span>
         </div>
         <div class="card-body p-0">
             <?php if ($keranjang === []): ?>
-                <div class="p-4 text-center text-muted">Keranjang masih kosong.</div>
+                <div class="p-4 text-center text-muted">
+                    <i class="bi bi-basket3 display-6 d-block mb-2 text-muted opacity-50"></i>
+                    Keranjang masih kosong. Scan barcode atau pilih produk dari katalog.
+                </div>
             <?php else: ?>
                 <div class="table-responsive">
                     <table class="table table-hover align-middle mb-0">
                         <thead class="table-light">
                             <tr>
                                 <th>Produk</th>
-                                <th class="text-center">Qty</th>
+                                <th class="text-center" style="min-width: 120px;">Qty</th>
                                 <th class="text-end">Harga</th>
                                 <th class="text-end">Subtotal</th>
                                 <th class="text-center">Aksi</th>
@@ -231,10 +270,37 @@ function renderFragmentKeranjangKiri(): string
                         <tbody>
                             <?php foreach ($keranjang as $item): ?>
                                 <tr>
-                                    <td><?= htmlspecialchars($item['nama']) ?></td>
-                                    <td class="text-center"><?= ($item['satuan'] ?? 'pcs') === 'gram' ? rtrim(rtrim(number_format($item['qty'], 3, ',', '.'), '0'), ',') . ' gr' : (int) $item['qty'] ?></td>
-                                    <td class="text-end"><?= formatRupiah($item['harga']) ?></td>
-                                    <td class="text-end"><?= formatRupiah($item['subtotal']) ?></td>
+                                    <td>
+                                        <div class="fw-semibold"><?= htmlspecialchars($item['nama']) ?></div>
+                                        <div class="small text-muted font-num"><?= formatRupiah($item['harga']) ?> / <?= htmlspecialchars($item['satuan'] ?? 'pcs') ?></div>
+                                    </td>
+                                    <td class="text-center">
+                                        <?php if (($item['satuan'] ?? 'pcs') === 'gram'): ?>
+                                            <span class="font-num fw-semibold"><?= rtrim(rtrim(number_format($item['qty'], 3, ',', '.'), '0'), ',') ?> gr</span>
+                                        <?php else: ?>
+                                            <div class="cart-qty-stepper">
+                                                <button
+                                                    type="button"
+                                                    class="btn-qty-step btn-step-minus"
+                                                    data-produk-id="<?= $item['produk_id'] ?>"
+                                                    title="Kurangi 1"
+                                                >
+                                                    <i class="bi bi-dash"></i>
+                                                </button>
+                                                <span class="cart-qty-val"><?= (int) $item['qty'] ?></span>
+                                                <button
+                                                    type="button"
+                                                    class="btn-qty-step btn-step-plus"
+                                                    data-produk-id="<?= $item['produk_id'] ?>"
+                                                    title="Tambah 1"
+                                                >
+                                                    <i class="bi bi-plus"></i>
+                                                </button>
+                                            </div>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td class="text-end font-num"><?= formatRupiah($item['harga']) ?></td>
+                                    <td class="text-end font-num fw-bold"><?= formatRupiah($item['subtotal']) ?></td>
                                     <td class="text-center">
                                         <button
                                             type="button"
@@ -245,7 +311,7 @@ function renderFragmentKeranjangKiri(): string
                                             data-produk-id="<?= $item['produk_id'] ?>"
                                             data-produk-nama="<?= htmlspecialchars($item['nama']) ?>"
                                         >
-                                            <i class="bi bi-x-circle me-1"></i>Void
+                                            <i class="bi bi-trash3 me-1"></i>Void
                                         </button>
                                     </td>
                                 </tr>
@@ -449,22 +515,40 @@ function renderFragmentKananKiosk(): string
     $kembalian = $jumlahBayar - $total;
 
     ob_start();
+    $namaKasirArr = explode(' ', trim($namaUser));
+    $inisialKasir = mb_strtoupper(mb_substr($namaKasirArr[0], 0, 1));
+    if (isset($namaKasirArr[1])) {
+        $inisialKasir .= mb_strtoupper(mb_substr($namaKasirArr[1], 0, 1));
+    }
     ?>
-    <!-- Userbar: nama kasir + hamburger menu (rawer → sidebar) -->
+    <!-- Userbar: nama kasir + audio toggle + status printer + menu -->
     <div class="kiosk-userbar">
-        <div class="kiosk-user">
-            <i class="bi bi-person-circle"></i>
-            <span><?= htmlspecialchars($namaUser) ?></span>
+        <div class="kiosk-user" data-bs-toggle="offcanvas" data-bs-target="#sidebarKasir" role="button" title="Buka menu kasir">
+            <span class="kiosk-user-avatar"><?= htmlspecialchars($inisialKasir) ?></span>
+            <div class="kiosk-user-details">
+                <span class="kiosk-user-name"><?= htmlspecialchars($namaUser) ?></span>
+                <span class="kiosk-user-status">
+                    <span class="status-dot-pulse"></span>
+                    <span><?= ucfirst((string)($_SESSION['role'] ?? 'Kasir')) ?> Online</span>
+                </span>
+            </div>
         </div>
         <div class="d-flex align-items-center gap-2">
-            <!-- Status printer (kecil) -->
-            <span class="badge text-bg-secondary" id="badge-printer-pos" title="Status printer"
-                  style="width:0.55rem;height:0.55rem;padding:0;font-size:0"></span>
+            <!-- Audio toggle -->
+            <button type="button" class="btn btn-sm btn-outline-secondary kiosk-btn-icon" id="btn-toggle-sound" title="Bunyi Suara POS (Beep)">
+                <i class="bi bi-volume-up-fill" id="icon-sound-pos"></i>
+            </button>
+            <!-- Status printer -->
+            <button type="button" class="btn btn-sm btn-outline-secondary kiosk-btn-icon" data-bs-toggle="modal" data-bs-target="#modalPerangkat" title="Perangkat POS">
+                <i class="bi bi-printer"></i>
+                <span class="badge-status-dot" id="badge-printer-pos"></span>
+            </button>
             <!-- Hamburger → buka sidebar semua aksi kasir -->
-            <button type="button" class="btn btn-sm btn-outline-primary"
+            <button type="button" class="btn btn-sm btn-primary kiosk-btn-menu"
                     data-bs-toggle="offcanvas" data-bs-target="#sidebarKasir"
-                    aria-label="Buka menu" title="Buka menu">
-                <i class="bi bi-list"></i>
+                    aria-label="Buka menu" title="Buka menu kasir">
+                <i class="bi bi-grid-fill"></i>
+                <span>Menu</span>
             </button>
         </div>
     </div>
@@ -500,8 +584,9 @@ function renderFragmentKananKiosk(): string
                     <input
                         type="text"
                         name="telepon"
+                        id="input-telepon-member"
                         class="form-control form-control-sm font-num"
-                        placeholder="Scan telepon member"
+                        placeholder="Scan telepon member (F4)"
                         autocomplete="off"
                         aria-label="Scan telepon member"
                     >
@@ -513,12 +598,10 @@ function renderFragmentKananKiosk(): string
         </div>
     </div>
 
-    <!-- Perangkat dikelola lewat modal di userbar (ikon printer) & halaman Profil. -->
-
-    <!-- Ringkasan -->
+    <!-- Ringkasan Total & Potongan -->
     <div class="kiosk-ringkasan">
         <div class="d-flex justify-content-between align-items-center mb-1">
-            <span class="kiosk-total-label">Total</span>
+            <span class="kiosk-total-label">Total Belanja</span>
             <span class="kiosk-total-nilai font-num" id="kiosk-total"><?= formatRupiah($total) ?></span>
         </div>
         <div class="d-flex justify-content-between small mb-1">
@@ -537,72 +620,109 @@ function renderFragmentKananKiosk(): string
                 <span class="kiosk-sub font-num"><?= formatRupiah($ringkasan['pajak']) ?></span>
             </div>
         <?php endif; ?>
-        <div class="d-flex justify-content-between small mb-3">
-            <span class="text-muted">Kembalian</span>
-            <span class="kiosk-sub font-num <?= $kembalian < 0 ? 'text-danger' : '' ?>" id="kembalian">
-                <?= $kembalian < 0 ? 'Kurang ' . formatRupiah(abs($kembalian)) : formatRupiah($kembalian) ?>
+        <div class="d-flex justify-content-between small">
+            <span class="text-muted">Status</span>
+            <span class="kiosk-sub font-num <?= $kembalian < 0 ? 'text-danger' : 'text-success' ?>" id="kembalian">
+                <?= $kembalian < 0 ? 'Kurang ' . formatRupiah(abs($kembalian)) : 'Kembalian ' . formatRupiah($kembalian) ?>
             </span>
         </div>
     </div>
 
-    <!-- Form pembayaran + numpad -->
+    <!-- Grand Kembalian Display Box -->
+    <div class="kiosk-change-card <?= $kembalian < 0 ? 'is-kurang' : 'is-cukup' ?>" id="kiosk-change-card">
+        <div class="d-flex justify-content-between align-items-center">
+            <span class="kiosk-change-label" id="change-status-label"><?= $kembalian < 0 ? 'Uang Kurang' : 'Kembalian Pelanggan' ?></span>
+            <span class="badge text-bg-<?= $kembalian < 0 ? 'danger' : 'success' ?> small" id="change-badge"><?= $kembalian < 0 ? 'Belum Cukup' : 'Siap Selesai' ?></span>
+        </div>
+        <div class="kiosk-change-val font-num" id="kiosk-change-val">
+            <?= $kembalian < 0 ? 'Kurang ' . formatRupiah(abs($kembalian)) : formatRupiah($kembalian) ?>
+        </div>
+    </div>
+
+    <!-- Form pembayaran + Quick Cash Presets -->
     <form method="post" id="form-bayar" data-aksi="bayar" class="mb-3">
         <input type="hidden" name="aksi" value="bayar">
         <span id="total-json" class="d-none"><?= $total ?></span>
 
         <div class="mb-3">
-            <label class="form-label">Metode pembayaran</label>
+            <label class="form-label fw-semibold">Metode Pembayaran</label>
             <div class="d-flex gap-3">
                 <div class="form-check">
                     <input class="form-check-input" type="radio" name="metode" value="tunai" id="metode-tunai" checked>
-                    <label class="form-check-label" for="metode-tunai">Tunai</label>
+                    <label class="form-check-label fw-medium" for="metode-tunai"><i class="bi bi-cash me-1 text-success"></i>Tunai</label>
                 </div>
                 <div class="form-check">
                     <input class="form-check-input" type="radio" name="metode" value="non_tunai" id="metode-nontunai">
-                    <label class="form-check-label" for="metode-nontunai">QRIS/EDC</label>
+                    <label class="form-check-label fw-medium" for="metode-nontunai"><i class="bi bi-qr-code-scan me-1 text-primary"></i>QRIS / EDC</label>
                 </div>
             </div>
         </div>
 
-        <div class="mb-3">
-            <label for="jumlah-dibayar" class="form-label">Jumlah dibayar</label>
-            <input
-                type="number"
-                step="0.01"
-                min="0"
-                id="jumlah-dibayar"
-                name="jumlah_dibayar"
-                class="form-control form-control-lg font-num text-end"
-                value="<?= $total > 0 ? (int) ceil($total) : 0 ?>"
-                inputmode="decimal"
-            >
-        </div>
+        <div id="jumlah-bayar-group">
+            <div class="mb-3">
+                <label for="jumlah-dibayar" class="form-label d-flex justify-content-between align-items-center">
+                    <span class="fw-semibold">Jumlah Dibayar (F2)</span>
+                    <span class="text-muted small">Pilih uang cepat:</span>
+                </label>
 
-        <div class="kiosk-numpad mb-3 d-none" id="kiosk-numpad">
-            <div class="numpad-grid">
-                <button type="button" data-num="1">1</button>
-                <button type="button" data-num="2">2</button>
-                <button type="button" data-num="3">3</button>
-                <button type="button" data-num="4">4</button>
-                <button type="button" data-num="5">5</button>
-                <button type="button" data-num="6">6</button>
-                <button type="button" data-num="7">7</button>
-                <button type="button" data-num="8">8</button>
-                <button type="button" data-num="9">9</button>
-                <button type="button" data-num="00">00</button>
-                <button type="button" data-num="0">0</button>
-                <button type="button" data-num="hapus" class="numpad-hapus"><i class="bi bi-backspace"></i></button>
-                <button type="button" data-num="bersih" class="numpad-aksi">C</button>
-                <button type="button" data-num="maks" class="numpad-aksi">UANG PAS</button>
+                <!-- Quick Cash Presets -->
+                <div class="quick-cash-grid">
+                    <button type="button" class="btn-cash-chip chip-exact" data-cash="exact" title="Bayar dengan uang pas (F8)">
+                        <i class="bi bi-cash-stack me-1"></i>UANG PAS (<?= formatRupiah($total) ?>)
+                    </button>
+                    <button type="button" class="btn-cash-chip" data-cash="10000">Rp 10.000</button>
+                    <button type="button" class="btn-cash-chip" data-cash="20000">Rp 20.000</button>
+                    <button type="button" class="btn-cash-chip" data-cash="50000">Rp 50.000</button>
+                    <button type="button" class="btn-cash-chip" data-cash="100000">Rp 100.000</button>
+                    <button type="button" class="btn-cash-chip" data-cash="200000">Rp 200.000</button>
+                    <button type="button" class="btn-cash-chip" data-cash="500000">Rp 500.000</button>
+                </div>
+
+                <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    id="jumlah-dibayar"
+                    name="jumlah_dibayar"
+                    class="form-control form-control-lg font-num text-end fw-bold"
+                    value="<?= $total > 0 ? (int) ceil($total) : 0 ?>"
+                    inputmode="decimal"
+                    autocomplete="off"
+                >
+            </div>
+
+            <div class="kiosk-numpad mb-3 d-none" id="kiosk-numpad">
+                <div class="numpad-grid">
+                    <button type="button" data-num="1">1</button>
+                    <button type="button" data-num="2">2</button>
+                    <button type="button" data-num="3">3</button>
+                    <button type="button" data-num="4">4</button>
+                    <button type="button" data-num="5">5</button>
+                    <button type="button" data-num="6">6</button>
+                    <button type="button" data-num="7">7</button>
+                    <button type="button" data-num="8">8</button>
+                    <button type="button" data-num="9">9</button>
+                    <button type="button" data-num="00">00</button>
+                    <button type="button" data-num="0">0</button>
+                    <button type="button" data-num="hapus" class="numpad-hapus"><i class="bi bi-backspace"></i></button>
+                    <button type="button" data-num="bersih" class="numpad-aksi">C</button>
+                    <button type="button" data-num="maks" class="numpad-aksi">UANG PAS</button>
+                </div>
             </div>
         </div>
 
+        <!-- Info bila metode non-tunai dipilih: tidak perlu input uang tunai -->
+        <div id="info-non-tunai" class="alert alert-info py-2 small mb-3 d-none">
+            <i class="bi bi-qr-code-scan me-1"></i>
+            Scan QRIS atau kartu di EDC. Total <strong class="font-num"><?= formatRupiah($total) ?></strong> akan dibayar otomatis.
+        </div>
+
         <div class="d-grid gap-2">
-            <button type="submit" class="btn btn-success btn-lg" <?= $keranjang === [] ? 'disabled data-kosong' : '' ?>>
-                <i class="bi bi-check2-circle me-1"></i>Proses Pembayaran
+            <button type="submit" class="btn btn-success btn-lg" <?= $keranjang === [] ? 'disabled data-kosong' : '' ?> title="Proses Pembayaran (F9)">
+                <i class="bi bi-check2-circle me-1"></i>Proses Pembayaran (F9)
             </button>
-            <button type="submit" class="btn btn-outline-danger" form="form-batalkan" data-aksi="batalkan" <?= $keranjang === [] ? 'disabled' : '' ?>>
-                <i class="bi bi-x-lg me-1"></i>Batalkan
+            <button type="submit" class="btn btn-outline-danger" form="form-batalkan" data-aksi="batalkan" <?= $keranjang === [] ? 'disabled' : '' ?> title="Batalkan Transaksi (ESC)">
+                <i class="bi bi-x-lg me-1"></i>Batalkan Transaksi
             </button>
         </div>
     </form>
@@ -721,6 +841,44 @@ function aksiHapusItem(int $produkId): void
     $_SESSION['keranjang'] = $keranjang;
 
     redirectSelf('Item dihapus dari keranjang.', 'success');
+}
+
+/** Ubah kuantitas produk di keranjang (misal klik tombol + / -). */
+function aksiUbahQty(int $produkId, float $delta, int $kasirId): void
+{
+    $keranjang = keranjang();
+    $kunci = (string) $produkId;
+
+    if (!isset($keranjang[$kunci])) {
+        redirectSelf('Item tidak ada di keranjang.', 'warning');
+    }
+
+    $produk = Produk::cari($produkId);
+    if ($produk === null) {
+        redirectSelf('Produk tidak ditemukan.', 'danger');
+    }
+
+    $qtyBaru = $keranjang[$kunci]['qty'] + $delta;
+
+    if ($qtyBaru <= 0) {
+        unset($keranjang[$kunci]);
+        $_SESSION['keranjang'] = $keranjang;
+        redirectSelf(sprintf('"%s" dikeluarkan dari keranjang.', $produk->getNama()), 'info');
+    }
+
+    if ($produk->getStok() < $qtyBaru) {
+        redirectSelf(
+            sprintf('Stok "%s" tidak cukup (tersedia: %d).', $produk->getNama(), $produk->getStok()),
+            'danger'
+        );
+    }
+
+    $keranjang[$kunci]['qty']      = $qtyBaru;
+    $keranjang[$kunci]['stok']     = $produk->getStok();
+    $keranjang[$kunci]['subtotal'] = round($produk->getHargaEfektif() * $qtyBaru, 2);
+
+    $_SESSION['keranjang'] = $keranjang;
+    redirectSelf(sprintf('Jumlah "%s" diubah (%d pcs).', $produk->getNama(), (int) $qtyBaru), 'success');
 }
 
 /** Terapkan diskon lewat method Transaksi::terapkanDiskon(). */
@@ -895,6 +1053,11 @@ function aksiBatalkan(): void
  */
 function aksiVoidItem(int $produkId, string $pin, int $kasirId, string $namaKasir): void
 {
+    // Validasi produk_id: 0 berarti hidden input kosong (tidak ada item dipilih)
+    if ($produkId <= 0) {
+        redirectSelf('Pilih item yang akan di-void terlebih dahulu.', 'warning');
+    }
+
     $pinBenar = \App\Models\Pengaturan::get('pin_supervisor', '0000');
 
     if (!hash_equals($pinBenar, $pin)) {
@@ -905,7 +1068,7 @@ function aksiVoidItem(int $produkId, string $pin, int $kasirId, string $namaKasi
     $keranjang = keranjang();
 
     if (!isset($keranjang[(string) $produkId])) {
-        redirectSelf('Item tidak ada di keranjang.', 'danger');
+        redirectSelf('Item tidak ada di keranjang. Mungkin sudah dihapus sebelumnya.', 'warning');
     }
 
     $namaItem = $keranjang[(string) $produkId]['nama'] ?? 'Item';
@@ -984,6 +1147,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             );
             break;
 
+        case 'ubah_qty':
+            aksiUbahQty(
+                (int) ($_POST['produk_id'] ?? 0),
+                (float) ($_POST['delta'] ?? 0),
+                $userId
+            );
+            break;
+
         case 'scan':
             // Scan barcode: cari produk by barcode, tambah 1 pcs langsung.
             $barcode = trim((string) ($_POST['barcode'] ?? ''));
@@ -1028,9 +1199,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             break;
 
         case 'bayar':
+            // Untuk non-tunai (QRIS/EDC), kasir tidak memasukkan uang tunai —
+            // gunakan total sebagai jumlah yang dibayar otomatis.
+            $metodeBayar = (string) ($_POST['metode'] ?? 'tunai');
+            $jumlahDibayar = (float) ($_POST['jumlah_dibayar'] ?? 0);
+            if ($metodeBayar === 'non_tunai' && $jumlahDibayar <= 0) {
+                $diskonRoute = null;
+                $diskonIdRoute = $_SESSION['diskon_id'] ?? null;
+                if ($diskonIdRoute !== null) {
+                    $diskonRoute = Diskon::cari((int) $diskonIdRoute);
+                }
+                $ringkasanBayar = hitungRingkasanKeranjang(keranjang(), $diskonRoute);
+                $jumlahDibayar = $ringkasanBayar['total'];
+            }
             aksiBayar(
-                (string) ($_POST['metode'] ?? 'tunai'),
-                (float) ($_POST['jumlah_dibayar'] ?? 0),
+                $metodeBayar,
+                $jumlahDibayar,
                 $userId,
                 $namaUser
             );
@@ -1095,7 +1279,7 @@ $produkSemua = Produk::semua();
     <meta name="csrf-token" content="<?= htmlspecialchars(csrf_token()) ?>">
     <link href="assets/vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
     <link href="assets/vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
-    <link href="assets/theme.css?v=20260818" rel="stylesheet">
+    <link href="assets/theme.css?v=<?= @filemtime(__DIR__ . '/assets/theme.css') ?: time() ?>" rel="stylesheet">
     <style>
         .qty-input { max-width: 4.5rem; }
         .summary-total { font-size: 1.75rem; font-weight: 700; }
@@ -1370,6 +1554,9 @@ $produkSemua = Produk::semua();
                     <button type="button" class="btn btn-sm btn-light" id="cetak-struk" title="Cetak struk">
                         <i class="bi bi-printer me-1"></i>Cetak
                     </button>
+                    <button type="button" class="btn btn-sm btn-light" id="transaksi-baru" title="Transaksi baru">
+                        <i class="bi bi-play me-1"></i>Baru
+                    </button>
                     <button type="button" class="btn-close btn-close-white" id="tutup-struk" aria-label="Tutup"></button>
                 </span>
             </div>
@@ -1384,6 +1571,9 @@ $produkSemua = Produk::semua();
                 <span class="d-flex gap-2">
                     <button type="button" class="btn btn-sm btn-light" id="cetak-struk" title="Cetak struk">
                         <i class="bi bi-printer me-1"></i>Cetak
+                    </button>
+                    <button type="button" class="btn btn-sm btn-light" id="transaksi-baru" title="Transaksi baru">
+                        <i class="bi bi-play me-1"></i>Baru
                     </button>
                     <button type="button" class="btn-close btn-close-white" id="tutup-struk" aria-label="Tutup"></button>
                 </span>
@@ -1558,10 +1748,10 @@ $produkSemua = Produk::semua();
 
 
 
-<script src="assets/vendor/bootstrap/bootstrap.bundle.min.js"></script></script>
-<script src="assets/pos.js?v=20260818c"></script>
-<script src="assets/hardware.js?v=20260818"></script>
-<script src="assets/hardware-pos.js?v=20260818"></script>
+<script src="assets/vendor/bootstrap/bootstrap.bundle.min.js"></script>
+<script src="assets/pos.js?v=<?= @filemtime(__DIR__ . '/assets/pos.js') ?: time() ?>"></script>
+<script src="assets/hardware.js?v=<?= @filemtime(__DIR__ . '/assets/hardware.js') ?: time() ?>"></script>
+<script src="assets/hardware-pos.js?v=<?= @filemtime(__DIR__ . '/assets/hardware-pos.js') ?: time() ?>"></script>
 
 <!-- Modal void item (butuh PIN supervisor) -->
 <div class="modal fade" id="modal-void" tabindex="-1" aria-labelledby="modal-void-label" aria-hidden="true">
@@ -1746,8 +1936,23 @@ $produkSemua = Produk::semua();
     </div>
 </div>
 
+<!-- Bottom Keyboard Shortcuts Bar -->
+<div class="kiosk-shortcuts-bar d-none d-md-flex">
+    <div class="kiosk-shortcuts-list">
+        <span class="shortcut-chip"><kbd>F1</kbd> Cari Produk</span>
+        <span class="shortcut-chip"><kbd>F2</kbd> Scan Barcode</span>
+        <span class="shortcut-chip"><kbd>F4</kbd> Member</span>
+        <span class="shortcut-chip"><kbd>F8</kbd> Uang Pas</span>
+        <span class="shortcut-chip"><kbd>F9</kbd> Proses Bayar</span>
+        <span class="shortcut-chip"><kbd>ESC</kbd> Batal / Reset</span>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+        <span class="text-muted"><i class="bi bi-lightning-charge-fill text-warning me-1"></i>POS Fast Mode Active</span>
+    </div>
+</div>
+
 <script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
-<script src="assets/scanner-pos.js?v=20260818"></script>
-<script src="assets/theme.js?v=20260818"></script>
+<script src="assets/scanner-pos.js?v=<?= @filemtime(__DIR__ . '/assets/scanner-pos.js') ?: time() ?>"></script>
+<script src="assets/theme.js?v=<?= @filemtime(__DIR__ . '/assets/theme.css') ?: time() ?>"></script>
 </body>
 </html>

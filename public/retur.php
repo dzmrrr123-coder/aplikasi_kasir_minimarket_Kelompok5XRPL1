@@ -133,6 +133,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // ---- Data untuk tampilan (view murni: produk utk form) ----
 $produkSemua = Produk::semua();
 $aktif = 'retur';
+$breadcrumb = ['Dashboard' => 'dashboard.php', 'Retur Barang' => ''];
 // Riwayat retur diambil via DataTables server-side dari api.php?aksi=retur.tabel
 // (Controller → ReturBarang::getDataTabel), bukan di-render di view.
 ?>

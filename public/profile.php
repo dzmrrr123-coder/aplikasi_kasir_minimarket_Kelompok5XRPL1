@@ -40,6 +40,7 @@ if ($user === null) {
 $namaUser = (string) ($_SESSION['nama'] ?? $user->getNama());
 $nama     = $namaUser; // pakai di navbar-kasir
 $aktif = 'profile';
+$breadcrumb = ['Dashboard' => 'dashboard.php', 'Profil' => ''];
 
 // Flash message dari aksi POST.
 $pesan = $_SESSION['pesan'] ?? '';

@@ -58,6 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['aksi'] ?? '') === 'logout'
 }
 
 $aktif = 'audit';
+$breadcrumb = ['Dashboard' => 'dashboard.php', 'Audit Log' => ''];
 ?>
 <!DOCTYPE html>
 <html lang="id">

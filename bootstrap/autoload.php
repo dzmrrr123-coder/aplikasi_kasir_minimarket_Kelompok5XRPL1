@@ -1,7 +1,6 @@
 <?php
 // bootstrap/autoload.php
-// Autoloader sederhana (PHP native, tanpa Composer): otomatis me-load class
-// dari folder /src berdasarkan namespace (App\...) atau nama file class.
+require_once __DIR__ . '/../src/autoload.php';
 
 spl_autoload_register(function (string $class): void {
     $baseDir = __DIR__ . '/../src/';

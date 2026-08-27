@@ -179,6 +179,7 @@ $kasirSemua = User::daftarKasir();
 $editKasirId = (int) ($_SESSION['edit_kasir_id'] ?? 0);
 $editKasir = $editKasirId > 0 ? User::cariKasir($editKasirId) : null;
 $aktif = 'user';
+$breadcrumb = ['Dashboard' => 'dashboard.php', 'Kelola Kasir' => ''];
 ?>
 <!DOCTYPE html>
 <html lang="id">

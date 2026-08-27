@@ -183,6 +183,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $editMemberId = (int) ($_SESSION['edit_member_id'] ?? 0);
 $editMember = $editMemberId > 0 ? Member::cari($editMemberId) : null;
 $aktif = 'member';
+$breadcrumb = ['Dashboard' => 'dashboard.php', 'Member' => ''];
 ?>
 <!DOCTYPE html>
 <html lang="id">

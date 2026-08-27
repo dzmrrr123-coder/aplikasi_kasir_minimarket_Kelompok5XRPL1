@@ -57,6 +57,27 @@
         hentikanStream();
     }
 
+    // Toast sederhana di dalam modal kamera: beri feedback visual singkat
+    // saaman barcode terdeteksi (sebelum modal tertutup & form submit).
+    function toastScan(teks) {
+        var toast = document.getElementById('toast-scan');
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.id = 'toast-scan';
+            toast.innerHTML = '<div class="toast align-items-center text-bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">' +
+                '<div class="d-flex">' +
+                '<div class="toast-body"></div>' +
+                '<button type="button" class="btn-close btn-close-white me-1 m-auto" data-bs-dismiss="toast" aria-label="Tutup"></button>' +
+                '</div></div>';
+            var body = modal ? modal.querySelector('.modal-body') : null;
+            if (body) body.appendChild(toast);
+        }
+        var body = toast.querySelector('.toast-body');
+        if (body) body.textContent = teks;
+        var bs = window.bootstrap ? bootstrap.Toast.getOrCreateInstance(toast.querySelector('.toast')) : null;
+        if (bs) { bs.show(); }
+    }
+
     function prosesBarcode(nilai) {
         if (pernahTerbaca) return;
         pernahTerbaca = true;
@@ -66,6 +87,9 @@
             input.value = nilai;
         }
 
+        // Toast konfirmasi singkat sebelum kamera tertutup.
+        toastScan('Barcode terbaca: ' + nilai);
+
         // Submit form scan (AJAX) — barang langsung masuk keranjang.
         var form = input && input.closest('form[data-aksi="scan"]');
         if (form) {
@@ -73,7 +97,7 @@
             setTimeout(function () {
                 tutupModal();
                 form.requestSubmit();
-            }, 400);
+            }, 800);
         } else {
             tutupModal();
         }
@@ -175,8 +199,13 @@
         setTimeout(bukaKamera, 300);
     });
 
-    // Tutup / sembunyikan -> matikan kamera.
-    modal.addEventListener('hidden.bs.modal', hentikanStream);
+    // Tutup / sembunyikan -> matikan kamera & bersihkan toast agar tidak
+    // menumpuk di render berikutnya.
+    modal.addEventListener('hidden.bs.modal', function () {
+        hentikanStream();
+        var toast = document.getElementById('toast-scan');
+        if (toast && toast.parentNode) toast.parentNode.removeChild(toast);
+    });
 
     // Tombol tutup manual.
     var tutupBtn = document.getElementById('tutup-kamera');
