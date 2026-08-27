@@ -2310,5 +2310,106 @@ button.sidebar-menu-item-link {
     height: 100%;
 }
 
+/* ============================================================
+   LIVE SEARCH AUTOCOMPLETE DROPDOWN
+   ============================================================ */
+.live-search-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.15), 0 4px 10px rgba(0, 0, 0, 0.05);
+    z-index: 1060;
+    max-height: 380px;
+    overflow-y: auto;
+}
 
+.live-search-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.65rem 1rem;
+    border-bottom: 1px solid var(--border-light, rgba(0, 0, 0, 0.05));
+    cursor: pointer;
+    transition: background-color 0.12s ease;
+    user-select: none;
+}
 
+.live-search-item:last-child {
+    border-bottom: none;
+}
+
+.live-search-item:hover,
+.live-search-item.is-selected {
+    background-color: var(--brand-primary-lighter, rgba(13, 148, 136, 0.08));
+}
+
+.live-search-thumb {
+    width: 40px;
+    height: 40px;
+    border-radius: 6px;
+    object-fit: cover;
+    background: #f1f5f9;
+    flex-shrink: 0;
+}
+
+.live-search-title {
+    font-weight: 600;
+    font-size: 0.88rem;
+    color: var(--text);
+    margin-bottom: 2px;
+}
+
+.live-search-meta {
+    font-size: 0.76rem;
+    color: var(--text-muted);
+}
+
+.live-search-price {
+    font-family: var(--font-num);
+    font-weight: 700;
+    font-size: 0.92rem;
+    color: var(--brand-primary);
+    text-align: right;
+}
+
+/* Network Status Indicator Pulse */
+.network-pulse {
+    width: 8px;
+    height: 8px;
+    background-color: #10b981;
+    border-radius: 50%;
+    display: inline-block;
+    animation: net-pulse 2s infinite;
+}
+
+@keyframes net-pulse {
+    0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+    70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+    100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+}
+
+#pos-network-status.is-offline {
+    background-color: rgba(239, 68, 68, 0.1) !important;
+    border-color: rgba(239, 68, 68, 0.3) !important;
+    color: #ef4444 !important;
+}
+
+#pos-network-status.is-offline .network-pulse {
+    background-color: #ef4444;
+    animation: none;
+}
+
+/* Sound Theme Chips */
+.sound-theme-chip {
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.sound-theme-chip:hover {
+    background-color: var(--brand-primary-lighter, rgba(13, 148, 136, 0.05));
+    border-color: var(--brand-primary) !important;
+}

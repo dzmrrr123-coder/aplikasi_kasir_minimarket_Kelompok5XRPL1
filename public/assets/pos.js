@@ -13,7 +13,8 @@
        ============================================================ */
     var POSAudio = (function () {
         var audioCtx = null;
-        var isMuted = localStorage.getItem('pos_sound_muted') === 'true';
+        var soundTheme = localStorage.getItem('pos_sound_theme') || 'classic';
+        var isMuted = localStorage.getItem('pos_sound_muted') === 'true' || soundTheme === 'mute';
 
         function getContext() {
             if (!audioCtx) {
@@ -27,7 +28,7 @@
         }
 
         function playTone(freq, type, duration, delay) {
-            if (isMuted) return;
+            if (isMuted || soundTheme === 'mute') return;
             try {
                 var ctx = getContext();
                 if (!ctx) return;
@@ -47,29 +48,57 @@
         }
 
         return {
-            beep: function () {
-                // Scanner pleasant high beep (880Hz, 70ms)
-                playTone(880, 'sine', 0.07);
+            beep: function (customTheme) {
+                var theme = customTheme || soundTheme;
+                if (theme === 'modern') {
+                    playTone(1046.5, 'triangle', 0.08); // High C6 soft chime
+                } else if (theme === 'arcade') {
+                    playTone(587.33, 'square', 0.04, 0); // D5
+                    playTone(880, 'square', 0.06, 0.04); // A5
+                } else if (theme === 'mute') {
+                    // silent
+                } else {
+                    // classic scanner beep
+                    playTone(880, 'sine', 0.07);
+                }
             },
-            chime: function () {
-                // Success payment melodic chime (C5 -> E5 -> G5)
-                playTone(523.25, 'triangle', 0.12, 0);
-                playTone(659.25, 'triangle', 0.12, 0.08);
-                playTone(783.99, 'triangle', 0.22, 0.16);
+            chime: function (customTheme) {
+                var theme = customTheme || soundTheme;
+                if (theme === 'arcade') {
+                    playTone(523.25, 'square', 0.08, 0);
+                    playTone(659.25, 'square', 0.08, 0.08);
+                    playTone(783.99, 'square', 0.08, 0.16);
+                    playTone(1046.5, 'square', 0.16, 0.24);
+                } else {
+                    playTone(523.25, 'triangle', 0.12, 0);
+                    playTone(659.25, 'triangle', 0.12, 0.08);
+                    playTone(783.99, 'triangle', 0.22, 0.16);
+                }
             },
             error: function () {
-                // Warning low tone (220Hz, 120ms x 2)
                 playTone(220, 'sawtooth', 0.12, 0);
                 playTone(180, 'sawtooth', 0.14, 0.12);
             },
-            toggleMute: function () {
-                isMuted = !isMuted;
+            setTheme: function (theme) {
+                soundTheme = theme || 'classic';
+                isMuted = (soundTheme === 'mute');
+                localStorage.setItem('pos_sound_theme', soundTheme);
                 localStorage.setItem('pos_sound_muted', isMuted ? 'true' : 'false');
                 updateSoundIcon();
-                return isMuted;
+            },
+            getTheme: function () {
+                return soundTheme;
+            },
+            toggleMute: function () {
+                if (soundTheme === 'mute') {
+                    this.setTheme('classic');
+                } else {
+                    this.setTheme('mute');
+                }
+                return (soundTheme === 'mute');
             },
             isMuted: function () {
-                return isMuted;
+                return soundTheme === 'mute' || isMuted;
             }
         };
     })();
@@ -347,6 +376,7 @@
         }
 
         initKembalian();
+        broadcastToCFD();
         fokusBarcode();
     }
 
@@ -365,6 +395,8 @@
         if (groupBayar) groupBayar.classList.toggle('d-none', !tunai);
         if (changeCard) changeCard.classList.toggle('d-none', !tunai);
         if (infoNonTunai) infoNonTunai.classList.toggle('d-none', tunai);
+
+        broadcastToCFD();
     }
 
     document.addEventListener('change', function (e) {
@@ -903,6 +935,11 @@
     }
 
     initDenominationCalc();
+    initLiveSearch();
+    initPosSettings();
+    initQrisModal();
+    initNetworkMonitoring();
+    broadcastToCFD();
 
     // Toggle Layar Penuh
     function toggleFullScreen() {
@@ -924,4 +961,332 @@
             POSAudio.beep();
         }
     });
+
+    /* ============================================================
+       10. CUSTOMER FACING DISPLAY (CFD) REALTIME BROADCAST
+       ============================================================ */
+    var cfdChannel = ('BroadcastChannel' in window) ? new BroadcastChannel('pos_cfd_channel') : null;
+
+    function broadcastToCFD() {
+        var items = [];
+        var cartRows = document.querySelectorAll('#fragmen-keranjang-kiri table tbody tr');
+        cartRows.forEach(function (row) {
+            var nameEl = row.querySelector('.fw-semibold');
+            var qtyEl = row.querySelector('.cart-qty-val, .font-num.fw-semibold');
+            var hargaEl = row.querySelector('td:nth-child(3)');
+            var subtotalEl = row.querySelector('td:nth-child(4)');
+
+            if (nameEl && subtotalEl) {
+                var nama = nameEl.textContent.trim();
+                var qtyStr = qtyEl ? qtyEl.textContent.trim() : '1';
+                var isGram = qtyStr.indexOf('gr') !== -1;
+                var qty = parseFloat(qtyStr.replace(/[^0-9.,]/g, '').replace(',', '.')) || 1;
+                var subtotal = parseFloat(subtotalEl.textContent.replace(/[^0-9]/g, '')) || 0;
+                var harga = parseFloat(hargaEl ? hargaEl.textContent.replace(/[^0-9]/g, '') : 0) || 0;
+
+                items.push({
+                    nama: nama,
+                    qty: qty,
+                    satuan: isGram ? 'gram' : 'pcs',
+                    harga: harga,
+                    subtotal: subtotal
+                });
+            }
+        });
+
+        var totalEl = document.getElementById('total-json');
+        var total = totalEl ? parseFloat(totalEl.textContent) || 0 : 0;
+        var subtotalEl = document.querySelector('.kiosk-sub');
+        var subtotal = subtotalEl ? parseFloat(subtotalEl.textContent.replace(/[^0-9]/g, '')) || 0 : total;
+
+        var inputBayar = document.getElementById('jumlah-dibayar');
+        var bayar = inputBayar ? parseFloat(inputBayar.value) || 0 : 0;
+        var kembalian = bayar - total;
+
+        var metode = document.querySelector('input[name="metode"]:checked');
+        var metodeVal = metode ? metode.value : 'tunai';
+
+        var memberEl = document.querySelector('.card.pos-card.mb-3 .fw-semibold');
+        var memberTelEl = document.querySelector('.card.pos-card.mb-3 .small.text-muted.font-num');
+        var memberData = null;
+        if (memberEl) {
+            memberData = {
+                nama: memberEl.textContent.trim(),
+                telepon: memberTelEl ? memberTelEl.textContent.trim() : '',
+                poin: 0
+            };
+        }
+
+        var payload = {
+            items: items,
+            total: total,
+            subtotal: subtotal,
+            kembalian: kembalian,
+            metode: metodeVal,
+            member: memberData,
+            timestamp: Date.now()
+        };
+
+        if (cfdChannel) {
+            cfdChannel.postMessage(payload);
+        }
+        try {
+            localStorage.setItem('pos_cfd_sync_data', JSON.stringify(payload));
+        } catch (e) {}
+    }
+
+    /* ============================================================
+       11. LIVE INSTANT SEARCH AUTOCOMPLETE
+       ============================================================ */
+    function initLiveSearch() {
+        var inputCari = document.getElementById('input-cari');
+        var dropdown = document.getElementById('live-search-dropdown');
+        var listContainer = document.getElementById('live-search-items');
+        if (!inputCari || !dropdown || !listContainer) return;
+
+        var debounceTimer = null;
+        var selectedIndex = -1;
+        var currentResults = [];
+
+        function sembunyikanDropdown() {
+            dropdown.classList.add('d-none');
+            selectedIndex = -1;
+        }
+
+        function renderResults(produkList) {
+            currentResults = produkList || [];
+            selectedIndex = -1;
+
+            if (currentResults.length === 0) {
+                listContainer.innerHTML = '<div class="p-3 text-center text-muted small"><i class="bi bi-search me-1"></i>Tidak ada produk yang cocok.</div>';
+                dropdown.classList.remove('d-none');
+                return;
+            }
+
+            var html = '';
+            currentResults.forEach(function (p, idx) {
+                var imgHtml = p.gambar
+                    ? '<img src="uploads/' + p.gambar + '" class="live-search-thumb me-2" alt="' + p.nama + '" onerror="this.style.display=\'none\'">'
+                    : '<div class="live-search-thumb me-2 d-flex align-items-center justify-content-center text-muted"><i class="bi bi-box-seam"></i></div>';
+
+                var hargaDisplay = p.satuan === 'gram'
+                    ? rupiah(p.harga_per_gram) + ' <small class="text-muted">/gr</small>'
+                    : rupiah(p.harga);
+
+                var stokBadge = p.stok > 0
+                    ? '<span class="badge text-bg-success-subtle text-success border border-success-subtle ms-1">stok ' + (p.satuan === 'gram' ? p.stok + ' gr' : p.stok) + '</span>'
+                    : '<span class="badge text-bg-danger-subtle text-danger border border-danger-subtle ms-1">Habis</span>';
+
+                html += '<div class="live-search-item" data-index="' + idx + '" data-id="' + p.id + '">' +
+                    '<div class="d-flex align-items-center">' +
+                        imgHtml +
+                        '<div>' +
+                            '<div class="live-search-title">' + p.nama + '</div>' +
+                            '<div class="live-search-meta">' +
+                                (p.barcode ? '<span class="font-num me-2">' + p.barcode + '</span>' : '') +
+                                (p.kategori_nama ? '<span class="text-muted">' + p.kategori_nama + '</span>' : '') +
+                                stokBadge +
+                            '</div>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="live-search-price">' + hargaDisplay + '</div>' +
+                '</div>';
+            });
+
+            listContainer.innerHTML = html;
+            dropdown.classList.remove('d-none');
+        }
+
+        function tambahProdukKeKeranjang(produk) {
+            if (!produk) return;
+            if (produk.stok <= 0) {
+                tampilkanFlash('Stok produk "' + produk.nama + '" habis!', 'danger');
+                POSAudio.error();
+                return;
+            }
+
+            var meta = document.querySelector('meta[name="csrf-token"]');
+            var token = meta ? meta.getAttribute('content') : '';
+            var data = new FormData();
+            data.set('aksi', 'tambah_item');
+            data.set('produk_id', String(produk.id));
+            data.set('qty', produk.satuan === 'gram' ? '100' : '1');
+            data.set('csrf', token);
+
+            fetch('transaksi.php', {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'fetch' },
+                body: data
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    tampilkanFlash(res.pesan, res.tipe);
+                    if (res.tipe === 'success') {
+                        POSAudio.beep();
+                    } else {
+                        POSAudio.error();
+                    }
+                    if (res.fragment) gantiFragment(res.fragment);
+                    inputCari.value = '';
+                    sembunyikanDropdown();
+                    fokusBarcode();
+                })
+                .catch(function (err) {
+                    tampilkanFlash('Terjadi kesalahan: ' + err.message, 'danger');
+                    POSAudio.error();
+                });
+        }
+
+        inputCari.addEventListener('input', function () {
+            var query = inputCari.value.trim();
+            clearTimeout(debounceTimer);
+
+            if (query.length < 1) {
+                sembunyikanDropdown();
+                return;
+            }
+
+            debounceTimer = setTimeout(function () {
+                var meta = document.querySelector('meta[name="csrf-token"]');
+                var token = meta ? meta.getAttribute('content') : '';
+                fetch('api.php?aksi=produk.cari_cepat&q=' + encodeURIComponent(query) + '&csrf=' + encodeURIComponent(token))
+                    .then(function (r) { return r.json(); })
+                    .then(function (d) {
+                        if (d && d.sukses) {
+                            renderResults(d.produk);
+                        }
+                    })
+                    .catch(function () {});
+            }, 180);
+        });
+
+        inputCari.addEventListener('keydown', function (e) {
+            var items = listContainer.querySelectorAll('.live-search-item');
+            if (items.length === 0 || dropdown.classList.contains('d-none')) return;
+
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                selectedIndex = (selectedIndex + 1) % items.length;
+                updateSelection(items);
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                selectedIndex = (selectedIndex - 1 + items.length) % items.length;
+                updateSelection(items);
+            } else if (e.key === 'Enter') {
+                if (selectedIndex >= 0 && currentResults[selectedIndex]) {
+                    e.preventDefault();
+                    tambahProdukKeKeranjang(currentResults[selectedIndex]);
+                }
+            } else if (e.key === 'Escape') {
+                sembunyikanDropdown();
+            }
+        });
+
+        function updateSelection(items) {
+            items.forEach(function (it, idx) {
+                it.classList.toggle('is-selected', idx === selectedIndex);
+                if (idx === selectedIndex) {
+                    it.scrollIntoView({ block: 'nearest' });
+                }
+            });
+        }
+
+        listContainer.addEventListener('click', function (e) {
+            var itemEl = e.target.closest('.live-search-item');
+            if (itemEl) {
+                var idx = parseInt(itemEl.getAttribute('data-index'), 10);
+                if (currentResults[idx]) {
+                    tambahProdukKeKeranjang(currentResults[idx]);
+                }
+            }
+        });
+
+        document.addEventListener('click', function (e) {
+            if (!e.target.closest('#form-cari-produk')) {
+                sembunyikanDropdown();
+            }
+        });
+    }
+
+    /* ============================================================
+       12. POS SETTINGS & SOUND THEMES
+       ============================================================ */
+    function initPosSettings() {
+        var savedTheme = POSAudio.getTheme();
+        var radios = document.querySelectorAll('input[name="sound_theme"]');
+        radios.forEach(function (r) {
+            if (r.value === savedTheme) r.checked = true;
+            r.addEventListener('change', function () {
+                POSAudio.setTheme(this.value);
+                POSAudio.beep();
+            });
+        });
+
+        document.addEventListener('click', function (e) {
+            var btnTest = e.target.closest('.btn-test-sound');
+            if (btnTest) {
+                e.preventDefault();
+                var soundType = btnTest.getAttribute('data-sound');
+                POSAudio.beep(soundType);
+            }
+        });
+    }
+
+    /* ============================================================
+       13. DYNAMIC QRIS MODAL & QUICK FINISH
+       ============================================================ */
+    function initQrisModal() {
+        var modalQris = document.getElementById('modal-qris');
+        if (modalQris) {
+            modalQris.addEventListener('show.bs.modal', function () {
+                var totalEl = document.getElementById('total-json');
+                var total = totalEl ? parseFloat(totalEl.textContent) || 0 : 0;
+                var totalDisp = document.getElementById('qris-modal-total');
+                var qrisImg = document.getElementById('qris-img');
+
+                if (totalDisp) totalDisp.textContent = rupiah(total);
+                if (qrisImg && total > 0) {
+                    var payloadQr = '00020101021126580014ID.LINKAJA.WWW01189360091100212345675204541153033605802ID5916MINIMARKET PLAZA6007JAKARTA6304ABCD' + String(total);
+                    qrisImg.src = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(payloadQr);
+                }
+                POSAudio.beep();
+            });
+        }
+
+        var btnQrisSudah = document.getElementById('btn-qris-sudah-bayar');
+        if (btnQrisSudah) {
+            btnQrisSudah.addEventListener('click', function () {
+                var radioNonTunai = document.getElementById('metode-nontunai');
+                if (radioNonTunai) {
+                    radioNonTunai.checked = true;
+                    syncMetodePembayaran();
+                }
+                var formBayar = document.getElementById('form-bayar');
+                if (formBayar) {
+                    formBayar.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                }
+            });
+        }
+    }
+
+    /* ============================================================
+       14. NETWORK STATUS MONITORING
+       ============================================================ */
+    function initNetworkMonitoring() {
+        var statusBadge = document.getElementById('pos-network-status');
+        if (!statusBadge) return;
+
+        function setOnline(online) {
+            if (online) {
+                statusBadge.className = 'badge text-bg-success-subtle text-success border border-success-subtle d-inline-flex align-items-center gap-1';
+                statusBadge.innerHTML = '<span class="network-pulse"></span>Online';
+            } else {
+                statusBadge.className = 'badge is-offline d-inline-flex align-items-center gap-1';
+                statusBadge.innerHTML = '<span class="network-pulse"></span>Offline / Putus';
+            }
+        }
+
+        window.addEventListener('online', function () { setOnline(true); tampilkanFlash('Koneksi terhubung kembali.', 'success'); });
+        window.addEventListener('offline', function () { setOnline(false); tampilkanFlash('Koneksi terputus! Periksa jaringan lokal.', 'danger'); });
+    }
 })();

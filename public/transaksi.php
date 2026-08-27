@@ -769,8 +769,13 @@ function renderFragmentKananKiosk(): string
 
         <!-- Info bila metode non-tunai dipilih: tidak perlu input uang tunai -->
         <div id="info-non-tunai" class="alert alert-info py-2 small mb-3 d-none">
-            <i class="bi bi-qr-code-scan me-1"></i>
-            Scan QRIS atau kartu di EDC. Total <strong class="font-num"><?= formatRupiah($total) ?></strong> akan dibayar otomatis.
+            <div class="d-flex justify-content-between align-items-center mb-1">
+                <span class="fw-semibold"><i class="bi bi-qr-code-scan me-1"></i>QRIS / EDC Merchant</span>
+                <button type="button" class="btn btn-sm btn-primary py-0 px-2" id="btn-buka-modal-qris" data-bs-toggle="modal" data-bs-target="#modal-qris">
+                    <i class="bi bi-qr-code me-1"></i>Tampilkan QRIS
+                </button>
+            </div>
+            Total <strong class="font-num" id="info-total-qris"><?= formatRupiah($total) ?></strong> siap dipindai via GoPay, OVO, ShopeePay, BCA, atau EDC.
         </div>
 
         <div class="d-grid gap-2">
@@ -900,7 +905,7 @@ function aksiHapusItem(int $produkId): void
 }
 
 /** Ubah kuantitas produk di keranjang (misal klik tombol + / -). */
-function aksiUbahQty(int $produkId, float $delta, int $kasirId): void
+function aksiUbahQty(int $produkId, float $delta, int $kasirId = 0): void
 {
     $keranjang = keranjang();
     $kunci = (string) $produkId;
@@ -914,6 +919,7 @@ function aksiUbahQty(int $produkId, float $delta, int $kasirId): void
         redirectSelf('Produk tidak ditemukan.', 'danger');
     }
 
+    $satuan = $keranjang[$kunci]['satuan'] ?? 'pcs';
     $qtyBaru = $keranjang[$kunci]['qty'] + $delta;
 
     if ($qtyBaru <= 0) {
@@ -924,7 +930,7 @@ function aksiUbahQty(int $produkId, float $delta, int $kasirId): void
 
     if ($produk->getStok() < $qtyBaru) {
         redirectSelf(
-            sprintf('Stok "%s" tidak cukup (tersedia: %d).', $produk->getNama(), $produk->getStok()),
+            sprintf('Stok "%s" tidak cukup (tersedia: %s).', $produk->getNama(), $produk->getStok()),
             'danger'
         );
     }
@@ -934,7 +940,7 @@ function aksiUbahQty(int $produkId, float $delta, int $kasirId): void
     $keranjang[$kunci]['subtotal'] = round($produk->getHargaEfektif() * $qtyBaru, 2);
 
     $_SESSION['keranjang'] = $keranjang;
-    redirectSelf(sprintf('Jumlah "%s" diubah (%d pcs).', $produk->getNama(), (int) $qtyBaru), 'success');
+    redirectSelf(sprintf('Jumlah "%s" diubah (%s).', $produk->getNama(), $satuan === 'gram' ? $qtyBaru . ' gr' : (int)$qtyBaru . ' pcs'), 'success');
 }
 
 /** Terapkan diskon lewat method Transaksi::terapkanDiskon(). */
@@ -1227,6 +1233,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $aksi = $_POST['aksi'] ?? '';
 
     switch ($aksi) {
+        case 'ubah_qty':
+            $pId = (int) ($_POST['produk_id'] ?? 0);
+            $delta = (int) ($_POST['delta'] ?? 0);
+            $setQty = isset($_POST['qty']) && $_POST['qty'] !== '' ? (float) $_POST['qty'] : null;
+            aksiUbahQty($pId, $delta, $setQty);
+            break;
+
         case 'tahan_keranjang':
             aksiTahanKeranjang($userId, trim((string) ($_POST['catatan_tahan'] ?? '')));
             break;
@@ -1533,11 +1546,22 @@ $produkSemua = Produk::semua();
     <div class="kiosk-kiri">
 
     <div class="d-flex flex-wrap align-items-center justify-content-between mb-3 gap-2">
-        <div>
-            <h1 class="h3 mb-0">Transaksi Penjualan</h1>
-            <span class="text-muted small">Kasir: <?= htmlspecialchars($namaUser) ?></span>
+        <div class="d-flex align-items-center gap-3">
+            <div>
+                <h1 class="h3 mb-0">Transaksi Penjualan</h1>
+                <span class="text-muted small">Kasir: <?= htmlspecialchars($namaUser) ?></span>
+            </div>
+            <span id="pos-network-status" class="badge text-bg-success-subtle text-success border border-success-subtle d-inline-flex align-items-center gap-1" title="Koneksi ke server aktif">
+                <span class="network-pulse"></span>Online
+            </span>
         </div>
         <div class="d-flex align-items-center gap-2">
+            <a href="kasir/display.php" target="_blank" class="btn btn-sm btn-outline-teal" id="btn-open-cfd" title="Buka Layar Pelanggan / Customer Display di Monitor Kedua">
+                <i class="bi bi-display me-1"></i>Layar Pelanggan
+            </a>
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modal-pos-settings" title="Pengaturan Suara & Layar POS">
+                <i class="bi bi-sliders"></i>
+            </button>
             <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modal-shortcuts" title="Panduan Tombol Pintas Keyboard (?)">
                 <i class="bi bi-keyboard me-1"></i>Shortcuts <kbd class="ms-1" style="font-size:0.7rem">?</kbd>
             </button>
@@ -1581,18 +1605,29 @@ $produkSemua = Produk::semua();
         </div>
         <div id="kamera-status" class="small text-muted mb-0 d-none"></div>
 
-        <div class="pos-toolbar-row">
+        <div class="pos-toolbar-row position-relative">
             <span class="pos-toolbar-label"><i class="bi bi-search me-1"></i>Cari</span>
-            <form method="get" class="pos-toolbar-form">
+            <form method="get" class="pos-toolbar-form position-relative flex-grow-1" id="form-cari-produk">
                 <input
                     type="search"
+                    id="input-cari"
                     name="cari"
                     class="form-control"
-                    placeholder="Ketik nama produk lalu Enter..."
+                    placeholder="Ketik nama produk / barcode... (Pencarian instan otomatis)"
                     value="<?= htmlspecialchars($_GET['cari'] ?? '') ?>"
                     aria-label="Cari produk"
+                    autocomplete="off"
                 >
                 <button type="submit" class="btn btn-primary text-nowrap"><i class="bi bi-search me-1"></i>Cari</button>
+
+                <!-- Floating Live Search Dropdown -->
+                <div id="live-search-dropdown" class="live-search-dropdown d-none">
+                    <div class="live-search-header d-flex justify-content-between align-items-center px-3 py-2 border-bottom text-muted small">
+                        <span><i class="bi bi-lightning-charge-fill text-warning me-1"></i>Hasil Pencarian Cepat</span>
+                        <span style="font-size: 0.75rem;">Gunakan <kbd class="px-1">↑</kbd> <kbd class="px-1">↓</kbd> lalu <kbd class="px-1">Enter</kbd></span>
+                    </div>
+                    <div id="live-search-items" class="live-search-list"></div>
+                </div>
             </form>
         </div>
     </div>
@@ -2240,6 +2275,110 @@ $produkSemua = Produk::semua();
     </div>
     <div class="d-flex align-items-center gap-2">
         <span class="text-muted"><i class="bi bi-lightning-charge-fill text-warning me-1"></i>POS Fast Mode Active</span>
+    </div>
+<!-- Modal QRIS Dynamic Payment Display -->
+<div class="modal fade" id="modal-qris" tabindex="-1" aria-labelledby="modalQrisLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalQrisLabel"><i class="bi bi-qr-code-scan me-2"></i>Pembayaran QRIS Nasional</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Tutup"></button>
+            </div>
+            <div class="modal-body text-center p-4">
+                <div class="qris-badge-header mb-2">
+                    <span class="badge text-bg-danger fw-bold px-3 py-1">QRIS</span>
+                    <span class="text-muted small ms-2">Standar Pembayaran Nasional</span>
+                </div>
+                <h4 class="fw-bold font-num text-teal mb-3" id="qris-modal-total"><?= formatRupiah($total) ?></h4>
+                <div class="qris-box-wrapper mx-auto p-3 border rounded shadow-sm bg-white mb-3" style="max-width: 260px;">
+                    <div id="qris-qrcode" class="d-flex justify-content-center align-items-center">
+                        <img id="qris-img" src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=<?= urlencode('00020101021126580014ID.LINKAJA.WWW01189360091100212345675204541153033605802ID5916MINIMARKET PLAZA6007JAKARTA6304ABCD') ?>" alt="QR Code QRIS" class="img-fluid rounded" style="width: 220px; height: 220px;">
+                    </div>
+                </div>
+                <div class="small text-muted mb-2">
+                    <i class="bi bi-phone me-1"></i>Arahkan kamera aplikasi (BCA, GoPay, OVO, ShopeePay, Dana, dll.) ke kode QR di atas.
+                </div>
+                <div class="alert alert-light border py-1 px-2 small mb-0 d-inline-block text-muted">
+                    <i class="bi bi-shield-check text-success me-1"></i>Verifikasi Otomatis Terhubung
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
+                <button type="button" class="btn btn-success" id="btn-qris-sudah-bayar" data-bs-dismiss="modal">
+                    <i class="bi bi-check2-circle me-1"></i>Sudah Dibayar (Proses Struk)
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Pengaturan POS & Suara -->
+<div class="modal fade" id="modal-pos-settings" tabindex="-1" aria-labelledby="modalPosSettingsLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalPosSettingsLabel"><i class="bi bi-sliders me-2 text-teal"></i>Pengaturan Kasir & Profil Suara</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="mb-4">
+                    <label class="form-label fw-bold small"><i class="bi bi-volume-up me-1 text-teal"></i>Tema Bunyi Kasir (Audio Sound FX)</label>
+                    <div class="d-flex flex-column gap-2" id="sound-theme-options">
+                        <label class="form-check sound-theme-chip p-2 border rounded d-flex align-items-center justify-content-between mb-0">
+                            <div class="d-flex align-items-center gap-2">
+                                <input class="form-check-input ms-1" type="radio" name="sound_theme" value="classic" checked>
+                                <div>
+                                    <div class="fw-semibold small">Minimarket Classic</div>
+                                    <div class="text-muted small" style="font-size:0.75rem">Beep barcode scanner retail</div>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 btn-test-sound" data-sound="classic">Test</button>
+                        </label>
+                        <label class="form-check sound-theme-chip p-2 border rounded d-flex align-items-center justify-content-between mb-0">
+                            <div class="d-flex align-items-center gap-2">
+                                <input class="form-check-input ms-1" type="radio" name="sound_theme" value="modern">
+                                <div>
+                                    <div class="fw-semibold small">Modern Soft Chime</div>
+                                    <div class="text-muted small" style="font-size:0.75rem">Nada halus & elegan</div>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 btn-test-sound" data-sound="modern">Test</button>
+                        </label>
+                        <label class="form-check sound-theme-chip p-2 border rounded d-flex align-items-center justify-content-between mb-0">
+                            <div class="d-flex align-items-center gap-2">
+                                <input class="form-check-input ms-1" type="radio" name="sound_theme" value="arcade">
+                                <div>
+                                    <div class="fw-semibold small">Arcade Fun</div>
+                                    <div class="text-muted small" style="font-size:0.75rem">Nada retro ceria 8-bit</div>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 btn-test-sound" data-sound="arcade">Test</button>
+                        </label>
+                        <label class="form-check sound-theme-chip p-2 border rounded d-flex align-items-center justify-content-between mb-0">
+                            <div class="d-flex align-items-center gap-2">
+                                <input class="form-check-input ms-1" type="radio" name="sound_theme" value="mute">
+                                <div>
+                                    <div class="fw-semibold small">Mute (Hening)</div>
+                                    <div class="text-muted small" style="font-size:0.75rem">Tanpa bunyi audio feedback</div>
+                                </div>
+                            </div>
+                            <span class="badge text-bg-light border small">Muted</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="mb-2">
+                    <label class="form-label fw-bold small"><i class="bi bi-display me-1 text-teal"></i>Layar Pelanggan (Dual Screen)</label>
+                    <p class="text-muted small mb-2">Buka tampilan pelanggan di monitor kedua untuk menampilkan keranjang belanja langsung ke pembeli.</p>
+                    <a href="kasir/display.php" target="_blank" class="btn btn-outline-primary btn-sm w-100">
+                        <i class="bi bi-box-arrow-up-right me-1"></i>Buka Layar Pelanggan (Tab Baru)
+                    </a>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal"><i class="bi bi-check-lg me-1"></i>Simpan Preferensi</button>
+            </div>
+        </div>
     </div>
 </div>
 

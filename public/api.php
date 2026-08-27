@@ -48,7 +48,7 @@ $aksi = (string) ($_GET['aksi'] ?? ($_POST['aksi'] ?? ''));
 
 // Aksi yang boleh diakses kasir (data milik kasir sendiri / konfigurasi
 // hardware POS yang tidak sensitif). Sisanya khusus admin.
-$aksiKasir = ['hardware.config', 'shift.ringkasan', 'device.list', 'device.set', 'device.remove', 'transaksi.detail'];
+$aksiKasir = ['hardware.config', 'shift.ringkasan', 'device.list', 'device.set', 'device.remove', 'transaksi.detail', 'produk.cari_cepat'];
 
 if ($_SESSION['role'] !== 'admin' && !in_array($aksi, $aksiKasir, true)) {
     http_response_code(403);
@@ -261,6 +261,28 @@ switch ($aksi) {
             'pajak'      => $tx->getPajak(),
             'items'      => $itemRows,
         ];
+        break;
+
+    case 'produk.cari_cepat':
+        $keyword = trim((string) ($params['q'] ?? ''));
+        if ($keyword === '') {
+            $hasil = ['sukses' => true, 'produk' => []];
+            break;
+        }
+        $pdo = \App\Database\Database::connect();
+        $stmt = $pdo->prepare(
+            "SELECT p.id, p.nama, p.barcode, p.harga, p.harga_per_gram, p.satuan, p.stok, p.gambar, k.nama AS kategori_nama
+               FROM produk p
+          LEFT JOIN kategori k ON k.id = p.kategori_id
+              WHERE p.is_aktif = 1
+                AND (p.nama LIKE :q OR p.barcode LIKE :qb)
+              ORDER BY p.stok > 0 DESC, p.nama ASC
+              LIMIT 8"
+        );
+        $qLike = '%' . $keyword . '%';
+        $stmt->execute([':q' => $qLike, ':qb' => $qLike]);
+        $items = $stmt->fetchAll();
+        $hasil = ['sukses' => true, 'produk' => $items];
         break;
 
     default:
