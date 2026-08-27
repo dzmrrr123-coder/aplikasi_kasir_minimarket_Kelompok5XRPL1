@@ -2042,6 +2042,26 @@ button.sidebar-menu-item-link {
     color: #c084fc !important;
 }
 
+.icon-emerald {
+    background-color: #d1fae5 !important;
+    color: #059669 !important;
+}
+
+.dark-mode .icon-emerald {
+    background-color: rgba(5, 150, 105, 0.2) !important;
+    color: #34d399 !important;
+}
+
+.icon-cyan {
+    background-color: #cffafe !important;
+    color: #0891b2 !important;
+}
+
+.dark-mode .icon-cyan {
+    background-color: rgba(8, 145, 178, 0.2) !important;
+    color: #22d3ee !important;
+}
+
 /* Subtitle & Title */
 .sidebar-link-content {
     display: flex !important;

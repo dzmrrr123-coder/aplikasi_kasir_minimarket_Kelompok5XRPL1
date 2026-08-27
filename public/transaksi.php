@@ -1555,20 +1555,6 @@ $produkSemua = Produk::semua();
                 <span class="network-pulse"></span>Online
             </span>
         </div>
-        <div class="d-flex align-items-center gap-2">
-            <a href="kasir/display.php" target="_blank" class="btn btn-sm btn-outline-teal" id="btn-open-cfd" title="Buka Layar Pelanggan / Customer Display di Monitor Kedua">
-                <i class="bi bi-display me-1"></i>Layar Pelanggan
-            </a>
-            <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modal-pos-settings" title="Pengaturan Suara & Layar POS">
-                <i class="bi bi-sliders"></i>
-            </button>
-            <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modal-shortcuts" title="Panduan Tombol Pintas Keyboard (?)">
-                <i class="bi bi-keyboard me-1"></i>Shortcuts <kbd class="ms-1" style="font-size:0.7rem">?</kbd>
-            </button>
-            <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-header-fullscreen" title="Layar Penuh (F11)">
-                <i class="bi bi-arrows-fullscreen"></i>
-            </button>
-        </div>
     </div>
 
     <div id="flash-pesan" class="alert alert-<?= htmlspecialchars($pesanTipe) ?> alert-dismissible fade show <?= $pesan === '' ? 'd-none' : '' ?>" role="alert">
@@ -1838,8 +1824,8 @@ $produkSemua = Produk::semua();
             </div>
         <?php endif; ?>
 
-        <!-- Section: Navigasi Utama -->
-        <div class="sidebar-section-title">Navigasi Utama</div>
+        <!-- Section: Navigasi & Layar -->
+        <div class="sidebar-section-title">Navigasi & Layar</div>
         <ul class="sidebar-menu-list">
             <li>
                 <a class="sidebar-menu-item-link" href="profile.php">
@@ -1854,17 +1840,15 @@ $produkSemua = Produk::semua();
                 </a>
             </li>
             <li>
-                <a class="sidebar-menu-item-link" href="#"
-                   data-bs-toggle="modal" data-bs-target="#modalPerangkat"
-                   data-bs-dismiss="offcanvas">
-                    <div class="sidebar-icon-bubble icon-indigo">
-                        <i class="bi bi-printer-fill"></i>
+                <a class="sidebar-menu-item-link" href="kasir/display.php" target="_blank">
+                    <div class="sidebar-icon-bubble icon-cyan">
+                        <i class="bi bi-display"></i>
                     </div>
                     <div class="sidebar-link-content">
-                        <span class="sidebar-link-title">Hubungkan Perangkat</span>
-                        <span class="sidebar-link-sub">Printer thermal & scanner POS</span>
+                        <span class="sidebar-link-title">Layar Pelanggan (Dual Screen)</span>
+                        <span class="sidebar-link-sub">Tampilkan keranjang di monitor pembeli</span>
                     </div>
-                    <i class="bi bi-chevron-right sidebar-chevron"></i>
+                    <i class="bi bi-box-arrow-up-right sidebar-chevron" style="font-size:0.8rem"></i>
                 </a>
             </li>
             <li>
@@ -1889,6 +1873,53 @@ $produkSemua = Produk::semua();
                         <span class="sidebar-link-sub">Fokus transaksi minimarket</span>
                     </div>
                     <span class="badge text-bg-light border small text-muted">F11</span>
+                </a>
+            </li>
+        </ul>
+
+        <!-- Section: Perangkat & Pengaturan POS -->
+        <div class="sidebar-section-title">Perangkat & Pengaturan POS</div>
+        <ul class="sidebar-menu-list">
+            <li>
+                <a class="sidebar-menu-item-link" href="#"
+                   data-bs-toggle="modal" data-bs-target="#modal-pos-settings"
+                   data-bs-dismiss="offcanvas">
+                    <div class="sidebar-icon-bubble icon-amber">
+                        <i class="bi bi-sliders"></i>
+                    </div>
+                    <div class="sidebar-link-content">
+                        <span class="sidebar-link-title">Pengaturan Kasir & Suara</span>
+                        <span class="sidebar-link-sub">Profil audio scanner & tema bunyi</span>
+                    </div>
+                    <i class="bi bi-chevron-right sidebar-chevron"></i>
+                </a>
+            </li>
+            <li>
+                <a class="sidebar-menu-item-link" href="#"
+                   data-bs-toggle="modal" data-bs-target="#modalPerangkat"
+                   data-bs-dismiss="offcanvas">
+                    <div class="sidebar-icon-bubble icon-indigo">
+                        <i class="bi bi-printer-fill"></i>
+                    </div>
+                    <div class="sidebar-link-content">
+                        <span class="sidebar-link-title">Hubungkan Perangkat</span>
+                        <span class="sidebar-link-sub">Printer thermal & scanner POS</span>
+                    </div>
+                    <i class="bi bi-chevron-right sidebar-chevron"></i>
+                </a>
+            </li>
+            <li>
+                <a class="sidebar-menu-item-link" href="#"
+                   data-bs-toggle="modal" data-bs-target="#modal-shortcuts"
+                   data-bs-dismiss="offcanvas">
+                    <div class="sidebar-icon-bubble icon-emerald">
+                        <i class="bi bi-keyboard"></i>
+                    </div>
+                    <div class="sidebar-link-content">
+                        <span class="sidebar-link-title">Panduan Shortcuts Keyboard</span>
+                        <span class="sidebar-link-sub">Daftar tombol pintas F1-F9 & ESC</span>
+                    </div>
+                    <span class="badge text-bg-dark border small text-white" style="font-size:0.75rem">?</span>
                 </a>
             </li>
         </ul>
