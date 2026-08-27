@@ -240,14 +240,70 @@ function renderFragmentProduk(): string
 function renderFragmentKeranjangKiri(): string
 {
     $keranjang = $_SESSION['keranjang'] ?? [];
+    $heldCarts = $_SESSION['keranjang_tertunda'] ?? [];
+    $jumlahTertunda = count($heldCarts);
 
     ob_start();
     ?>
     <!-- Keranjang -->
-    <div class="card pos-card mb-4">
-        <div class="card-header bg-white d-flex justify-content-between align-items-center">
-            <span><i class="bi bi-cart3 me-1"></i>Keranjang Belanja</span>
-            <span class="badge text-bg-primary"><?= count($keranjang) ?> jenis barang</span>
+    <div class="card pos-card mb-4" id="card-keranjang-pos">
+        <div class="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <div class="d-flex align-items-center gap-2">
+                <span class="fw-bold"><i class="bi bi-cart3 me-1 text-teal"></i>Keranjang Belanja</span>
+                <span class="badge text-bg-primary font-num"><?= count($keranjang) ?> jenis barang</span>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <!-- Tombol Parkir / Panggil Keranjang -->
+                <?php if ($jumlahTertunda > 0): ?>
+                    <div class="dropdown">
+                        <button class="btn btn-sm btn-warning dropdown-toggle btn-hold-cart" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Panggil keranjang yang ditahan">
+                            <i class="bi bi-pause-circle-fill"></i>
+                            <span>Diparkir</span>
+                            <span class="badge bg-danger rounded-pill badge-hold-count ms-1"><?= $jumlahTertunda ?></span>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end shadow-sm" style="min-width: 280px; z-index: 1050;">
+                            <li class="dropdown-header small fw-bold text-uppercase text-muted">Daftar Transaksi Ditahan</li>
+                            <?php foreach ($heldCarts as $hIdx => $hCart): ?>
+                                <li class="p-2 border-bottom">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <span class="fw-semibold small"><?= htmlspecialchars((string)($hCart['catatan'] ?? 'Pelanggan')) ?></span>
+                                        <span class="badge bg-light text-dark font-num small"><?= htmlspecialchars((string)($hCart['waktu'] ?? '')) ?></span>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center small text-muted mb-2">
+                                        <span><?= count($hCart['keranjang'] ?? []) ?> item</span>
+                                        <strong class="text-teal font-num"><?= formatRupiah((float)($hCart['total'] ?? 0)) ?></strong>
+                                    </div>
+                                    <div class="d-flex gap-1">
+                                        <form method="post" data-aksi="panggil_keranjang" class="flex-fill">
+                                            <input type="hidden" name="aksi" value="panggil_keranjang">
+                                            <input type="hidden" name="hold_id" value="<?= htmlspecialchars((string)($hCart['id'] ?? (string)$hIdx)) ?>">
+                                            <button type="submit" class="btn btn-sm btn-primary w-100 py-0" style="font-size: 0.78rem;">
+                                                <i class="bi bi-play-fill me-1"></i>Panggil
+                                            </button>
+                                        </form>
+                                        <form method="post" data-aksi="hapus_tahanan" onsubmit="return confirm('Hapus antrean keranjang tertunda ini?')">
+                                            <input type="hidden" name="aksi" value="hapus_tahanan">
+                                            <input type="hidden" name="hold_id" value="<?= htmlspecialchars((string)($hCart['id'] ?? (string)$hIdx)) ?>">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger py-0" style="font-size: 0.78rem;" title="Hapus">
+                                                <i class="bi bi-trash3"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    </div>
+                <?php endif; ?>
+
+                <!-- Tombol Tahan Keranjang Saat Ini -->
+                <form method="post" data-aksi="tahan_keranjang" class="d-inline" id="form-tahan-keranjang">
+                    <input type="hidden" name="aksi" value="tahan_keranjang">
+                    <button type="submit" class="btn btn-sm btn-outline-warning btn-hold-cart" <?= empty($keranjang) ? 'disabled' : '' ?> title="Tahan keranjang untuk pelanggan lain (F7)">
+                        <i class="bi bi-pause-circle"></i>
+                        <span>Tahan (F7)</span>
+                    </button>
+                </form>
+            </div>
         </div>
         <div class="card-body p-0">
             <?php if ($keranjang === []): ?>
@@ -1047,6 +1103,88 @@ function aksiBatalkan(): void
     redirectSelf('Keranjang dibatalkan.', 'info');
 }
 
+/** Tahan (parkir) keranjang saat ini ke memori sesi sementara. */
+function aksiTahanKeranjang(int $kasirId, string $catatan = ''): void
+{
+    $keranjang = keranjang();
+    if ($keranjang === []) {
+        redirectSelf('Keranjang masih kosong, tidak ada yang bisa ditahan.', 'warning');
+    }
+
+    if (!isset($_SESSION['keranjang_tertunda'])) {
+        $_SESSION['keranjang_tertunda'] = [];
+    }
+
+    $diskonId = $_SESSION['diskon_id'] ?? null;
+    $diskon = $diskonId !== null ? Diskon::cari((int) $diskonId) : null;
+    $ringkasan = hitungRingkasanKeranjang($keranjang, $diskon);
+
+    $holdId = uniqid('hold_', true);
+    $_SESSION['keranjang_tertunda'][$holdId] = [
+        'id'        => $holdId,
+        'waktu'     => date('H:i'),
+        'catatan'   => $catatan !== '' ? $catatan : 'Pelanggan #' . (count($_SESSION['keranjang_tertunda']) + 1),
+        'keranjang' => $keranjang,
+        'diskon_id' => $_SESSION['diskon_id'] ?? null,
+        'member_id' => $_SESSION['member_id'] ?? null,
+        'total'     => $ringkasan['total'],
+    ];
+
+    $_SESSION['keranjang'] = [];
+    unset($_SESSION['diskon_id'], $_SESSION['member_id']);
+
+    redirectSelf('Keranjang berhasil diparkir/ditahan (F7). Anda bisa melayani pelanggan berikutnya.', 'info');
+}
+
+/** Panggil kembali keranjang yang sebelumnya ditahan. */
+function aksiPanggilKeranjang(string $holdId): void
+{
+    if (empty($_SESSION['keranjang_tertunda'][$holdId])) {
+        redirectSelf('Transaksi tertunda tidak ditemukan.', 'danger');
+    }
+
+    $held = $_SESSION['keranjang_tertunda'][$holdId];
+    unset($_SESSION['keranjang_tertunda'][$holdId]);
+
+    // Jika keranjang saat ini sedang ada isinya, tukar (tahan keranjang saat ini dulu)
+    $keranjangSekarang = keranjang();
+    if (!empty($keranjangSekarang)) {
+        $holdIdSwap = uniqid('hold_', true);
+        $_SESSION['keranjang_tertunda'][$holdIdSwap] = [
+            'id'        => $holdIdSwap,
+            'waktu'     => date('H:i'),
+            'catatan'   => 'Pelanggan #' . (count($_SESSION['keranjang_tertunda']) + 1),
+            'keranjang' => $keranjangSekarang,
+            'diskon_id' => $_SESSION['diskon_id'] ?? null,
+            'member_id' => $_SESSION['member_id'] ?? null,
+            'total'     => hitungRingkasanKeranjang($keranjangSekarang, null)['total'],
+        ];
+    }
+
+    $_SESSION['keranjang'] = $held['keranjang'] ?? [];
+    if (!empty($held['diskon_id'])) {
+        $_SESSION['diskon_id'] = (int) $held['diskon_id'];
+    } else {
+        unset($_SESSION['diskon_id']);
+    }
+    if (!empty($held['member_id'])) {
+        $_SESSION['member_id'] = (int) $held['member_id'];
+    } else {
+        unset($_SESSION['member_id']);
+    }
+
+    redirectSelf('Keranjang tertunda dipanggil kembali.', 'success');
+}
+
+/** Hapus antrean keranjang tertunda. */
+function aksiHapusTahanan(string $holdId): void
+{
+    if (isset($_SESSION['keranjang_tertunda'][$holdId])) {
+        unset($_SESSION['keranjang_tertunda'][$holdId]);
+    }
+    redirectSelf('Antrean keranjang tertunda dihapus.', 'info');
+}
+
 /**
  * Void (hapus) satu item dari keranjang. Butuh PIN supervisor/admin
  * (disimpan di pengaturan 'pin_supervisor', default 0000).
@@ -1089,6 +1227,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $aksi = $_POST['aksi'] ?? '';
 
     switch ($aksi) {
+        case 'tahan_keranjang':
+            aksiTahanKeranjang($userId, trim((string) ($_POST['catatan_tahan'] ?? '')));
+            break;
+
+        case 'panggil_keranjang':
+            aksiPanggilKeranjang((string) ($_POST['hold_id'] ?? ''));
+            break;
+
+        case 'hapus_tahanan':
+            aksiHapusTahanan((string) ($_POST['hold_id'] ?? ''));
+            break;
         case 'logout':
             logoutKaryawan();
             header('Location: login.php');
@@ -1388,6 +1537,14 @@ $produkSemua = Produk::semua();
             <h1 class="h3 mb-0">Transaksi Penjualan</h1>
             <span class="text-muted small">Kasir: <?= htmlspecialchars($namaUser) ?></span>
         </div>
+        <div class="d-flex align-items-center gap-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modal-shortcuts" title="Panduan Tombol Pintas Keyboard (?)">
+                <i class="bi bi-keyboard me-1"></i>Shortcuts <kbd class="ms-1" style="font-size:0.7rem">?</kbd>
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-header-fullscreen" title="Layar Penuh (F11)">
+                <i class="bi bi-arrows-fullscreen"></i>
+            </button>
+        </div>
     </div>
 
     <div id="flash-pesan" class="alert alert-<?= htmlspecialchars($pesanTipe) ?> alert-dismissible fade show <?= $pesan === '' ? 'd-none' : '' ?>" role="alert">
@@ -1521,18 +1678,27 @@ $produkSemua = Produk::semua();
                 <i class="bi bi-cash-stack me-1"></i><span id="buka-kas-judul">Buka Kas</span>
             </div>
             <div class="card-body p-4">
-                <p class="mb-4">Anda harus <strong>buka kas</strong> dulu sebelum mulai transaksi. Isi modal awal (uang di laci) untuk memulai shift.</p>
+                <p class="mb-3">Anda harus <strong>buka kas</strong> dulu sebelum mulai transaksi. Isi modal awal (uang di laci) untuk memulai shift.</p>
                 <form method="post" data-aksi="buka_kas">
                     <input type="hidden" name="aksi" value="buka_kas">
-                    <div class="mb-4">
-                        <label for="modal-awal" class="form-label">Modal awal (Rp)</label>
+                    <div class="mb-3">
+                        <label for="modal-awal" class="form-label d-flex justify-content-between">
+                            <span>Modal awal (Rp)</span>
+                            <span class="text-muted small">Pilih cepat:</span>
+                        </label>
+                        <div class="quick-float-grid mb-2">
+                            <button type="button" class="btn-float-chip" data-float="50000">Rp 50.000</button>
+                            <button type="button" class="btn-float-chip" data-float="100000">Rp 100.000</button>
+                            <button type="button" class="btn-float-chip" data-float="200000">Rp 200.000</button>
+                            <button type="button" class="btn-float-chip" data-float="500000">Rp 500.000</button>
+                        </div>
                         <input
                             type="number"
                             step="0.01"
                             min="0"
                             id="modal-awal"
                             name="modal_awal"
-                            class="form-control form-control-lg font-num"
+                            class="form-control form-control-lg font-num text-end fw-bold"
                             placeholder="cth: 100000"
                             required
                             <?= $wajibBukaKas ? 'autofocus' : '' ?>
@@ -1790,12 +1956,12 @@ $produkSemua = Produk::semua();
 
 <!-- Modal tutup kas (rekonsiliasi) -->
 <div class="modal fade" id="modal-tutup-kas" tabindex="-1" aria-labelledby="modal-tutup-label" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <form method="post" data-aksi="tutup_kas">
                 <input type="hidden" name="aksi" value="tutup_kas">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="modal-tutup-label"><i class="bi bi-cash-coin me-1"></i>Tutup Kas</h5>
+                    <h5 class="modal-title" id="modal-tutup-label"><i class="bi bi-cash-coin me-2 text-warning"></i>Tutup Kas Shift & Rekonsiliasi</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
                 </div>
                 <div class="modal-body">
@@ -1805,40 +1971,166 @@ $produkSemua = Produk::semua();
                     </div>
 
                     <!-- Ringkasan & riwayat transaksi shift (diisi dinamis
-                         via api.php?aksi=shift.ringkasan saat modal dibuka,
-                         supaya selalu mutakhir walau shift baru dibuka lewat AJAX) -->
+                         via api.php?aksi=shift.ringkasan saat modal dibuka) -->
                     <div id="tutup-kas-ringkasan"></div>
 
+                    <!-- Kalkulator Pecahan Lembaran Fisik (Interactive Denomination Calculator) -->
+                    <div class="card bg-light border mb-3">
+                        <div class="card-header bg-transparent py-2 d-flex justify-content-between align-items-center" role="button" data-bs-toggle="collapse" data-bs-target="#collapsePecahan">
+                            <span class="small fw-bold"><i class="bi bi-calculator me-1 text-teal"></i>Kalkulator Pecahan Uang Fisik (Lembaran & Koin)</span>
+                            <i class="bi bi-chevron-down small text-muted"></i>
+                        </div>
+                        <div class="collapse show" id="collapsePecahan">
+                            <div class="card-body p-2">
+                                <table class="denomination-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Pecahan</th>
+                                            <th class="text-center" style="width: 140px;">Jumlah</th>
+                                            <th class="text-end" style="width: 160px;">Subtotal (Rp)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="denom-tbody">
+                                        <tr data-val="100000"><td>Rp 100.000</td><td class="text-center"><input type="number" min="0" class="form-control form-control-sm denom-input mx-auto" value="0"></td><td class="denom-subtotal">Rp 0</td></tr>
+                                        <tr data-val="50000"><td>Rp 50.000</td><td class="text-center"><input type="number" min="0" class="form-control form-control-sm denom-input mx-auto" value="0"></td><td class="denom-subtotal">Rp 0</td></tr>
+                                        <tr data-val="20000"><td>Rp 20.000</td><td class="text-center"><input type="number" min="0" class="form-control form-control-sm denom-input mx-auto" value="0"></td><td class="denom-subtotal">Rp 0</td></tr>
+                                        <tr data-val="10000"><td>Rp 10.000</td><td class="text-center"><input type="number" min="0" class="form-control form-control-sm denom-input mx-auto" value="0"></td><td class="denom-subtotal">Rp 0</td></tr>
+                                        <tr data-val="5000"><td>Rp 5.000</td><td class="text-center"><input type="number" min="0" class="form-control form-control-sm denom-input mx-auto" value="0"></td><td class="denom-subtotal">Rp 0</td></tr>
+                                        <tr data-val="2000"><td>Rp 2.000</td><td class="text-center"><input type="number" min="0" class="form-control form-control-sm denom-input mx-auto" value="0"></td><td class="denom-subtotal">Rp 0</td></tr>
+                                        <tr data-val="1000"><td>Rp 1.000</td><td class="text-center"><input type="number" min="0" class="form-control form-control-sm denom-input mx-auto" value="0"></td><td class="denom-subtotal">Rp 0</td></tr>
+                                        <tr data-val="1"><td>Uang Logam / Koin</td><td class="text-center"><input type="number" min="0" step="100" class="form-control form-control-sm denom-input mx-auto" placeholder="Rp" value="0" style="width:100px;"></td><td class="denom-subtotal">Rp 0</td></tr>
+                                    </tbody>
+                                    <tfoot>
+                                        <tr class="fw-bold border-top">
+                                            <td colspan="2" class="pt-2">Total Terhitung Fisik</td>
+                                            <td class="text-end pt-2 font-num text-teal" id="denom-grand-total">Rp 0</td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="mb-3">
-                        <label for="kas-fisik" class="form-label">Uang di laci (kas fisik) — Rp</label>
+                        <label for="kas-fisik" class="form-label fw-bold">Uang di laci (kas fisik) — Rp</label>
                         <input
                             type="number"
                             step="0.01"
                             min="0"
                             id="kas-fisik"
                             name="kas_fisik"
-                            class="form-control form-control-lg font-num"
-                            placeholder="Isi jumlah uang fisik di laci"
+                            class="form-control form-control-lg font-num fw-bold text-end"
+                            placeholder="0"
                             required
                         >
                         <div class="form-text" id="tutup-kas-hint">Total penjualan shift otomatis dihitung untuk rekonsiliasi.</div>
                     </div>
-                    <div class="mb-2">
+
+                    <!-- Live Difference Badge (Selisih) -->
+                    <div id="diff-status-box" class="diff-status-box is-pas d-none">
+                        <span id="diff-status-text">Selisih Kas: Pas</span>
+                        <span class="font-num fw-bold" id="diff-status-val">Rp 0</span>
+                    </div>
+
+                    <div class="mb-2 mt-3">
                         <label for="catatan-shift" class="form-label">Catatan (opsional)</label>
                         <input
                             type="text"
                             id="catatan-shift"
                             name="catatan_shift"
                             class="form-control"
-                            placeholder="cth: shift pagi"
+                            placeholder="cth: shift pagi, kas pas"
                         >
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
-                    <button type="submit" class="btn btn-warning" id="btn-tutup-kas"><i class="bi bi-cash-coin me-1"></i>Tutup Kas</button>
+                    <button type="submit" class="btn btn-warning" id="btn-tutup-kas"><i class="bi bi-cash-coin me-1"></i>Tutup Kas & Rekonsiliasi</button>
                 </div>
             </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Panduan Keyboard Shortcuts -->
+<div class="modal fade" id="modal-shortcuts" tabindex="-1" aria-labelledby="modalShortcutsLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalShortcutsLabel"><i class="bi bi-keyboard me-2 text-teal"></i>Panduan Tombol Pintas POS (Keyboard Shortcuts)</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+            </div>
+            <div class="modal-body p-4">
+                <p class="text-muted small mb-3">Gunakan tombol pintas di keyboard untuk mempercepat transaksi kasir tanpa perlu memegang mouse.</p>
+                <div class="shortcut-guide-grid">
+                    <div class="shortcut-guide-card">
+                        <span class="shortcut-guide-key">F1</span>
+                        <div>
+                            <div class="fw-bold small">Cari Produk</div>
+                            <div class="text-muted small" style="font-size:0.75rem">Fokus ke kolom pencarian nama produk</div>
+                        </div>
+                    </div>
+                    <div class="shortcut-guide-card">
+                        <span class="shortcut-guide-key">F2</span>
+                        <div>
+                            <div class="fw-bold small">Scan Barcode</div>
+                            <div class="text-muted small" style="font-size:0.75rem">Fokus ke kolom scan barcode scanner</div>
+                        </div>
+                    </div>
+                    <div class="shortcut-guide-card">
+                        <span class="shortcut-guide-key">F4</span>
+                        <div>
+                            <div class="fw-bold small">Scan Member</div>
+                            <div class="text-muted small" style="font-size:0.75rem">Fokus ke kolom nomor telepon member</div>
+                        </div>
+                    </div>
+                    <div class="shortcut-guide-card">
+                        <span class="shortcut-guide-key">F7</span>
+                        <div>
+                            <div class="fw-bold small">Tahan Keranjang</div>
+                            <div class="text-muted small" style="font-size:0.75rem">Parkir keranjang untuk melayani antrean lain</div>
+                        </div>
+                    </div>
+                    <div class="shortcut-guide-card">
+                        <span class="shortcut-guide-key">F8</span>
+                        <div>
+                            <div class="fw-bold small">Uang Pas</div>
+                            <div class="text-muted small" style="font-size:0.75rem">Isi jumlah bayar sama dengan total belanja</div>
+                        </div>
+                    </div>
+                    <div class="shortcut-guide-card">
+                        <span class="shortcut-guide-key">F9</span>
+                        <div>
+                            <div class="fw-bold small">Proses Bayar</div>
+                            <div class="text-muted small" style="font-size:0.75rem">Selesaikan transaksi penjualan</div>
+                        </div>
+                    </div>
+                    <div class="shortcut-guide-card">
+                        <span class="shortcut-guide-key">F11</span>
+                        <div>
+                            <div class="fw-bold small">Layar Penuh</div>
+                            <div class="text-muted small" style="font-size:0.75rem">Mode layar penuh kasir (Fullscreen POS)</div>
+                        </div>
+                    </div>
+                    <div class="shortcut-guide-card">
+                        <span class="shortcut-guide-key">ESC</span>
+                        <div>
+                            <div class="fw-bold small">Tutup / Batal</div>
+                            <div class="text-muted small" style="font-size:0.75rem">Tutup struk terakhir atau batal modal</div>
+                        </div>
+                    </div>
+                    <div class="shortcut-guide-card">
+                        <span class="shortcut-guide-key">?</span>
+                        <div>
+                            <div class="fw-bold small">Bantuan Shortcuts</div>
+                            <div class="text-muted small" style="font-size:0.75rem">Buka jendela panduan ini kapan saja</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal"><i class="bi bi-check-lg me-1"></i>Mengerti</button>
+            </div>
         </div>
     </div>
 </div>

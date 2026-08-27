@@ -349,6 +349,11 @@ $baseUrl       = SessionGuard::baseUrl();
 
         <div class="divider"></div>
 
+        <div class="barcode-visual" style="margin: 10px auto 6px auto; text-align: center;">
+            <div class="barcode-lines" style="height: 32px; background: repeating-linear-gradient(90deg, #111, #111 2px, #fff 2px, #fff 4px, #111 4px, #111 5px, #fff 5px, #fff 7px, #111 7px, #111 10px, #fff 10px, #fff 11px); width: 170px; margin: 0 auto;"></div>
+            <div class="barcode-text" style="font-family: monospace; font-size: 11px; text-align: center; letter-spacing: 2px; margin-top: 3px;">*TX-<?= str_pad((string)$transaksi->getId(), 6, '0', STR_PAD_LEFT) ?>*</div>
+        </div>
+
         <div class="receipt-footer">
             <p><?= nl2br(htmlspecialchars($footerStruk)) ?></p>
             <p style="margin-top: 4px; font-size: 10px; color: #888;">Simpan struk ini sebagai bukti pembayaran yang sah.</p>

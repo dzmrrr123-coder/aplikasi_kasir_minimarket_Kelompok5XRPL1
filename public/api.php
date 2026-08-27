@@ -48,7 +48,7 @@ $aksi = (string) ($_GET['aksi'] ?? ($_POST['aksi'] ?? ''));
 
 // Aksi yang boleh diakses kasir (data milik kasir sendiri / konfigurasi
 // hardware POS yang tidak sensitif). Sisanya khusus admin.
-$aksiKasir = ['hardware.config', 'shift.ringkasan', 'device.list', 'device.set', 'device.remove'];
+$aksiKasir = ['hardware.config', 'shift.ringkasan', 'device.list', 'device.set', 'device.remove', 'transaksi.detail'];
 
 if ($_SESSION['role'] !== 'admin' && !in_array($aksi, $aksiKasir, true)) {
     http_response_code(403);
@@ -228,8 +228,39 @@ switch ($aksi) {
         $hasil = $retur->supplierAsalProduk($params);
         break;
 
-    case 'retur.grafik':
-        $hasil = $retur->grafikBulanan($params);
+    case 'transaksi.detail':
+        $txId = (int) ($params['id'] ?? 0);
+        $tx = \App\Models\Transaksi::cari($txId);
+        if ($tx === null) {
+            $hasil = ['sukses' => false, 'pesan' => 'Transaksi tidak ditemukan.'];
+            break;
+        }
+        // Cek hak akses: kasir hanya boleh melihat transaksi miliknya sendiri
+        if ($_SESSION['role'] === 'kasir' && $tx->getKasirId() !== (int) $_SESSION['user_id']) {
+            $hasil = ['sukses' => false, 'pesan' => 'Akses ditolak.'];
+            break;
+        }
+        $items = \App\Models\ItemTransaksi::untukTransaksi($txId);
+        $itemRows = [];
+        foreach ($items as $it) {
+            $p = $it->getProduk();
+            $itemRows[] = [
+                'nama'     => $p->getNama(),
+                'satuan'   => $p->getSatuan(),
+                'qty'      => $it->getQty(),
+                'harga'    => $it->getHarga(),
+                'subtotal' => $it->getSubtotal(),
+            ];
+        }
+        $hasil = [
+            'sukses'     => true,
+            'id'         => $txId,
+            'tanggal'    => $tx->getTanggal()->format('d/m/Y H:i'),
+            'kasir_nama' => $tx->getKasirNama(),
+            'total'      => $tx->getTotal(),
+            'pajak'      => $tx->getPajak(),
+            'items'      => $itemRows,
+        ];
         break;
 
     default:

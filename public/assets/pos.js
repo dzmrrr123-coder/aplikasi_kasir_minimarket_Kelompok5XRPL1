@@ -176,6 +176,19 @@
        3. QUICK CASH PRESETS & NUMPAD (Global Delegated Events)
        ============================================================ */
     document.addEventListener('click', function (e) {
+        // Quick Float Chips (Buka Kas Modal Awal)
+        var floatChip = e.target.closest('.btn-float-chip');
+        if (floatChip) {
+            e.preventDefault();
+            var inputModal = document.getElementById('modal-awal');
+            if (inputModal) {
+                inputModal.value = floatChip.getAttribute('data-float') || '0';
+                inputModal.focus();
+                POSAudio.beep();
+            }
+            return;
+        }
+
         // Quick Cash Chips (Pecahan Uang Otomatis)
         var chip = e.target.closest('.btn-cash-chip');
         if (chip) {
@@ -385,6 +398,15 @@
             e.preventDefault();
             var memberInput = document.getElementById('input-telepon-member');
             if (memberInput) { memberInput.focus(); memberInput.select(); }
+        } else if (e.key === 'F7') {
+            e.preventDefault();
+            var formTahan = document.getElementById('form-tahan-keranjang');
+            if (formTahan) {
+                var btnTahan = formTahan.querySelector('button[type="submit"]');
+                if (btnTahan && !btnTahan.disabled) {
+                    formTahan.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                }
+            }
         } else if (e.key === 'F8') {
             e.preventDefault();
             var chipPas = document.querySelector('.btn-cash-chip.chip-exact');
@@ -393,6 +415,13 @@
             e.preventDefault();
             var formBayarBtn = document.querySelector('#form-bayar button[type="submit"]');
             if (formBayarBtn && !formBayarBtn.disabled) formBayarBtn.click();
+        } else if (e.key === '?' && !['input', 'textarea'].includes((e.target.tagName || '').toLowerCase())) {
+            e.preventDefault();
+            var modalShortcuts = document.getElementById('modal-shortcuts');
+            if (modalShortcuts && window.bootstrap) {
+                var bsShortcuts = bootstrap.Modal.getOrCreateInstance(modalShortcuts);
+                bsShortcuts.toggle();
+            }
         }
     });
 
@@ -717,14 +746,88 @@
         });
     }
 
+    // Interactive Denomination Calculator for Tutup Kas
+    function updateDiffStatus() {
+        var kasFisikInput = document.getElementById('kas-fisik');
+        var diffBox = document.getElementById('diff-status-box');
+        var diffText = document.getElementById('diff-status-text');
+        var diffVal = document.getElementById('diff-status-val');
+        if (!kasFisikInput || !diffBox) return;
+
+        var modalTutup = document.getElementById('modal-tutup-kas');
+        var totalSistem = modalTutup ? parseFloat(modalTutup.dataset.totalSistem) || 0 : 0;
+        var fisik = parseFloat(kasFisikInput.value) || 0;
+
+        if (kasFisikInput.value === '') {
+            diffBox.classList.add('d-none');
+            return;
+        }
+
+        diffBox.classList.remove('d-none');
+        var selisih = fisik - totalSistem;
+
+        diffBox.classList.remove('is-pas', 'is-lebih', 'is-kurang');
+        if (Math.abs(selisih) < 0.01) {
+            diffBox.classList.add('is-pas');
+            if (diffText) diffText.textContent = 'Selisih Kas: Pas (Sesuai Sistem)';
+            if (diffVal) diffVal.textContent = rupiah(0);
+        } else if (selisih > 0) {
+            diffBox.classList.add('is-lebih');
+            if (diffText) diffText.textContent = 'Selisih Kas: Lebih (Surplus)';
+            if (diffVal) diffVal.textContent = '+' + rupiah(selisih);
+        } else {
+            diffBox.classList.add('is-kurang');
+            if (diffText) diffText.textContent = 'Selisih Kas: Kurang (Defisit)';
+            if (diffVal) diffVal.textContent = '-' + rupiah(Math.abs(selisih));
+        }
+    }
+
+    function initDenominationCalc() {
+        var tbody = document.getElementById('denom-tbody');
+        var kasFisikInput = document.getElementById('kas-fisik');
+        var grandTotalEl = document.getElementById('denom-grand-total');
+        if (!tbody || !kasFisikInput) return;
+
+        function hitungDenominasi() {
+            var rows = tbody.querySelectorAll('tr[data-val]');
+            var total = 0;
+
+            rows.forEach(function (row) {
+                var val = parseFloat(row.getAttribute('data-val')) || 0;
+                var input = row.querySelector('.denom-input');
+                var subEl = row.querySelector('.denom-subtotal');
+                var qty = parseFloat(input ? input.value : 0) || 0;
+                var sub = val === 1 ? qty : (val * qty);
+                total += sub;
+                if (subEl) subEl.textContent = rupiah(sub);
+            });
+
+            if (grandTotalEl) grandTotalEl.textContent = rupiah(total);
+            if (total > 0 || tbody.dataset.userEdited === 'true') {
+                kasFisikInput.value = total;
+                updateDiffStatus();
+            }
+        }
+
+        tbody.addEventListener('input', function (e) {
+            if (e.target && e.target.classList.contains('denom-input')) {
+                tbody.dataset.userEdited = 'true';
+                hitungDenominasi();
+            }
+        });
+
+        kasFisikInput.addEventListener('input', updateDiffStatus);
+    }
+
     // Modal tutup kas init
     function muatRingkasanTutupKas() {
         var wadah = document.getElementById('tutup-kas-ringkasan');
         var dibuka = document.getElementById('tutup-kas-dibuka');
         var hint = document.getElementById('tutup-kas-hint');
+        var modalTutup = document.getElementById('modal-tutup-kas');
         if (!wadah) return;
 
-        wadah.innerHTML = '<div class="text-muted small py-2 d-flex align-items-center gap-2"><span class="spinner"></span>Memuat riwayat shift...</div>';
+        wadah.innerHTML = '<div class="text-muted small py-2 d-flex align-items-center gap-2"><span class="spinner-border spinner-border-sm text-teal"></span>Memuat riwayat shift...</div>';
 
         var meta = document.querySelector('meta[name="csrf-token"]');
         var token = meta ? meta.getAttribute('content') : '';
@@ -736,8 +839,9 @@
                     return;
                 }
 
+                if (modalTutup) modalTutup.dataset.totalSistem = String(d.uang_seharusnya || 0);
                 if (dibuka) dibuka.textContent = d.dibuka_pada ? new Date(d.dibuka_pada.replace(' ', 'T')).toLocaleString('id-ID') : '-';
-                if (hint) hint.textContent = 'Cocokkan dengan uang seharusnya di laci: ' + rupiah(d.uang_seharusnya) + '.';
+                if (hint) hint.textContent = 'Total uang seharusnya di laci: ' + rupiah(d.uang_seharusnya) + '.';
 
                 var baris = (d.riwayat || []).map(function (r) {
                     var tgl = r.tanggal ? new Date(r.tanggal.replace(' ', 'T')).toLocaleString('id-ID') : '';
@@ -751,11 +855,11 @@
                     '<div class="col-6 col-md-3"><div class="border rounded p-2 text-center"><div class="small text-muted">Modal awal</div>' +
                     '<div class="fw-bold font-num">' + rupiah(d.modal_awal) + '</div></div></div>' +
                     '<div class="col-6 col-md-3"><div class="border rounded p-2 text-center"><div class="small text-muted">Penjualan tunai</div>' +
-                    '<div class="fw-bold font-num">' + rupiah(d.total_tunai || 0) + '</div></div></div>' +
-                    '<div class="col-6 col-md-3"><div class="border rounded p-2 text-center"><div class="small text-muted">Non-tunai (QRIS/EDC)</div>' +
-                    '<div class="fw-bold font-num">' + rupiah(d.total_nontunai || 0) + '</div></div></div>' +
-                    '<div class="col-6 col-md-3"><div class="border rounded p-2 text-center"><div class="small text-muted">Uang di laci</div>' +
-                    '<div class="fw-bold font-num">' + rupiah(d.uang_seharusnya) + '</div></div></div></div>';
+                    '<div class="fw-bold font-num text-success">' + rupiah(d.total_tunai || 0) + '</div></div></div>' +
+                    '<div class="col-6 col-md-3"><div class="border rounded p-2 text-center"><div class="small text-muted">Non-tunai</div>' +
+                    '<div class="fw-bold font-num text-primary">' + rupiah(d.total_nontunai || 0) + '</div></div></div>' +
+                    '<div class="col-6 col-md-3"><div class="border rounded p-2 text-center bg-warning-subtle"><div class="small text-muted">Target di laci</div>' +
+                    '<div class="fw-bold font-num text-warning-emphasis">' + rupiah(d.uang_seharusnya) + '</div></div></div></div>';
 
                 isi += '<div class="mb-3"><div class="d-flex justify-content-between align-items-center mb-1">' +
                     '<span class="small fw-semibold">Riwayat transaksi shift ini</span>' +
@@ -764,7 +868,7 @@
                 if ((d.riwayat || []).length === 0) {
                     isi += '<div class="text-muted small border rounded p-3 text-center">Belum ada transaksi di shift ini.</div>';
                 } else {
-                    isi += '<div class="table-responsive border rounded" style="max-height: 220px; overflow-y: auto;">' +
+                    isi += '<div class="table-responsive border rounded" style="max-height: 180px; overflow-y: auto;">' +
                         '<table class="table table-sm align-middle mb-0"><thead class="table-light">' +
                         '<tr><th>Waktu</th><th class="text-end">Total</th><th class="text-center">Metode</th></tr></thead>' +
                         '<tbody>' + baris + '</tbody>' +
@@ -775,6 +879,7 @@
                 isi += '</div>';
 
                 wadah.innerHTML = isi;
+                updateDiffStatus();
             })
             .catch(function () {
                 wadah.innerHTML = '<div class="alert alert-danger py-2 small">Gagal memuat riwayat shift.</div>';
@@ -783,27 +888,40 @@
 
     var modalTutupKas = document.getElementById('modal-tutup-kas');
     if (modalTutupKas) {
-        modalTutupKas.addEventListener('show.bs.modal', muatRingkasanTutupKas);
+        modalTutupKas.addEventListener('show.bs.modal', function () {
+            muatRingkasanTutupKas();
+            var kasFisikInput = document.getElementById('kas-fisik');
+            if (kasFisikInput) {
+                kasFisikInput.value = '';
+                setTimeout(function () { kasFisikInput.focus(); }, 300);
+            }
+        });
         modalTutupKas.addEventListener('hidden.bs.modal', function () {
             var trigger = document.querySelector('[data-bs-target="#modal-tutup-kas"]');
             if (trigger) trigger.focus();
         });
     }
 
+    initDenominationCalc();
+
     // Toggle Layar Penuh
-    var btnFullscreen = document.getElementById('btn-sidebar-fullscreen');
-    if (btnFullscreen) {
-        btnFullscreen.addEventListener('click', function (e) {
-            e.preventDefault();
-            if (!document.fullscreenElement) {
-                if (document.documentElement.requestFullscreen) {
-                    document.documentElement.requestFullscreen().catch(function () {});
-                }
-            } else {
-                if (document.exitFullscreen) {
-                    document.exitFullscreen().catch(function () {});
-                }
+    function toggleFullScreen() {
+        if (!document.fullscreenElement) {
+            if (document.documentElement.requestFullscreen) {
+                document.documentElement.requestFullscreen().catch(function () {});
             }
-        });
+        } else {
+            if (document.exitFullscreen) {
+                document.exitFullscreen().catch(function () {});
+            }
+        }
     }
+
+    document.addEventListener('click', function (e) {
+        if (e.target.closest('#btn-sidebar-fullscreen') || e.target.closest('#btn-header-fullscreen')) {
+            e.preventDefault();
+            toggleFullScreen();
+            POSAudio.beep();
+        }
+    });
 })();

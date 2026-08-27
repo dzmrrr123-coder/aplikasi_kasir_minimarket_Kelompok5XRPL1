@@ -2115,4 +2115,200 @@ button.sidebar-menu-item-link {
     box-shadow: 0 1px 0 rgba(0, 0, 0, 0.1) !important;
 }
 
+/* ============================================================
+   CASHIER UX ENHANCEMENTS (Hold & Recall, Denomination, Shortcuts)
+   ============================================================ */
+
+/* Hold Cart & Parked Carts Badges */
+.btn-hold-cart {
+    font-size: 0.82rem;
+    font-weight: 600;
+    padding: 0.25rem 0.65rem;
+    border-radius: var(--radius-sm);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    transition: all 0.15s ease;
+}
+
+.badge-hold-count {
+    animation: pulse-badge 1.8s infinite;
+}
+
+@keyframes pulse-badge {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.15); box-shadow: 0 0 8px rgba(245, 158, 11, 0.6); }
+    100% { transform: scale(1); }
+}
+
+/* Quick Float Preset Buttons (Buka Kas) */
+.quick-float-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.btn-float-chip {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 0.8rem;
+    font-weight: 600;
+    font-family: var(--font-num);
+    padding: 0.4rem 0.6rem;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.15s ease;
+}
+
+.btn-float-chip:hover {
+    background: var(--brand-primary);
+    border-color: var(--brand-primary);
+    color: #fff;
+    transform: translateY(-1px);
+}
+
+/* Denomination Breakdown Table (Tutup Kas) */
+.denomination-table {
+    width: 100%;
+    font-size: 0.85rem;
+}
+
+.denomination-table th {
+    font-weight: 600;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 0.4rem 0.5rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.denomination-table td {
+    padding: 0.35rem 0.5rem;
+    vertical-align: middle;
+}
+
+.denomination-table .denom-input {
+    width: 80px;
+    text-align: center;
+    font-family: var(--font-num);
+    font-weight: bold;
+    padding: 0.25rem 0.4rem;
+    border-radius: 4px;
+}
+
+.denom-subtotal {
+    font-family: var(--font-num);
+    font-weight: 600;
+    text-align: right;
+    color: var(--text);
+}
+
+/* Difference Status Pill */
+.diff-status-box {
+    border-radius: var(--radius-sm);
+    padding: 0.75rem 1rem;
+    margin-top: 0.75rem;
+    font-weight: 600;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: all 0.2s ease;
+}
+
+.diff-status-box.is-pas {
+    background-color: #ecfdf5;
+    border: 1px solid #a7f3d0;
+    color: #065f46;
+}
+
+.dark-mode .diff-status-box.is-pas {
+    background-color: rgba(16, 185, 129, 0.15);
+    border-color: rgba(16, 185, 129, 0.3);
+    color: #34d399;
+}
+
+.diff-status-box.is-lebih {
+    background-color: #eff6ff;
+    border: 1px solid #bfdbfe;
+    color: #1e40af;
+}
+
+.dark-mode .diff-status-box.is-lebih {
+    background-color: rgba(59, 130, 246, 0.15);
+    border-color: rgba(59, 130, 246, 0.3);
+    color: #60a5fa;
+}
+
+.diff-status-box.is-kurang {
+    background-color: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #991b1b;
+}
+
+.dark-mode .diff-status-box.is-kurang {
+    background-color: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #f87171;
+}
+
+/* Shortcut Overlay Grid */
+.shortcut-guide-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 0.75rem;
+}
+
+.shortcut-guide-card {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.65rem 0.85rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.shortcut-guide-key {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.25rem 0.55rem;
+    font-family: var(--font-num);
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: var(--brand-primary);
+    box-shadow: 0 2px 0 rgba(0, 0, 0, 0.08);
+    flex-shrink: 0;
+}
+
+/* Cart Item Add Animation */
+@keyframes item-added-glow {
+    0% { background-color: rgba(13, 148, 136, 0.15); }
+    100% { background-color: transparent; }
+}
+
+.item-just-added {
+    animation: item-added-glow 1.2s ease-out;
+}
+
+/* Barcode Visual in CSS for Receipt */
+.barcode-visual {
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    gap: 2px;
+    height: 38px;
+    margin: 8px auto 4px auto;
+}
+
+.barcode-bar {
+    background-color: #111;
+    height: 100%;
+}
+
+
 

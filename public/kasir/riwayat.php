@@ -227,6 +227,16 @@ foreach ($daftarTransaksi as $tx) {
                                     Rp <?= number_format((float)$tx['total'], 0, ',', '.') ?>
                                 </td>
                                 <td class="text-end">
+                                    <button type="button"
+                                            class="btn btn-sm btn-outline-secondary btn-detail-tx me-1"
+                                            data-id="<?= (int)$tx['id'] ?>"
+                                            data-tanggal="<?= htmlspecialchars(date('d/m/Y H:i', strtotime($tx['tanggal']))) ?>"
+                                            data-kasir="<?= htmlspecialchars($tx['kasir_nama']) ?>"
+                                            data-metode="<?= htmlspecialchars((string)($tx['metode'] ?: 'Tunai')) ?>"
+                                            data-total="Rp <?= number_format((float)$tx['total'], 0, ',', '.') ?>"
+                                            title="Lihat Rincian Item">
+                                        <i class="bi bi-eye"></i> Detail
+                                    </button>
                                     <a href="<?= $baseUrl ?>/kasir/struk.php?id=<?= (int)$tx['id'] ?>"
                                        class="btn btn-sm btn-outline-teal"
                                        style="color:#0d9488;border-color:#0d9488"
@@ -245,7 +255,104 @@ foreach ($daftarTransaksi as $tx) {
         </div>
     </div>
 
+    <!-- Modal Detail Transaksi -->
+    <div class="modal fade" id="modalDetailTransaksi" tabindex="-1" aria-labelledby="modalDetailLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalDetailLabel"><i class="bi bi-receipt me-2 text-teal"></i>Rincian Transaksi <span id="detail-tx-id"></span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+                </div>
+                <div class="modal-body p-3">
+                    <div class="d-flex justify-content-between small text-muted mb-2">
+                        <span>Waktu: <strong class="text-dark" id="detail-tx-waktu">-</strong></span>
+                        <span>Kasir: <strong class="text-dark" id="detail-tx-kasir">-</strong></span>
+                    </div>
+                    <div class="table-responsive border rounded mb-3">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Produk</th>
+                                    <th class="text-center">Qty</th>
+                                    <th class="text-end">Subtotal</th>
+                                </tr>
+                            </thead>
+                            <tbody id="detail-tx-items">
+                                <tr><td colspan="3" class="text-center text-muted py-3">Memuat item...</td></tr>
+                            </tbody>
+                            <tfoot class="table-light">
+                                <tr class="fw-bold">
+                                    <td>Total Pembayaran</td>
+                                    <td colspan="2" class="text-end text-teal font-num" id="detail-tx-total">-</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
+                    <a href="#" id="detail-btn-cetak" target="_blank" class="btn btn-teal" style="background:#0d9488;color:#fff">
+                        <i class="bi bi-printer me-1"></i>Buka & Cetak Struk
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Bootstrap JS Bundle -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        var modalEl = document.getElementById('modalDetailTransaksi');
+        var bsModal = modalEl ? new bootstrap.Modal(modalEl) : null;
+
+        document.querySelectorAll('.btn-detail-tx').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var txId = this.getAttribute('data-id');
+                var waktu = this.getAttribute('data-tanggal');
+                var kasir = this.getAttribute('data-kasir');
+                var total = this.getAttribute('data-total');
+
+                document.getElementById('detail-tx-id').textContent = '#' + txId;
+                document.getElementById('detail-tx-waktu').textContent = waktu;
+                document.getElementById('detail-tx-kasir').textContent = kasir;
+                document.getElementById('detail-tx-total').textContent = total;
+                document.getElementById('detail-btn-cetak').href = '<?= $baseUrl ?>/kasir/struk.php?id=' + txId;
+
+                var tbody = document.getElementById('detail-tx-items');
+                tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted py-3"><span class="spinner-border spinner-border-sm me-2 text-teal"></span>Memuat rincian item...</td></tr>';
+
+                if (bsModal) bsModal.show();
+
+                fetch('<?= $baseUrl ?>/api.php?aksi=transaksi.detail&id=' + txId)
+                    .then(function (r) { return r.json(); })
+                    .then(function (res) {
+                        if (!res.sukses || !res.items) {
+                            tbody.innerHTML = '<tr><td colspan="3" class="text-center text-danger py-3">Gagal memuat item.</td></tr>';
+                            return;
+                        }
+                        if (res.items.length === 0) {
+                            tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted py-3">Tidak ada item tercatat.</td></tr>';
+                            return;
+                        }
+                        var html = '';
+                        res.items.forEach(function (it) {
+                            var qtyStr = it.satuan === 'gram' ? Number(it.qty).toLocaleString('id-ID') + ' gr' : Number(it.qty) + ' pcs';
+                            var subtotalStr = 'Rp ' + Number(it.subtotal).toLocaleString('id-ID');
+                            html += '<tr>' +
+                                '<td><div class="fw-semibold small">' + it.nama + '</div></td>' +
+                                '<td class="text-center font-num small">' + qtyStr + '</td>' +
+                                '<td class="text-end font-num small fw-semibold">' + subtotalStr + '</td>' +
+                                '</tr>';
+                        });
+                        tbody.innerHTML = html;
+                    })
+                    .catch(function () {
+                        tbody.innerHTML = '<tr><td colspan="3" class="text-center text-danger py-3">Terjadi kesalahan koneksi.</td></tr>';
+                    });
+            });
+        });
+    });
+    </script>
 </body>
 </html>
