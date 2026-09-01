@@ -90,7 +90,15 @@ class Database
                 continue;
             }
 
-            if (preg_match('/^\s*(CREATE\s+DATABASE|USE)\b/i', $trimmed)) {
+            // Lewati perintah yang berbahaya bila dijalankan berulang kali:
+            // CREATE DATABASE & USE sudah ditangani di atas.
+            // DROP TABLE akan menghapus data pengguna — jangan dijalankan otomatis.
+            // SET FOREIGN_KEY_CHECKS tidak perlu dijalankan berulang kali.
+            if (preg_match('/^\s*(CREATE\s+DATABASE|USE|SET)\b/i', $trimmed)) {
+                continue;
+            }
+
+            if (preg_match('/^\s*DROP\s+TABLE\b/i', $trimmed)) {
                 continue;
             }
 
@@ -99,6 +107,14 @@ class Database
                     continue;
                 }
             }
+
+            // Konversi CREATE TABLE -> CREATE TABLE IF NOT EXISTS
+            // supaya aman dijalankan berulang kali tanpa menghapus data.
+            $trimmed = preg_replace(
+                '/^\s*CREATE\s+TABLE\s+(?!IF\s+NOT\s+EXISTS)/i',
+                'CREATE TABLE IF NOT EXISTS ',
+                $trimmed
+            );
 
             $pdo->exec($trimmed);
         }
@@ -288,6 +304,186 @@ class Database
             $pdo->exec('ALTER TABLE user_devices ADD UNIQUE KEY uq_user_tipe (user_id, tipe)');
         }
 
+        // Migrasi v13: promo & stock_opname tables
+        if (!self::tabelAda($pdo, $db['dbname'], 'promo')) {
+            $pdo->exec(
+                "CREATE TABLE promo (
+                    id                   INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                    nama                 VARCHAR(100) NOT NULL,
+                    tipe                 ENUM('buy_x_get_y','diskon_persen','diskon_nominal') NOT NULL DEFAULT 'buy_x_get_y',
+                    syarat_produk_id     INT UNSIGNED NULL,
+                    syarat_qty           INT          NOT NULL DEFAULT 1,
+                    reward_produk_id     INT UNSIGNED NULL,
+                    reward_qty           INT          NOT NULL DEFAULT 1,
+                    reward_diskon_persen DECIMAL(5,2) NOT NULL DEFAULT 100.00,
+                    is_active            TINYINT(1)   NOT NULL DEFAULT 1,
+                    mulai                DATETIME     NULL,
+                    selesai              DATETIME     NULL,
+                    CONSTRAINT fk_promo_syarat
+                        FOREIGN KEY (syarat_produk_id) REFERENCES produk(id)
+                        ON UPDATE CASCADE ON DELETE SET NULL,
+                    CONSTRAINT fk_promo_reward
+                        FOREIGN KEY (reward_produk_id) REFERENCES produk(id)
+                        ON UPDATE CASCADE ON DELETE SET NULL
+                ) ENGINE=InnoDB"
+            );
+        }
+
+        if (!self::tabelAda($pdo, $db['dbname'], 'stock_opname')) {
+            $pdo->exec(
+                "CREATE TABLE stock_opname (
+                    id         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                    gudang_id  INT UNSIGNED  NOT NULL,
+                    user_id    INT UNSIGNED  NOT NULL,
+                    status     ENUM('draft','selesai','dibatalkan') NOT NULL DEFAULT 'draft',
+                    catatan    TEXT          NULL,
+                    dibuat_pada DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    selesai_pada DATETIME    NULL,
+                    CONSTRAINT fk_opname_gudang
+                        FOREIGN KEY (gudang_id) REFERENCES gudang(id)
+                        ON UPDATE CASCADE ON DELETE RESTRICT,
+                    CONSTRAINT fk_opname_user
+                        FOREIGN KEY (user_id) REFERENCES users(id)
+                        ON UPDATE CASCADE ON DELETE RESTRICT
+                ) ENGINE=InnoDB"
+            );
+        }
+
+        if (!self::tabelAda($pdo, $db['dbname'], 'stock_opname_item')) {
+            $pdo->exec(
+                "CREATE TABLE stock_opname_item (
+                    id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                    opname_id       INT UNSIGNED  NOT NULL,
+                    produk_id       INT UNSIGNED  NOT NULL,
+                    stok_sistem     INT           NOT NULL DEFAULT 0,
+                    stok_fisik      INT           NULL,
+                    selisih         INT           NULL,
+                    catatan         VARCHAR(255)  NULL,
+                    CONSTRAINT fk_opname_item_opname
+                        FOREIGN KEY (opname_id) REFERENCES stock_opname(id)
+                        ON UPDATE CASCADE ON DELETE CASCADE,
+                    CONSTRAINT fk_opname_item_produk
+                        FOREIGN KEY (produk_id) REFERENCES produk(id)
+                        ON UPDATE CASCADE ON DELETE RESTRICT
+                ) ENGINE=InnoDB"
+            );
+        }
+
+        // Migrasi v12b: transaksi.gudang_id (multi-gudang integration)
+        if (!self::kolomAda($pdo, $db['dbname'], 'transaksi', 'gudang_id')) {
+            $pdo->exec('ALTER TABLE transaksi ADD COLUMN gudang_id INT UNSIGNED NULL AFTER member_id');
+        }
+        if (self::kolomAda($pdo, $db['dbname'], 'transaksi', 'gudang_id')
+            && !self::constraintAda($pdo, $db['dbname'], 'fk_transaksi_gudang')) {
+            $pdo->exec(
+                'ALTER TABLE transaksi ADD CONSTRAINT fk_transaksi_gudang
+                 FOREIGN KEY (gudang_id) REFERENCES gudang(id)
+                 ON UPDATE CASCADE ON DELETE SET NULL'
+            );
+        }
+
+        // Migrasi v12: notifikasi_stok (log alert stok menipis via WhatsApp)
+        if (!self::tabelAda($pdo, $db['dbname'], 'notifikasi_stok')) {
+            $pdo->exec(
+                "CREATE TABLE notifikasi_stok (
+                    id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                    produk_id     INT UNSIGNED  NOT NULL,
+                    webhook_url   VARCHAR(255)  NOT NULL,
+                    nomor_tujuan  VARCHAR(30)   NOT NULL,
+                    payload       JSON          NOT NULL,
+                    status        ENUM('pending','sent','failed') NOT NULL DEFAULT 'pending',
+                    dibuat_pada   DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT fk_notif_stok_produk
+                        FOREIGN KEY (produk_id) REFERENCES produk(id)
+                        ON UPDATE CASCADE ON DELETE CASCADE
+                ) ENGINE=InnoDB"
+            );
+        }
+
+        // Migrasi v11b: perbesar kolom metode di rekap_penjualan (VARCHAR(20) -> VARCHAR(50)).
+        $tipeMetode = $pdo->query(
+            'SELECT DATA_TYPE, CHARACTER_MAXIMUM_LENGTH FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = ' . $pdo->quote($db['dbname']) . '
+               AND TABLE_NAME = \'rekap_penjualan\' AND COLUMN_NAME = \'metode\''
+        )->fetch();
+
+        if ($tipeMetode !== false && (int) ($tipeMetode['CHARACTER_MAXIMUM_LENGTH'] ?? 0) < 50) {
+            $pdo->exec('ALTER TABLE rekap_penjualan MODIFY metode VARCHAR(50) NOT NULL DEFAULT \'tunai\'');
+        }
+
+        // ------------------------------------------------------------
+        // Migrasi v11 (multi-gudang): tabel gudang, stok_gudang,
+        //   transfer_stok, item_transfer.
+        // ------------------------------------------------------------
+        if (!self::tabelAda($pdo, $db['dbname'], 'gudang')) {
+            $pdo->exec(
+                "CREATE TABLE gudang (
+                    id        INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                    nama      VARCHAR(100) NOT NULL,
+                    alamat    VARCHAR(255) NULL,
+                    is_utama  TINYINT(1)   NOT NULL DEFAULT 0,
+                    is_aktif  TINYINT(1)   NOT NULL DEFAULT 1
+                ) ENGINE=InnoDB"
+            );
+        }
+
+        if (!self::tabelAda($pdo, $db['dbname'], 'stok_gudang')) {
+            $pdo->exec(
+                "CREATE TABLE stok_gudang (
+                    id         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                    gudang_id  INT UNSIGNED  NOT NULL,
+                    produk_id  INT UNSIGNED  NOT NULL,
+                    stok       INT           NOT NULL DEFAULT 0,
+                    CONSTRAINT fk_stok_gudang
+                        FOREIGN KEY (gudang_id) REFERENCES gudang(id)
+                        ON UPDATE CASCADE ON DELETE CASCADE,
+                    CONSTRAINT fk_stok_produk
+                        FOREIGN KEY (produk_id) REFERENCES produk(id)
+                        ON UPDATE CASCADE ON DELETE CASCADE,
+                    UNIQUE KEY uq_gudang_produk (gudang_id, produk_id)
+                ) ENGINE=InnoDB"
+            );
+        }
+
+        if (!self::tabelAda($pdo, $db['dbname'], 'transfer_stok')) {
+            $pdo->exec(
+                "CREATE TABLE transfer_stok (
+                    id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                    gudang_asal_id  INT UNSIGNED  NOT NULL,
+                    gudang_tujuan_id INT UNSIGNED NOT NULL,
+                    tanggal         DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    user_id         INT UNSIGNED  NOT NULL,
+                    keterangan      VARCHAR(255)  NULL,
+                    CONSTRAINT fk_transfer_asal
+                        FOREIGN KEY (gudang_asal_id) REFERENCES gudang(id)
+                        ON UPDATE CASCADE ON DELETE RESTRICT,
+                    CONSTRAINT fk_transfer_tujuan
+                        FOREIGN KEY (gudang_tujuan_id) REFERENCES gudang(id)
+                        ON UPDATE CASCADE ON DELETE RESTRICT,
+                    CONSTRAINT fk_transfer_user
+                        FOREIGN KEY (user_id) REFERENCES users(id)
+                        ON UPDATE CASCADE ON DELETE RESTRICT
+                ) ENGINE=InnoDB"
+            );
+        }
+
+        if (!self::tabelAda($pdo, $db['dbname'], 'item_transfer')) {
+            $pdo->exec(
+                "CREATE TABLE item_transfer (
+                    id             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                    transfer_id    INT UNSIGNED  NOT NULL,
+                    produk_id      INT UNSIGNED  NOT NULL,
+                    qty            DECIMAL(12,3) NOT NULL,
+                    CONSTRAINT fk_item_transfer
+                        FOREIGN KEY (transfer_id) REFERENCES transfer_stok(id)
+                        ON UPDATE CASCADE ON DELETE CASCADE,
+                    CONSTRAINT fk_item_transfer_produk
+                        FOREIGN KEY (produk_id) REFERENCES produk(id)
+                        ON UPDATE CASCADE ON DELETE RESTRICT
+                ) ENGINE=InnoDB"
+            );
+        }
+
         // ------------------------------------------------------------
         // Migrasi v9 (notifikasi WA via n8n): outbox transaksional.
         // Observer NotifikasiWhatsApp meng-INSERT baris PENDING ini di
@@ -391,6 +587,9 @@ class Database
     {
         if (!self::kolomAda($pdo, $db, 'users', 'is_active')) {
             $pdo->exec('ALTER TABLE users ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 1 AFTER role');
+        }
+        if (!self::kolomAda($pdo, $db, 'users', 'data_sesi')) {
+            $pdo->exec('ALTER TABLE users ADD COLUMN data_sesi JSON NULL AFTER is_active');
         }
     }
 
