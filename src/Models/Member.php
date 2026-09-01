@@ -368,7 +368,10 @@ class Member implements DataReporter
      */
     public function getAgregasiGrafik(array $params = []): array
     {
-        $total = (int) Database::connect()->query('SELECT COUNT(*) FROM member')->fetchColumn();
+        $adminId = currentAdminId();
+        $stmt = Database::connect()->prepare('SELECT COUNT(*) FROM member WHERE admin_id = :admin_id');
+        $stmt->execute([':admin_id' => $adminId]);
+        $total = (int) $stmt->fetchColumn();
 
         return [
             'labels' => ['Member'],
@@ -452,8 +455,12 @@ class Member implements DataReporter
      */
     public static function katalogHadiah(): array
     {
-        return Database::connect()->query(
-            'SELECT id, nama, poin, deskripsi FROM katalog_penukaran WHERE aktif = 1 ORDER BY poin ASC'
-        )->fetchAll();
+        $adminId = currentAdminId();
+        $stmt = Database::connect()->prepare(
+            'SELECT id, nama, poin, deskripsi FROM katalog_penukaran WHERE aktif = 1 AND admin_id = :admin_id ORDER BY poin ASC'
+        );
+        $stmt->execute([':admin_id' => $adminId]);
+
+        return $stmt->fetchAll();
     }
 }

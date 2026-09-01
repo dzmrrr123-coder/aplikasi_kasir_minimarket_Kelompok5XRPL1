@@ -377,16 +377,17 @@ class Produk implements DataReporter
     /** Cek apakah barcode sudah dipakai produk lain. */
     private function barcodeTerpakai(): bool
     {
+        $adminId = currentAdminId();
         if ($this->id === '') {
             $stmt = Database::connect()->prepare(
-                'SELECT COUNT(*) FROM produk WHERE barcode = :barcode'
+                'SELECT COUNT(*) FROM produk WHERE barcode = :barcode AND admin_id = :admin_id'
             );
-            $stmt->execute([':barcode' => $this->barcode]);
+            $stmt->execute([':barcode' => $this->barcode, ':admin_id' => $adminId]);
         } else {
             $stmt = Database::connect()->prepare(
-                'SELECT COUNT(*) FROM produk WHERE barcode = :barcode AND id <> :id'
+                'SELECT COUNT(*) FROM produk WHERE barcode = :barcode AND id <> :id AND admin_id = :admin_id'
             );
-            $stmt->execute([':barcode' => $this->barcode, ':id' => $this->id]);
+            $stmt->execute([':barcode' => $this->barcode, ':id' => $this->id, ':admin_id' => $adminId]);
         }
 
         return (int) $stmt->fetchColumn() > 0;
@@ -541,14 +542,18 @@ class Produk implements DataReporter
     {
         $limit = max(1, (int) ($params['limit'] ?? 8));
 
+        $adminId = currentAdminId();
         $stmt = Database::connect()->prepare(
             'SELECT k.nama AS kategori, COALESCE(SUM(p.stok), 0) AS stok
              FROM kategori k
-             LEFT JOIN produk p ON p.kategori_id = k.id
+             LEFT JOIN produk p ON p.kategori_id = k.id AND p.admin_id = :admin_id
+             WHERE k.admin_id = :admin_id2
              GROUP BY k.id, k.nama
              ORDER BY stok DESC
              LIMIT :limit'
         );
+        $stmt->bindValue(':admin_id', $adminId, \PDO::PARAM_INT);
+        $stmt->bindValue(':admin_id2', $adminId, \PDO::PARAM_INT);
         $stmt->bindValue(':limit', $limit, \PDO::PARAM_INT);
         $stmt->execute();
 
