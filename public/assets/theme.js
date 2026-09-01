@@ -45,6 +45,54 @@
     }
 
     /* ============================================================
+       SIDEBAR — buka/tutup off-canvas di layar kecil (< 992px).
+       Di layar besar sidebar selalu terlihat (CSS), JS ini hanya
+       mengatur mode mobile: tombol hamburger, backdrop, tombol X, Esc.
+       ============================================================ */
+    var sidebar = document.getElementById('pos-sidebar');
+    var sidebarToggle = document.getElementById('pos-sidebar-toggle');
+    var sidebarClose = document.getElementById('pos-sidebar-close');
+    var sidebarBackdrop = document.getElementById('pos-sidebar-backdrop');
+
+    if (sidebar && sidebarToggle) {
+        function bukaSidebar() {
+            sidebar.classList.add('open');
+            if (sidebarBackdrop) {
+                sidebarBackdrop.hidden = false;
+                sidebarBackdrop.classList.add('show');
+            }
+            sidebarToggle.setAttribute('aria-expanded', 'true');
+        }
+
+        function tutupSidebar() {
+            sidebar.classList.remove('open');
+            if (sidebarBackdrop) {
+                sidebarBackdrop.classList.remove('show');
+                sidebarBackdrop.hidden = true;
+            }
+            sidebarToggle.setAttribute('aria-expanded', 'false');
+        }
+
+        sidebarToggle.addEventListener('click', bukaSidebar);
+        if (sidebarClose) {
+            sidebarClose.addEventListener('click', tutupSidebar);
+        }
+        if (sidebarBackdrop) {
+            sidebarBackdrop.addEventListener('click', tutupSidebar);
+        }
+        // Tutup otomatis setelah memilih menu (mode mobile).
+        sidebar.querySelectorAll('.pos-sidebar-link').forEach(function (link) {
+            link.addEventListener('click', tutupSidebar);
+        });
+        // Tutup dengan tombol Escape.
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && sidebar.classList.contains('open')) {
+                tutupSidebar();
+            }
+        });
+    }
+
+    /* ============================================================
        CSRF — tambahkan token ke semua form POST secara otomatis.
        Token dibaca dari <meta name="csrf-token">. Mencakup form
        statis maupun form yang di-render DataTables (edit/hapus).
