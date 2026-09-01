@@ -219,8 +219,8 @@ class Gudang
     public static function daftarProduk(int $gudangId, string $cari = ''): array
     {
         $pdo = Database::connect();
-        $where = 'WHERE sg.gudang_id = :g';
-        $bind = [':g' => $gudangId];
+        $where = 'WHERE sg.gudang_id = :g AND p.admin_id = :admin_id';
+        $bind = [':g' => $gudangId, ':admin_id' => currentAdminId()];
 
         if ($cari !== '') {
             $where .= ' AND (p.nama LIKE :cari OR p.barcode LIKE :cari2)';

@@ -38,9 +38,9 @@ class StockOpname
                 SELECT ?, p.id, COALESCE(sg.stok, 0), 0, 0
                 FROM produk p
                 LEFT JOIN stok_gudang sg ON p.id = sg.produk_id AND sg.gudang_id = ?
-                WHERE p.is_active = 1
+                WHERE p.is_active = 1 AND p.admin_id = ?
             ");
-            $stmt->execute([$opnameId, $gudangId]);
+            $stmt->execute([$opnameId, $gudangId, currentAdminId()]);
 
             $pdo->commit();
             return $opnameId;

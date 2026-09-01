@@ -318,7 +318,7 @@ class Produk implements DataReporter
                  barcode = :barcode, harga_beli = :harga_beli, stok_minimum = :stok_minimum,
                  supplier_id = :supplier_id, is_active = :is_active, gambar = :gambar,
                  harga_grosir = :harga_grosir, batas_grosir = :batas_grosir
-             WHERE id = :id'
+             WHERE id = :id AND admin_id = :admin_id'
         );
         $stmt->execute([
             ':nama'            => $this->nama,
@@ -336,6 +336,7 @@ class Produk implements DataReporter
             ':harga_grosir'    => $this->hargaGrosir > 0 ? $this->hargaGrosir : null,
             ':batas_grosir'    => $this->batasGrosir > 0 ? $this->batasGrosir : null,
             ':id'              => $this->id,
+            ':admin_id'        => currentAdminId(),
         ]);
     }
 
@@ -395,8 +396,8 @@ class Produk implements DataReporter
 
     public function hapus(): void
     {
-        $stmt = Database::connect()->prepare('DELETE FROM produk WHERE id = :id');
-        $stmt->execute([':id' => $this->id]);
+        $stmt = Database::connect()->prepare('DELETE FROM produk WHERE id = :id AND admin_id = :admin_id');
+        $stmt->execute([':id' => $this->id, ':admin_id' => currentAdminId()]);
     }
 
     /**

@@ -209,10 +209,11 @@ class Member implements DataReporter
 
     public static function cari(int $id): ?self
     {
+        $adminId = currentAdminId();
         $stmt = Database::connect()->prepare(
-            'SELECT id, nomor_member, nama, telepon, password, poin FROM member WHERE id = :id LIMIT 1'
+            'SELECT id, nomor_member, nama, telepon, password, poin FROM member WHERE id = :id AND admin_id = :admin_id LIMIT 1'
         );
-        $stmt->execute([':id' => $id]);
+        $stmt->execute([':id' => $id, ':admin_id' => $adminId]);
         $row = $stmt->fetch();
 
         return $row === false ? null : new self($row);
@@ -225,10 +226,11 @@ class Member implements DataReporter
             return null;
         }
 
+        $adminId = currentAdminId();
         $stmt = Database::connect()->prepare(
-            'SELECT id, nomor_member, nama, telepon, password, poin FROM member WHERE telepon = :telepon LIMIT 1'
+            'SELECT id, nomor_member, nama, telepon, password, poin FROM member WHERE telepon = :telepon AND admin_id = :admin_id LIMIT 1'
         );
-        $stmt->execute([':telepon' => trim($telepon)]);
+        $stmt->execute([':telepon' => trim($telepon), ':admin_id' => $adminId]);
         $row = $stmt->fetch();
 
         return $row === false ? null : new self($row);
@@ -243,10 +245,11 @@ class Member implements DataReporter
             return null;
         }
 
+        $adminId = currentAdminId();
         $stmt = Database::connect()->prepare(
-            'SELECT id, nomor_member, nama, telepon, password, poin FROM member WHERE nomor_member = :nomor LIMIT 1'
+            'SELECT id, nomor_member, nama, telepon, password, poin FROM member WHERE nomor_member = :nomor AND admin_id = :admin_id LIMIT 1'
         );
-        $stmt->execute([':nomor' => $nomor]);
+        $stmt->execute([':nomor' => $nomor, ':admin_id' => $adminId]);
         $row = $stmt->fetch();
 
         return $row === false ? null : new self($row);
