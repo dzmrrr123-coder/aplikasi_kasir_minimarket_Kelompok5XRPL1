@@ -12,6 +12,31 @@ declare(strict_types=1);
 // supaya jam di database (DateTime) konsisten dengan jam lokal.
 date_default_timezone_set('Asia/Jakarta');
 
+// Load .env file ke environment variables (getenv).
+// Dilakukan sekali supaya semua komponen (Midtrans, Clerk, dll) bisa
+// membaca config via getenv() tanpa harus load .env sendiri.
+(function () {
+    $envFile = dirname(__DIR__) . '/.env';
+    if (!is_file($envFile)) {
+        return;
+    }
+    $lines = file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    foreach ($lines as $line) {
+        $line = trim($line);
+        if ($line === '' || $line[0] === '#') {
+            continue;
+        }
+        if (str_contains($line, '=')) {
+            [$key, $value] = explode('=', $line, 2);
+            $key = trim($key);
+            $value = trim($value);
+            if (!getenv($key)) {
+                putenv("$key=$value");
+            }
+        }
+    }
+})();
+
 // Hardening cookie sesi: HttpOnly + SameSite=Lax mencegah akses cookie
 // via JavaScript dan memblokir sebagian besar serangan CSRF lintas-situs.
 // Tidak dipanggil di CLI (tidak ada cookie & menghindari warning header).
@@ -70,7 +95,7 @@ if (!function_exists('csrf_valid')) {
 if (!function_exists('logoutKaryawan')) {
     function logoutKaryawan(): void
     {
-        foreach (['user_id', 'role', 'nama'] as $kunci) {
+        foreach (['user_id', 'role', 'nama', 'auth_provider', 'clerk_user_id', 'clerk_email', 'clerk_nama'] as $kunci) {
             unset($_SESSION[$kunci]);
         }
 
@@ -78,6 +103,56 @@ if (!function_exists('logoutKaryawan')) {
         // karyawan) tidak bisa disadap/dipakai ulang.
         session_regenerate_id(true);
     }
+}
+
+/**
+ * Ambil ID admin pemilik data dari sesi.
+ * - Admin login → ID sendiri (admin IS owner)
+ * - Kasir login → admin_id dari baris kasir di tabel users
+ * Dipakai semua model untuk filter data per-toko (multi-tenancy).
+ *
+ * @return int 0 bila sesi belum ada / tidak valid
+ */
+if (!function_exists('currentAdminId')) {
+    function currentAdminId(): int
+    {
+        return (int) ($_SESSION['admin_id'] ?? 0);
+    }
+}
+
+/**
+ * Registrasi shutdown function untuk mem-persist data sesi (seperti keranjang dan filter laporan)
+ * ke database setiap kali eksekusi PHP selesai.
+ */
+if (PHP_SAPI !== 'cli' && !function_exists('syncSesiKeDB')) {
+    function syncSesiKeDB(): void
+    {
+        if (isset($_SESSION['user_id'])) {
+            try {
+                $pdo = \App\Database\Database::connect();
+                $id = (int) $_SESSION['user_id'];
+                
+                // Ambil data yang perlu disimpan dari session
+                $dataToSave = [
+                    'keranjang' => $_SESSION['keranjang'] ?? [],
+                    'keranjang_tertunda' => $_SESSION['keranjang_tertunda'] ?? [],
+                    'diskon_id' => $_SESSION['diskon_id'] ?? null,
+                    'member_id' => $_SESSION['member_id'] ?? null,
+                    'laporan_tanggal_mulai' => $_SESSION['laporan_tanggal_mulai'] ?? null,
+                    'laporan_tanggal_akhir' => $_SESSION['laporan_tanggal_akhir'] ?? null,
+                ];
+
+                $stmt = $pdo->prepare('UPDATE users SET data_sesi = :data WHERE id = :id');
+                $stmt->execute([
+                    ':data' => json_encode($dataToSave, JSON_UNESCAPED_UNICODE),
+                    ':id'   => $id,
+                ]);
+            } catch (\Throwable $e) {
+                // Jangan melempar error di shutdown function, diamkan saja.
+            }
+        }
+    }
+    register_shutdown_function('syncSesiKeDB');
 }
 
 /**
@@ -108,8 +183,15 @@ if (!function_exists('pesanErrorRamah')) {
             return $e->getMessage();
         }
 
-        if ($e instanceof \PDOException && (int) $e->getCode() === 23000) {
-            return 'Data sudah dipakai atau duplikat. Periksa kembali input Anda.';
+        // @phpstan-ignore-next-line instanceof.alwaysFalse (PDOException is built-in)
+        if ($e instanceof \PDOException) {
+            $msg = $e->getMessage();
+            if (str_contains($msg, 'fk_shift_kasir') || str_contains($msg, 'kasir_id')) {
+                return 'Sesi akun kasir tidak valid atau database baru saja di-reset. Silakan logout dan login kembali.';
+            }
+            if ((int) $e->getCode() === 23000 || str_contains($msg, '1062') || str_contains($msg, '1452')) {
+                return 'Data sudah dipakai atau relasi data tidak ditemukan. Periksa kembali input Anda.';
+            }
         }
 
         return 'Terjadi kesalahan. Silakan coba lagi.';

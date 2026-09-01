@@ -84,11 +84,12 @@ class Diskon
         $this->validasi();
 
         $pdo = Database::connect();
-        $stmt = $pdo->prepare('INSERT INTO diskon (kode, jenis, nilai) VALUES (:kode, :jenis, :nilai)');
+        $stmt = $pdo->prepare('INSERT INTO diskon (kode, jenis, nilai, admin_id) VALUES (:kode, :jenis, :nilai, :admin_id)');
         $stmt->execute([
-            ':kode'  => $this->kode !== '' ? $this->kode : null,
-            ':jenis' => $this->jenis,
-            ':nilai' => $this->nilai,
+            ':kode'     => $this->kode !== '' ? $this->kode : null,
+            ':jenis'    => $this->jenis,
+            ':nilai'    => $this->nilai,
+            ':admin_id' => currentAdminId(),
         ]);
 
         $this->id = (string) $pdo->lastInsertId();
@@ -146,9 +147,11 @@ class Diskon
      */
     public static function semua(): array
     {
-        $rows = Database::connect()->query('SELECT id, kode, jenis, nilai FROM diskon ORDER BY id')->fetchAll();
+        $adminId = currentAdminId();
+        $stmt = Database::connect()->prepare('SELECT id, kode, jenis, nilai FROM diskon WHERE admin_id = :admin_id ORDER BY id');
+        $stmt->execute([':admin_id' => $adminId]);
 
-        return array_map(static fn (array $row): self => new self($row), $rows);
+        return array_map(static fn (array $row): self => new self($row), $stmt->fetchAll());
     }
 
     public static function cari(int $id): ?self
@@ -172,8 +175,9 @@ class Diskon
             return null;
         }
 
-        $stmt = Database::connect()->prepare('SELECT id, kode, jenis, nilai FROM diskon WHERE UPPER(kode) = :kode LIMIT 1');
-        $stmt->execute([':kode' => $kode]);
+        $adminId = currentAdminId();
+        $stmt = Database::connect()->prepare('SELECT id, kode, jenis, nilai FROM diskon WHERE UPPER(kode) = :kode AND admin_id = :admin_id LIMIT 1');
+        $stmt->execute([':kode' => $kode, ':admin_id' => $adminId]);
         $row = $stmt->fetch();
 
         if ($row !== false) {

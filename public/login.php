@@ -110,6 +110,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['user_id'] = (int) $user->getId();
             $_SESSION['nama']    = $user->getNama();
             $_SESSION['role']    = $user instanceof \App\Models\Admin ? 'admin' : 'kasir';
+            $_SESSION['admin_id'] = (int) $user->getId(); // Admin baru = owner toko sendiri
 
             $dataSesi = $user->muatDataSesi();
             if (is_array($dataSesi)) {
@@ -139,6 +140,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['user_id'] = (int) $user->getId();
                 $_SESSION['nama']    = $user->getNama();
                 $_SESSION['role']    = $user instanceof \App\Models\Admin ? 'admin' : 'kasir';
+
+                // Multi-tenancy: set admin_id untuk scope data per-toko.
+                // Admin → pakai ID sendiri. Kasir → admin_id dari baris users.
+                if ($user instanceof \App\Models\Admin) {
+                    $_SESSION['admin_id'] = (int) $user->getId();
+                } else {
+                    $stmtAdmin = \App\Database\Database::connect()->prepare(
+                        'SELECT admin_id FROM users WHERE id = :id LIMIT 1'
+                    );
+                    $stmtAdmin->execute([':id' => (int) $user->getId()]);
+                    $rowAdmin = $stmtAdmin->fetch();
+                    $_SESSION['admin_id'] = $rowAdmin !== false ? (int) ($rowAdmin['admin_id'] ?? $user->getId()) : (int) $user->getId();
+                }
 
                 $dataSesi = $user->muatDataSesi();
                 if (is_array($dataSesi)) {

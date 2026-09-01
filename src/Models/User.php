@@ -129,17 +129,57 @@ abstract class User
     // ------------------------------------------------------------
 
     /**
-     * Mengambil semua akun kasir, diurutkan berdasarkan nama.
+     * Mengambil semua akun kasir milik admin tertentu.
      *
      * @return Kasir[]
      */
     public static function daftarKasir(): array
     {
-        $rows = Database::connect()->query(
-            "SELECT id, nama, username, password, role, is_active FROM users WHERE role = 'kasir' ORDER BY nama"
-        )->fetchAll();
+        $adminId = currentAdminId();
+        $stmt = Database::connect()->prepare(
+            "SELECT id, nama, username, password, role, is_active FROM users WHERE role = 'kasir' AND admin_id = :admin_id ORDER BY nama"
+        );
+        $stmt->execute([':admin_id' => $adminId]);
 
-        return array_map(static fn (array $row): Kasir => new Kasir($row), $rows);
+        return array_map(static fn (array $row): Kasir => new Kasir($row), $stmt->fetchAll());
+    }
+
+    /**
+     * Mengambil semua akun kasir beserta statistik transaksi & shift aktifnya.
+     *
+     * @return array<int, array{id: int, nama: string, username: string, is_active: bool, total_transaksi: int, total_omzet: float, shift_aktif: bool}>
+     */
+    public static function daftarKasirDenganStatistik(): array
+    {
+        $pdo = Database::connect();
+        $sql = "
+            SELECT 
+                u.id, 
+                u.nama, 
+                u.username, 
+                u.is_active,
+                COUNT(DISTINCT t.id) AS total_transaksi,
+                COALESCE(SUM(t.total), 0) AS total_omzet,
+                (SELECT COUNT(*) FROM shift_kasir sk WHERE sk.kasir_id = u.id AND sk.status = 'buka') AS shift_aktif_count
+            FROM users u
+            LEFT JOIN transaksi t ON t.kasir_id = u.id
+            WHERE u.role = 'kasir'
+            GROUP BY u.id, u.nama, u.username, u.is_active
+            ORDER BY u.nama ASC
+        ";
+
+        $stmt = $pdo->query($sql);
+        $rows = $stmt->fetchAll();
+
+        return array_map(static fn (array $r): array => [
+            'id'              => (int) $r['id'],
+            'nama'            => (string) $r['nama'],
+            'username'        => (string) $r['username'],
+            'is_active'       => (int) $r['is_active'] === 1,
+            'total_transaksi' => (int) $r['total_transaksi'],
+            'total_omzet'     => (float) $r['total_omzet'],
+            'shift_aktif'     => ((int) ($r['shift_aktif_count'] ?? 0)) > 0,
+        ], $rows);
     }
 
     public static function cariKasir(int $id): ?Kasir
@@ -173,6 +213,11 @@ abstract class User
         return $row['role'] === 'admin' ? new Admin($row) : new Kasir($row);
     }
 
+    public static function cari(int $id): ?self
+    {
+        return self::cariBerdasarkanId($id);
+    }
+
     /**
      * Cek apakah username sudah dipakai.
      * Bila $kecualiId diberikan, username milik kasir tersebut diabaikan
@@ -196,6 +241,72 @@ abstract class User
     }
 
     /**
+     * Registrasi pengguna baru (Owner Toko / Admin).
+     *
+     * @param array $data berisi nama, username, password, dan opsional role ('admin'|'kasir')
+     *
+     * @return User objek user yang baru terdaftar
+     *
+     * @throws \RuntimeException bila validasi gagal
+     */
+    public static function register(array $data): self
+    {
+        $nama = trim((string) ($data['nama'] ?? ''));
+        $username = trim((string) ($data['username'] ?? ''));
+        $password = (string) ($data['password'] ?? '');
+        $role = (string) ($data['role'] ?? 'kasir');
+
+        if ($role !== 'admin' && $role !== 'kasir') {
+            $role = 'kasir';
+        }
+
+        // Admin baru: admin_id = diri sendiri. Kasir baru: admin_id dari session.
+        $adminId = $role === 'admin' ? null : currentAdminId();
+
+        if ($nama === '') {
+            $label = $role === 'admin' ? 'Nama pemilik / admin' : 'Nama kasir / staf';
+            throw new \RuntimeException($label . ' tidak boleh kosong.');
+        }
+
+        if ($username === '') {
+            throw new \RuntimeException('Username tidak boleh kosong.');
+        }
+
+        if (preg_match('/^[a-zA-Z0-9_.-]{3,30}$/', $username) !== 1) {
+            throw new \RuntimeException('Username hanya boleh huruf, angka, titik, underscore, dan dash (3-30 karakter).');
+        }
+
+        if (self::usernameTerpakai($username)) {
+            throw new \RuntimeException('Username sudah terpakai, silakan gunakan username lain.');
+        }
+
+        if (strlen($password) < 6) {
+            throw new \RuntimeException('Password minimal 6 karakter.');
+        }
+
+        $pdo = Database::connect();
+        $stmt = $pdo->prepare(
+            'INSERT INTO users (nama, username, password, role, is_active, admin_id) VALUES (:nama, :username, :password, :role, 1, :admin_id)'
+        );
+        $stmt->execute([
+            ':nama'     => $nama,
+            ':username' => $username,
+            ':password' => password_hash($password, PASSWORD_DEFAULT),
+            ':role'     => $role,
+            ':admin_id' => $adminId,
+        ]);
+
+        $id = (int) $pdo->lastInsertId();
+        $user = self::cariBerdasarkanId($id);
+
+        if ($user === null) {
+            throw new \RuntimeException('Gagal membuat akun pengguna.');
+        }
+
+        return $user;
+    }
+
+    /**
      * Tambah akun kasir baru.
      *
      * @param array $data berisi nama, username, password
@@ -213,13 +324,14 @@ abstract class User
         self::validasiDataKasir($nama, $username, $password, true);
 
         $stmt = Database::connect()->prepare(
-            'INSERT INTO users (nama, username, password, role) VALUES (:nama, :username, :password, :kasir)'
+            'INSERT INTO users (nama, username, password, role, admin_id) VALUES (:nama, :username, :password, :kasir, :admin_id)'
         );
         $stmt->execute([
             ':nama'     => $nama,
             ':username' => $username,
             ':password' => password_hash($password, PASSWORD_DEFAULT),
             ':kasir'    => 'kasir',
+            ':admin_id' => currentAdminId(),
         ]);
 
         return (int) Database::connect()->lastInsertId();
@@ -458,5 +570,45 @@ abstract class User
         if (!in_array($tipe, ['timbangan', 'printer'], true)) {
             throw new \RuntimeException('Tipe device tidak valid.');
         }
+    }
+
+    /**
+     * Menyimpan data sesi pengguna ke database.
+     * Dipakai untuk menyimpan state keranjang/preferensi agar persisten lintas login/device.
+     */
+    public function simpanDataSesi(array $data): void
+    {
+        $id = (int) $this->id;
+        if ($id === 0) {
+            return;
+        }
+
+        $stmt = Database::connect()->prepare('UPDATE users SET data_sesi = :data WHERE id = :id');
+        $stmt->execute([
+            ':data' => json_encode($data, JSON_UNESCAPED_UNICODE),
+            ':id'   => $id,
+        ]);
+    }
+
+    /**
+     * Memuat data sesi pengguna dari database.
+     */
+    public function muatDataSesi(): array
+    {
+        $id = (int) $this->id;
+        if ($id === 0) {
+            return [];
+        }
+
+        $stmt = Database::connect()->prepare('SELECT data_sesi FROM users WHERE id = :id LIMIT 1');
+        $stmt->execute([':id' => $id]);
+        $row = $stmt->fetch();
+
+        if ($row === false || empty($row['data_sesi'])) {
+            return [];
+        }
+
+        $decoded = json_decode($row['data_sesi'], true);
+        return is_array($decoded) ? $decoded : [];
     }
 }

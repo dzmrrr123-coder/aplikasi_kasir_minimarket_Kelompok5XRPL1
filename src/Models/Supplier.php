@@ -66,14 +66,19 @@ class Supplier implements DataReporter
 
     public function simpan(): int
     {
+        if (trim($this->nama) === '') {
+            throw new \RuntimeException('Nama supplier tidak boleh kosong.');
+        }
+
         $pdo = Database::connect();
         $stmt = $pdo->prepare(
-            'INSERT INTO supplier (nama, kontak, alamat) VALUES (:nama, :kontak, :alamat)'
+            'INSERT INTO supplier (nama, kontak, alamat, admin_id) VALUES (:nama, :kontak, :alamat, :admin_id)'
         );
         $stmt->execute([
-            ':nama'   => $this->nama,
-            ':kontak' => $this->kontak,
-            ':alamat' => $this->alamat,
+            ':nama'     => $this->nama,
+            ':kontak'   => $this->kontak,
+            ':alamat'   => $this->alamat,
+            ':admin_id' => currentAdminId(),
         ]);
 
         $this->id = (string) $pdo->lastInsertId();
@@ -107,11 +112,13 @@ class Supplier implements DataReporter
      */
     public static function semua(): array
     {
-        $rows = Database::connect()->query(
-            'SELECT id, nama, kontak, alamat FROM supplier ORDER BY nama'
-        )->fetchAll();
+        $adminId = currentAdminId();
+        $stmt = Database::connect()->prepare(
+            'SELECT id, nama, kontak, alamat FROM supplier WHERE admin_id = :admin_id ORDER BY nama'
+        );
+        $stmt->execute([':admin_id' => $adminId]);
 
-        return array_map(static fn (array $row): self => new self($row), $rows);
+        return array_map(static fn (array $row): self => new self($row), $stmt->fetchAll());
     }
 
     public static function cari(int $id): ?self

@@ -19,13 +19,15 @@ class Pengaturan
      */
     public static function semua(): array
     {
-        $rows = Database::connect()->query(
-            'SELECT kunci, nilai FROM pengaturan ORDER BY kunci'
-        )->fetchAll();
+        $adminId = currentAdminId();
+        $stmt = Database::connect()->prepare(
+            'SELECT kunci, nilai FROM pengaturan WHERE admin_id = :admin_id ORDER BY kunci'
+        );
+        $stmt->execute([':admin_id' => $adminId]);
 
         $hasil = [];
 
-        foreach ($rows as $row) {
+        foreach ($stmt->fetchAll() as $row) {
             $hasil[$row['kunci']] = $row['nilai'];
         }
 
@@ -40,15 +42,17 @@ class Pengaturan
     public static function simpan(array $data): void
     {
         $pdo = Database::connect();
+        $adminId = currentAdminId();
         $stmt = $pdo->prepare(
-            'INSERT INTO pengaturan (kunci, nilai) VALUES (:kunci, :nilai)
+            'INSERT INTO pengaturan (kunci, nilai, admin_id) VALUES (:kunci, :nilai, :admin_id)
              ON DUPLICATE KEY UPDATE nilai = VALUES(nilai)'
         );
 
         foreach ($data as $kunci => $nilai) {
             $stmt->execute([
-                ':kunci' => (string) $kunci,
-                ':nilai' => (string) $nilai,
+                ':kunci'    => (string) $kunci,
+                ':nilai'    => (string) $nilai,
+                ':admin_id' => $adminId,
             ]);
         }
     }
@@ -58,10 +62,11 @@ class Pengaturan
      */
     public static function get(string $kunci, string $default = ''): string
     {
+        $adminId = currentAdminId();
         $stmt = Database::connect()->prepare(
-            'SELECT nilai FROM pengaturan WHERE kunci = :kunci LIMIT 1'
+            'SELECT nilai FROM pengaturan WHERE kunci = :kunci AND admin_id = :admin_id LIMIT 1'
         );
-        $stmt->execute([':kunci' => $kunci]);
+        $stmt->execute([':kunci' => $kunci, ':admin_id' => $adminId]);
         $nilai = $stmt->fetchColumn();
 
         return $nilai === false ? $default : (string) $nilai;

@@ -44,10 +44,11 @@ class Kategori
      */
     public static function semua(): array
     {
-        $pdo = Database::connect();
-        $rows = $pdo->query('SELECT id, nama FROM kategori ORDER BY nama')->fetchAll();
+        $adminId = currentAdminId();
+        $stmt = Database::connect()->prepare('SELECT id, nama FROM kategori WHERE admin_id = :admin_id ORDER BY nama');
+        $stmt->execute([':admin_id' => $adminId]);
 
-        return array_map(static fn (array $row): self => new self($row), $rows);
+        return array_map(static fn (array $row): self => new self($row), $stmt->fetchAll());
     }
 
     public static function cari(int $id): ?self
@@ -61,9 +62,13 @@ class Kategori
 
     public function simpan(): int
     {
+        if (trim($this->nama) === '') {
+            throw new \RuntimeException('Nama kategori tidak boleh kosong.');
+        }
+
         $pdo = Database::connect();
-        $stmt = $pdo->prepare('INSERT INTO kategori (nama) VALUES (:nama)');
-        $stmt->execute([':nama' => $this->nama]);
+        $stmt = $pdo->prepare('INSERT INTO kategori (nama, admin_id) VALUES (:nama, :admin_id)');
+        $stmt->execute([':nama' => $this->nama, ':admin_id' => currentAdminId()]);
 
         $this->id = (string) $pdo->lastInsertId();
 

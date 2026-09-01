@@ -513,6 +513,54 @@ class Database
                 ) ENGINE=InnoDB"
             );
         }
+
+        // ------------------------------------------------------------
+        // Migrasi v14 (multi-tenancy): admin_id pada semua tabel
+        //   supaya data tiap admin/pemilik toko terisolasi.
+        //   - users: kasir punya admin_id (penunjuk pemilik/admin)
+        //   - semua tabel data: admin_id untuk scope data per-toko
+        // ------------------------------------------------------------
+        self::migrasiMultiTenancy($pdo, $db['dbname']);
+    }
+
+    /**
+     * Migrasi multi-tenancy: tambah kolom admin_id ke semua tabel
+     * supaya data tiap admin/pemilik toko terisolasi.
+     */
+    private static function migrasiMultiTenancy(PDO $pdo, string $db): void
+    {
+        // Tabel yang perlu admin_id untuk scope data per-toko
+        $tabelData = [
+            'produk', 'kategori', 'supplier', 'diskon',
+            'pengaturan', 'gudang', 'member', 'promo',
+            'katalog_penukaran', 'transaksi', 'pembelian',
+            'retur_barang', 'shift_kasir', 'rekap_penjualan',
+            'stock_opname', 'notifikasi_stok', 'notifikasi_queue',
+        ];
+
+        foreach ($tabelData as $tabel) {
+            if (self::kolomAda($pdo, $db, $tabel, 'admin_id')) {
+                continue;
+            }
+            $pdo->exec(
+                "ALTER TABLE `{$tabel}` ADD COLUMN admin_id INT UNSIGNED NULL"
+            );
+        }
+
+        // users: admin_id untuk kasir (指向 pemilik/admin)
+        if (!self::kolomAda($pdo, $db, 'users', 'admin_id')) {
+            $pdo->exec('ALTER TABLE users ADD COLUMN admin_id INT UNSIGNED NULL AFTER is_active');
+        }
+
+        // Set admin_id = id untuk admin (biar punya data sendiri)
+        // Hanya jika kolom baru saja ditambahkan (semua NULL)
+        $cek = $pdo->query(
+            'SELECT COUNT(*) FROM users WHERE admin_id IS NULL AND role = \'admin\''
+        )->fetchColumn();
+
+        if ($cek > 0) {
+            $pdo->exec('UPDATE users SET admin_id = id WHERE role = \'admin\' AND admin_id IS NULL');
+        }
     }
 
     /** Cek apakah kolom ada di tabel tertentu. */

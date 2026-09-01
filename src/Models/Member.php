@@ -97,8 +97,8 @@ class Member implements DataReporter
 
         $pdo = Database::connect();
         $stmt = $pdo->prepare(
-            'INSERT INTO member (nomor_member, nama, telepon, password, poin)
-             VALUES (:nomor_member, :nama, :telepon, :password, :poin)'
+            'INSERT INTO member (nomor_member, nama, telepon, password, poin, admin_id)
+             VALUES (:nomor_member, :nama, :telepon, :password, :poin, :admin_id)'
         );
         $stmt->execute([
             ':nomor_member' => $nomor,
@@ -106,6 +106,7 @@ class Member implements DataReporter
             ':telepon'      => $this->telepon !== '' ? $this->telepon : null,
             ':password'     => $this->password !== '' ? password_hash($this->password, PASSWORD_DEFAULT) : null,
             ':poin'         => $this->poin,
+            ':admin_id'     => currentAdminId(),
         ]);
 
         $this->id = (string) $pdo->lastInsertId();
@@ -196,11 +197,13 @@ class Member implements DataReporter
      */
     public static function semua(): array
     {
-        $rows = Database::connect()->query(
-            'SELECT id, nomor_member, nama, telepon, poin FROM member ORDER BY nama'
-        )->fetchAll();
+        $adminId = currentAdminId();
+        $stmt = Database::connect()->prepare(
+            'SELECT id, nomor_member, nama, telepon, poin FROM member WHERE admin_id = :admin_id ORDER BY nama'
+        );
+        $stmt->execute([':admin_id' => $adminId]);
 
-        return array_map(static fn (array $row): self => new self($row), $rows);
+        return array_map(static fn (array $row): self => new self($row), $stmt->fetchAll());
     }
 
     public static function cari(int $id): ?self
