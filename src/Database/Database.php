@@ -561,6 +561,53 @@ class Database
         if ($cek > 0) {
             $pdo->exec('UPDATE users SET admin_id = id WHERE role = \'admin\' AND admin_id IS NULL');
         }
+
+        // UNIQUE constraints perlu dikonversi ke composite (kunci, admin_id)
+        // supaya tiap admin bisa punya data dengan nama/kunci yang sama.
+        self::dropUniqueJikaAda($pdo, $db, 'kategori', 'uq_kategori_nama');
+        if (!self::constraintAda($pdo, $db, 'uq_kategori_nama_admin')) {
+            $pdo->exec('ALTER TABLE kategori ADD UNIQUE KEY uq_kategori_nama_admin (nama, admin_id)');
+        }
+
+        // Pengaturan: UNIQUE kunci harus per-admin
+        self::dropUniqueJikaAda($pdo, $db, 'pengaturan', 'kunci');
+        if (!self::constraintAda($pdo, $db, 'uq_pengaturan_kunci_admin')) {
+            $pdo->exec('ALTER TABLE pengaturan ADD UNIQUE KEY uq_pengaturan_kunci_admin (kunci, admin_id)');
+        }
+
+        // Diskon: UNIQUE kode harus per-admin
+        self::dropUniqueJikaAda($pdo, $db, 'diskon', 'kode');
+        if (!self::constraintAda($pdo, $db, 'uq_diskon_kode_admin')) {
+            $pdo->exec('ALTER TABLE diskon ADD UNIQUE KEY uq_diskon_kode_admin (kode, admin_id)');
+        }
+
+        // Member: UNIQUE nomor_member dan telepon harus per-admin
+        self::dropUniqueJikaAda($pdo, $db, 'member', 'nomor_member');
+        if (!self::constraintAda($pdo, $db, 'uq_member_nomor_admin')) {
+            $pdo->exec('ALTER TABLE member ADD UNIQUE KEY uq_member_nomor_admin (nomor_member, admin_id)');
+        }
+        self::dropUniqueJikaAda($pdo, $db, 'member', 'telepon');
+        if (!self::constraintAda($pdo, $db, 'uq_member_telepon_admin')) {
+            $pdo->exec('ALTER TABLE member ADD UNIQUE KEY uq_member_telepon_admin (telepon, admin_id)');
+        }
+    }
+
+    /** Hapus UNIQUE constraint bila ada (UNTUK konversi ke composite). */
+    private static function dropUniqueJikaAda(PDO $pdo, string $db, string $tabel, string $kolom): void
+    {
+        // MySQL: cari nama constraint UNIQUE pada kolom tertentu
+        $stmt = $pdo->prepare(
+            'SELECT INDEX_NAME FROM information_schema.STATISTICS
+             WHERE TABLE_SCHEMA = :db AND TABLE_NAME = :tabel
+               AND COLUMN_NAME = :kolom AND NON_UNIQUE = 0
+             LIMIT 1'
+        );
+        $stmt->execute([':db' => $db, ':tabel' => $tabel, ':kolom' => $kolom]);
+        $nama = $stmt->fetchColumn();
+
+        if ($nama !== false && $nama !== 'PRIMARY') {
+            $pdo->exec('ALTER TABLE `' . $tabel . '` DROP INDEX `' . $nama . '`');
+        }
     }
 
     /** Cek apakah kolom ada di tabel tertentu. */

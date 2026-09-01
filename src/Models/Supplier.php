@@ -123,10 +123,11 @@ class Supplier implements DataReporter
 
     public static function cari(int $id): ?self
     {
+        $adminId = currentAdminId();
         $stmt = Database::connect()->prepare(
-            'SELECT id, nama, kontak, alamat FROM supplier WHERE id = :id LIMIT 1'
+            'SELECT id, nama, kontak, alamat FROM supplier WHERE id = :id AND admin_id = :admin_id LIMIT 1'
         );
-        $stmt->execute([':id' => $id]);
+        $stmt->execute([':id' => $id, ':admin_id' => $adminId]);
         $row = $stmt->fetch();
 
         return $row === false ? null : new self($row);

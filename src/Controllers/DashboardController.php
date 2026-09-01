@@ -103,7 +103,6 @@ class DashboardController
      */
     public function grafikStokKategori(array $params = []): array
     {
-        /** @var DataReporter $reporter */
         $reporter = new Produk();
 
         return $reporter->getAgregasiGrafik([

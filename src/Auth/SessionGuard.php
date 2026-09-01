@@ -28,10 +28,10 @@ class SessionGuard
         return '';
     }
 
-    // URL dashboard per role: kasir -> transaksi, admin -> produk.
+    // URL dashboard per role (halaman kanonik di root /public).
     public static function dashboardUrl(string $role): string
     {
-        return self::baseUrl() . ($role === 'admin' ? '/admin/produk.php' : '/kasir/transaksi.php');
+        return self::baseUrl() . ($role === 'admin' ? '/dashboard.php' : '/transaksi.php');
     }
 
     // Wajib login: redirect ke login.php kalau session user belum ada.

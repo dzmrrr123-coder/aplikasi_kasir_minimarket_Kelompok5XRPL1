@@ -175,16 +175,17 @@ class Member implements DataReporter
     /** Cek apakah nomor telepon sudah dipakai member lain. */
     private function teleponTerpakai(): bool
     {
+        $adminId = currentAdminId();
         if ($this->id === '') {
             $stmt = Database::connect()->prepare(
-                'SELECT COUNT(*) FROM member WHERE telepon = :telepon'
+                'SELECT COUNT(*) FROM member WHERE telepon = :telepon AND admin_id = :admin_id'
             );
-            $stmt->execute([':telepon' => $this->telepon]);
+            $stmt->execute([':telepon' => $this->telepon, ':admin_id' => $adminId]);
         } else {
             $stmt = Database::connect()->prepare(
-                'SELECT COUNT(*) FROM member WHERE telepon = :telepon AND id <> :id'
+                'SELECT COUNT(*) FROM member WHERE telepon = :telepon AND id <> :id AND admin_id = :admin_id'
             );
-            $stmt->execute([':telepon' => $this->telepon, ':id' => $this->id]);
+            $stmt->execute([':telepon' => $this->telepon, ':id' => $this->id, ':admin_id' => $adminId]);
         }
 
         return (int) $stmt->fetchColumn() > 0;

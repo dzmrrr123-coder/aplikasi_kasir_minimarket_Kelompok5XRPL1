@@ -90,10 +90,11 @@ class Http
         if ($response === false) {
             $err = error_get_last();
 
-            return [0, '', $err !== null && isset($err['message']) ? $err['message'] : 'HTTP request failed'];
+            return [0, '', $err !== null ? $err['message'] : 'HTTP request failed'];
         }
 
         $code = 0;
+        // @phpstan-ignore-next-line isset.variable ($http_response_header is a stream superglobal)
         if (isset($http_response_header)) {
             // Baris pertama: "HTTP/1.1 200 OK".
             if (preg_match('#HTTP/\S+\s+(\d{3})#i', $http_response_header[0], $m)) {
