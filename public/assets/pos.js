@@ -141,6 +141,55 @@
         }
     });
 
+    // Modal pembayaran: buka/tutup + tombol uang cepat (quick cash).
+    // Pakai event delegation supaya tetap jalan setelah fragment di-rebuild.
+    function tutupModalBayar() {
+        var modal = document.getElementById('modal-bayar');
+        if (modal) modal.classList.add('d-none');
+        document.body.classList.remove('pay-modal-open');
+    }
+    function bukaModalBayar() {
+        var modal = document.getElementById('modal-bayar');
+        if (!modal) return;
+        modal.classList.remove('d-none');
+        document.body.classList.add('pay-modal-open');
+        // Numpad tampil bila metode tunai yang terpilih saat modal dibuka.
+        var tunai = document.getElementById('metode-tunai');
+        numpadTampil = !tunai || tunai.checked;
+        syncNumpadMetode();
+        var input = document.getElementById('jumlah-dibayar');
+        if (input) {
+            input.focus();
+            input.select();
+        }
+    }
+    document.addEventListener('click', function (e) {
+        if (e.target.closest('#btn-buka-bayar')) {
+            bukaModalBayar();
+            return;
+        }
+        if (e.target.closest('[data-tutup-bayar]')) {
+            tutupModalBayar();
+            return;
+        }
+        var cash = e.target.closest('[data-cash]');
+        if (cash) {
+            var input = document.getElementById('jumlah-dibayar');
+            if (input) {
+                input.value = cash.getAttribute('data-cash');
+                input.dispatchEvent(new Event('input'));
+                input.focus();
+            }
+        }
+    });
+    // Esc menutup modal pembayaran.
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+            var modal = document.getElementById('modal-bayar');
+            if (modal && !modal.classList.contains('d-none')) tutupModalBayar();
+        }
+    });
+
     // Shortcut keyboard: F1 = fokus pencarian, F2 = fokus jumlah dibayar.
     document.addEventListener('keydown', function (e) {
         if (e.key === 'F1') {

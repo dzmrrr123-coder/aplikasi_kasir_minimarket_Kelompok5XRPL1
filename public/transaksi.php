@@ -547,10 +547,6 @@ function renderFragmentKananKiosk(): string
 
     <!-- Ringkasan -->
     <div class="kiosk-ringkasan">
-        <div class="d-flex justify-content-between align-items-center mb-1">
-            <span class="kiosk-total-label">Total</span>
-            <span class="kiosk-total-nilai font-num" id="kiosk-total"><?= formatRupiah($total) ?></span>
-        </div>
         <div class="d-flex justify-content-between small mb-1">
             <span class="text-muted">Subtotal</span>
             <span class="kiosk-sub font-num"><?= formatRupiah($ringkasan['subtotal']) ?></span>
@@ -567,78 +563,130 @@ function renderFragmentKananKiosk(): string
                 <span class="kiosk-sub font-num"><?= formatRupiah($ringkasan['pajak']) ?></span>
             </div>
         <?php endif; ?>
-        <div class="d-flex justify-content-between small mb-3">
-            <span class="text-muted">Kembalian</span>
-            <span class="kiosk-sub font-num <?= $kembalian < 0 ? 'text-danger' : '' ?>" id="kembalian">
-                <?= $kembalian < 0 ? 'Kurang ' . formatRupiah(abs($kembalian)) : formatRupiah($kembalian) ?>
-            </span>
+        <div class="kiosk-total-row">
+            <span class="kiosk-total-label">Total</span>
+            <span class="kiosk-total-nilai font-num" id="kiosk-total"><?= formatRupiah($total) ?></span>
         </div>
     </div>
 
-    <!-- Form pembayaran + numpad -->
-    <form method="post" id="form-bayar" data-aksi="bayar" class="mb-3">
-        <input type="hidden" name="aksi" value="bayar">
-        <span id="total-json" class="d-none"><?= $total ?></span>
+    <span id="total-json" class="d-none"><?= $total ?></span>
 
-        <div class="mb-3">
-            <label class="form-label">Metode pembayaran</label>
-            <div class="d-flex gap-3">
-                <div class="form-check">
-                    <input class="form-check-input" type="radio" name="metode" value="tunai" id="metode-tunai" checked>
-                    <label class="form-check-label" for="metode-tunai">Tunai</label>
-                </div>
-                <div class="form-check">
-                    <input class="form-check-input" type="radio" name="metode" value="non_tunai" id="metode-nontunai">
-                    <label class="form-check-label" for="metode-nontunai">QRIS/EDC</label>
-                </div>
-            </div>
-        </div>
-
-        <div class="mb-3">
-            <label for="jumlah-dibayar" class="form-label">Jumlah dibayar</label>
-            <input
-                type="number"
-                step="0.01"
-                min="0"
-                id="jumlah-dibayar"
-                name="jumlah_dibayar"
-                class="form-control form-control-lg font-num text-end"
-                value="<?= $total > 0 ? (int) ceil($total) : 0 ?>"
-                inputmode="decimal"
-            >
-        </div>
-
-        <div class="kiosk-numpad mb-3 d-none" id="kiosk-numpad">
-            <div class="numpad-grid">
-                <button type="button" data-num="1">1</button>
-                <button type="button" data-num="2">2</button>
-                <button type="button" data-num="3">3</button>
-                <button type="button" data-num="4">4</button>
-                <button type="button" data-num="5">5</button>
-                <button type="button" data-num="6">6</button>
-                <button type="button" data-num="7">7</button>
-                <button type="button" data-num="8">8</button>
-                <button type="button" data-num="9">9</button>
-                <button type="button" data-num="00">00</button>
-                <button type="button" data-num="0">0</button>
-                <button type="button" data-num="hapus" class="numpad-hapus"><i class="bi bi-backspace"></i></button>
-                <button type="button" data-num="bersih" class="numpad-aksi">C</button>
-                <button type="button" data-num="maks" class="numpad-aksi">UANG PAS</button>
-            </div>
-        </div>
-
-        <div class="d-grid gap-2">
-            <button type="submit" class="btn btn-success btn-lg" <?= $keranjang === [] ? 'disabled data-kosong' : '' ?>>
-                <i class="bi bi-check2-circle me-1"></i>Proses Pembayaran
-            </button>
-            <button type="submit" class="btn btn-outline-danger" form="form-batalkan" data-aksi="batalkan" <?= $keranjang === [] ? 'disabled' : '' ?>>
-                <i class="bi bi-x-lg me-1"></i>Batalkan
-            </button>
-        </div>
-    </form>
+    <!-- Tombol pemicu bayar + batalkan -->
+    <div class="kiosk-aksi-bayar d-grid gap-2 mb-3">
+        <button type="button" class="btn-bayar-utama" id="btn-buka-bayar" <?= $keranjang === [] ? 'disabled' : '' ?>>
+            <span class="btn-bayar-label"><i class="bi bi-credit-card-2-front me-2"></i>Bayar</span>
+            <span class="btn-bayar-nominal font-num"><?= formatRupiah($total) ?></span>
+        </button>
+        <button type="submit" class="btn btn-outline-danger" form="form-batalkan" data-aksi="batalkan" <?= $keranjang === [] ? 'disabled' : '' ?>>
+            <i class="bi bi-x-lg me-1"></i>Batalkan
+        </button>
+    </div>
     <form method="post" id="form-batalkan" class="d-none">
         <input type="hidden" name="aksi" value="batalkan">
     </form>
+
+    <!-- Modal pembayaran (checkout) -->
+    <div class="pay-modal d-none" id="modal-bayar" role="dialog" aria-modal="true" aria-labelledby="pay-modal-judul">
+        <div class="pay-modal-backdrop" data-tutup-bayar></div>
+        <div class="pay-modal-card" role="document">
+            <button type="button" class="pay-modal-close" data-tutup-bayar aria-label="Tutup pembayaran">
+                <i class="bi bi-x-lg"></i>
+            </button>
+            <div class="pay-modal-grid">
+                <!-- Kiri: total tagihan -->
+                <div class="pay-modal-tagihan">
+                    <span class="pay-modal-eyebrow" id="pay-modal-judul">Total Tagihan</span>
+                    <span class="pay-modal-total font-num"><?= formatRupiah($total) ?></span>
+                    <div class="pay-modal-meta">
+                        <div class="d-flex justify-content-between">
+                            <span>Subtotal</span>
+                            <span class="font-num"><?= formatRupiah($ringkasan['subtotal']) ?></span>
+                        </div>
+                        <?php if ($ringkasan['potongan'] > 0): ?>
+                            <div class="d-flex justify-content-between">
+                                <span>Diskon <?= $diskon !== null ? htmlspecialchars($diskon->getKode()) : '' ?></span>
+                                <span class="font-num">-<?= formatRupiah($ringkasan['potongan']) ?></span>
+                            </div>
+                        <?php endif; ?>
+                        <?php if ($ringkasan['pajak'] > 0): ?>
+                            <div class="d-flex justify-content-between">
+                                <span>Pajak (PPN)</span>
+                                <span class="font-num"><?= formatRupiah($ringkasan['pajak']) ?></span>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
+                <!-- Kanan: form pembayaran -->
+                <div class="pay-modal-form">
+                    <form method="post" id="form-bayar" data-aksi="bayar">
+                        <input type="hidden" name="aksi" value="bayar">
+
+                        <div class="pay-metode" role="radiogroup" aria-label="Metode pembayaran">
+                            <label class="pay-metode-opsi">
+                                <input class="form-check-input" type="radio" name="metode" value="tunai" id="metode-tunai" checked>
+                                <span><i class="bi bi-cash-stack"></i> Tunai</span>
+                            </label>
+                            <label class="pay-metode-opsi">
+                                <input class="form-check-input" type="radio" name="metode" value="non_tunai" id="metode-nontunai">
+                                <span><i class="bi bi-qr-code"></i> QRIS / EDC</span>
+                            </label>
+                        </div>
+
+                        <div id="pay-uang-wrap">
+                            <label for="jumlah-dibayar" class="pay-label">Uang Diterima</label>
+                            <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                id="jumlah-dibayar"
+                                name="jumlah_dibayar"
+                                class="pay-input font-num"
+                                value="<?= $total > 0 ? (int) ceil($total) : 0 ?>"
+                                inputmode="decimal"
+                            >
+
+                            <div class="pay-quickcash">
+                                <button type="button" data-num="maks" class="pay-chip">Uang Pas</button>
+                                <button type="button" data-cash="50000" class="pay-chip font-num">50.000</button>
+                                <button type="button" data-cash="100000" class="pay-chip font-num">100.000</button>
+                            </div>
+
+                            <div class="kiosk-numpad d-none" id="kiosk-numpad">
+                                <div class="numpad-grid">
+                                    <button type="button" data-num="1">1</button>
+                                    <button type="button" data-num="2">2</button>
+                                    <button type="button" data-num="3">3</button>
+                                    <button type="button" data-num="4">4</button>
+                                    <button type="button" data-num="5">5</button>
+                                    <button type="button" data-num="6">6</button>
+                                    <button type="button" data-num="7">7</button>
+                                    <button type="button" data-num="8">8</button>
+                                    <button type="button" data-num="9">9</button>
+                                    <button type="button" data-num="00">00</button>
+                                    <button type="button" data-num="0">0</button>
+                                    <button type="button" data-num="hapus" class="numpad-hapus"><i class="bi bi-backspace"></i></button>
+                                    <button type="button" data-num="bersih" class="numpad-aksi">C</button>
+                                    <button type="button" data-num="maks" class="numpad-aksi">UANG PAS</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="pay-kembalian">
+                            <span>Kembalian</span>
+                            <span class="font-num <?= $kembalian < 0 ? 'text-danger' : '' ?>" id="kembalian">
+                                <?= $kembalian < 0 ? 'Kurang ' . formatRupiah(abs($kembalian)) : formatRupiah($kembalian) ?>
+                            </span>
+                        </div>
+
+                        <button type="submit" class="btn-selesai" <?= $keranjang === [] ? 'disabled data-kosong' : '' ?>>
+                            <i class="bi bi-check2-circle me-2"></i>Selesaikan Transaksi
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
     <?php
     return (string) ob_get_clean();
 }

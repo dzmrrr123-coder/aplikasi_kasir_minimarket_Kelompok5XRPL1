@@ -792,6 +792,272 @@ a:hover {
     font-family: var(--font-num);
     font-weight: 600;
 }
+.kiosk-ringkasan .kiosk-total-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-top: 0.5rem;
+    padding-top: 0.75rem;
+    border-top: 1px dashed var(--border);
+}
+
+/* ============================================================
+   TOMBOL PEMICU BAYAR (panel kanan kiosk)
+   ============================================================ */
+.btn-bayar-utama {
+    border: none;
+    border-radius: 0.9rem;
+    background: var(--brand-success);
+    color: #fff;
+    padding: 0.95rem 1.15rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 10px 24px -8px rgba(22, 163, 74, 0.55);
+    transition: background-color 0.15s ease, transform 0.1s ease;
+}
+.btn-bayar-utama:hover:not(:disabled) { background: var(--brand-success-dark); }
+.btn-bayar-utama:active:not(:disabled) { transform: translateY(1px); }
+.btn-bayar-utama:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
+.btn-bayar-utama .btn-bayar-label {
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-size: 1rem;
+}
+.btn-bayar-utama .btn-bayar-nominal { font-size: 1.3rem; }
+
+/* ============================================================
+   MODAL PEMBAYARAN (checkout overlay)
+   ============================================================ */
+body.pay-modal-open { overflow: hidden; }
+
+.pay-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1080;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+}
+.pay-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(2, 6, 23, 0.55);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+}
+.pay-modal-card {
+    position: relative;
+    z-index: 1;
+    width: min(920px, 100%);
+    max-height: calc(100vh - 3rem);
+    overflow: auto;
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 1.5rem;
+    box-shadow: 0 30px 80px -20px rgba(2, 6, 23, 0.65);
+    animation: payModalIn 0.18s ease-out;
+}
+@keyframes payModalIn {
+    from { opacity: 0; transform: translateY(12px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.pay-modal-close {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    width: 2.4rem;
+    height: 2.4rem;
+    border-radius: 999px;
+    border: none;
+    background: rgba(255, 255, 255, 0.18);
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.05rem;
+    cursor: pointer;
+    z-index: 2;
+    transition: background-color 0.15s ease;
+}
+.pay-modal-close:hover { background: var(--brand-danger); }
+
+.pay-modal-grid {
+    display: grid;
+    grid-template-columns: 1fr 1.15fr;
+}
+
+/* Kiri: total tagihan */
+.pay-modal-tagihan {
+    padding: 2.25rem 2rem;
+    background: linear-gradient(160deg, var(--brand-primary-dark), var(--brand-primary-darker));
+    color: #fff;
+    border-radius: 1.5rem 0 0 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+.pay-modal-eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.75rem;
+    font-weight: 600;
+    opacity: 0.85;
+}
+.pay-modal-total {
+    font-size: clamp(2.25rem, 4vw, 3.25rem);
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.5rem;
+    word-break: break-word;
+}
+.pay-modal-meta {
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    font-size: 0.9rem;
+    opacity: 0.92;
+    border-top: 1px solid rgba(255, 255, 255, 0.22);
+    padding-top: 1rem;
+}
+
+/* Kanan: form */
+.pay-modal-form { padding: 2rem 1.75rem; }
+.pay-metode {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+    margin-bottom: 1.1rem;
+}
+.pay-metode-opsi {
+    position: relative;
+    border: 1.5px solid var(--border);
+    border-radius: 0.75rem;
+    padding: 0.7rem 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+    transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+}
+.pay-metode-opsi .form-check-input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+.pay-metode-opsi:has(.form-check-input:checked) {
+    border-color: var(--brand-primary);
+    background: var(--brand-primary-lighter);
+    color: var(--brand-primary-darker);
+}
+.dark-mode .pay-metode-opsi:has(.form-check-input:checked) { color: #5eead4; }
+
+.pay-label {
+    display: block;
+    font-weight: 600;
+    font-size: 0.85rem;
+    margin-bottom: 0.4rem;
+    color: var(--text-muted);
+}
+.pay-input {
+    width: 100%;
+    font-size: 1.75rem;
+    font-weight: 700;
+    text-align: right;
+    padding: 0.6rem 0.9rem;
+    border-radius: 0.75rem;
+    border: 1.5px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+}
+.pay-input:focus {
+    outline: none;
+    border-color: var(--brand-primary);
+    box-shadow: 0 0 0 3px var(--brand-primary-light);
+}
+.pay-quickcash {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+    margin: 0.75rem 0;
+}
+.pay-chip {
+    border: 1.5px solid var(--border);
+    background: var(--surface-2, var(--surface));
+    color: var(--text);
+    border-radius: 0.6rem;
+    padding: 0.65rem 0.4rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease;
+}
+.pay-chip:hover {
+    border-color: var(--brand-primary);
+    color: var(--brand-primary-dark);
+}
+.dark-mode .pay-chip:hover { color: #5eead4; }
+
+/* Numpad di dalam modal: rapat ke lebar penuh */
+.pay-modal-form .kiosk-numpad { margin-top: 0.25rem; }
+
+.pay-kembalian {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin: 1rem 0;
+    padding: 0.85rem 1rem;
+    border-radius: 0.75rem;
+    background: var(--brand-primary-lighter);
+    font-weight: 600;
+}
+.pay-kembalian span:last-child {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: var(--brand-primary-darker);
+}
+.dark-mode .pay-kembalian span:last-child { color: #5eead4; }
+.pay-kembalian span:last-child.text-danger { color: var(--brand-danger) !important; }
+
+.btn-selesai {
+    width: 100%;
+    border: none;
+    border-radius: 0.85rem;
+    background: var(--brand-success);
+    color: #fff;
+    font-size: 1.2rem;
+    font-weight: 700;
+    padding: 1rem;
+    cursor: pointer;
+    letter-spacing: 0.01em;
+    box-shadow: 0 10px 24px -8px rgba(22, 163, 74, 0.55);
+    transition: background-color 0.15s ease, transform 0.1s ease;
+}
+.btn-selesai:hover:not(:disabled) { background: var(--brand-success-dark); }
+.btn-selesai:active:not(:disabled) { transform: translateY(1px); }
+.btn-selesai:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
+
+@media (max-width: 680px) {
+    .pay-modal { padding: 0; align-items: stretch; }
+    .pay-modal-card {
+        width: 100%;
+        max-height: 100vh;
+        border-radius: 0;
+        border: none;
+    }
+    .pay-modal-grid { grid-template-columns: 1fr; }
+    .pay-modal-tagihan { border-radius: 0; padding: 1.75rem 1.5rem; }
+    .pay-modal-total { font-size: 2.5rem; }
+}
 
 /* Kartu produk kiosk */
 .kiosk-produk {
