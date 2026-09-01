@@ -83,20 +83,28 @@ class Struk implements Observer
         $teleponToko = $pengaturan['telepon'] ?? '';
         $footer = $pengaturan['footer_struk'] ?? 'Terima kasih atas kunjungan Anda!';
 
+        $w = 32; // thermal receipt width (chars) — works for 58mm & 80mm
+        $sep = str_repeat('=', $w);
+        $dash = str_repeat('-', $w);
+
         $lines = [];
-        $lines[] = '==================================';
-        $lines[] = strtoupper($namaToko);
+
+        // --- Header (centered) ---
+        $lines[] = $sep;
+        $lines[] = $this->centerText(strtoupper($namaToko), $w);
 
         if ($alamatToko !== '') {
-            $lines[] = $alamatToko;
+            $lines[] = $this->centerText($alamatToko, $w);
         }
         if ($teleponToko !== '') {
-            $lines[] = 'Telp: ' . $teleponToko;
+            $lines[] = $this->centerText('Telp: ' . $teleponToko, $w);
         }
 
-        $lines[] = '==================================';
-        $lines[] = 'No. Transaksi : ' . $this->transaksiId;
-        $lines[] = 'Tanggal       : ' . $this->transaksi->getTanggal()->format('d-m-Y H:i');
+        $lines[] = $sep;
+
+        // --- Transaction info ---
+        $lines[] = 'No. Transaksi : #' . $this->transaksiId;
+        $lines[] = 'Tanggal       : ' . $this->transaksi->getTanggal()->format('d/m/Y H:i');
         $lines[] = 'Kasir         : ' . $this->namaKasir();
 
         $member = $this->transaksi->getMemberNama();
@@ -105,67 +113,89 @@ class Struk implements Observer
             $lines[] = 'Member        : ' . $member;
         }
 
-        $lines[] = '----------------------------------';
+        $lines[] = $dash;
+        $lines[] = $this->centerText('BARANG', $w);
+        $lines[] = $dash;
 
+        // --- Items ---
         $no = 1;
 
         foreach ($this->transaksi->getItems() as $item) {
             $produk = $item->getProduk();
-            // Harga satuan efektif: produk gram memakai harga per gram.
-            $hargaSatuan = $produk->getHargaEfektif();
-            $lines[] = $no . '. ' . $produk->getNama();
-            $lines[] = sprintf(
-                '    %s x %s',
-                $this->formatQty($item->getQty()),
-                $this->formatRupiah($hargaSatuan)
-            );
-            $lines[] = '    Subtotal  : ' . $this->formatRupiah($item->getSubtotal());
+            $hargaSatuan = $produk->getHargaEfektif($item->getQty());
+            $qtyStr = $this->formatQty($item->getQty());
+            $satuan = $produk->getSatuan() === 'gram' ? 'g' : 'x';
+
+            // Line 1: product name (truncate if too long)
+            $namaBarang = $produk->getNama();
+            if (mb_strlen($namaBarang) > $w - 4) {
+                $namaBarang = mb_substr($namaBarang, 0, $w - 7) . '...';
+            }
+            $lines[] = $no . '. ' . $namaBarang;
+
+            // Line 2: qty x price = subtotal (right-aligned subtotal)
+            $qtyLine = '   ' . $qtyStr . ' ' . $satuan . ' x ' . $this->formatRupiah($hargaSatuan);
+            $subLine = $this->formatRupiah($item->getSubtotal());
+            $gap = max(1, $w - mb_strlen($qtyLine) - mb_strlen($subLine));
+            $lines[] = $qtyLine . str_repeat(' ', $gap) . $subLine;
+
+            // Line 3: discount per item if any
+            if ($item->getPotongan() > 0) {
+                $discLine = '   (Diskon)';
+                $discVal = '-' . $this->formatRupiah($item->getPotongan());
+                $gapD = max(1, $w - mb_strlen($discLine) - mb_strlen($discVal));
+                $lines[] = $discLine . str_repeat(' ', $gapD) . $discVal;
+            }
+
             $no++;
         }
 
-        $lines[] = '----------------------------------';
-        $lines[] = 'Subtotal      : ' . $this->formatRupiah($this->subtotalKotor());
+        $lines[] = $dash;
+
+        // --- Totals (right-aligned values) ---
+        $lines[] = $this->rightAligned('Subtotal', $this->formatRupiah($this->subtotalKotor()), $w);
 
         $diskon = $this->transaksi->getDiskon();
 
         if ($diskon !== null) {
-            // Potongan dihitung dari subtotal kotor vs total sebelum pajak.
             $totalSetelahDiskon = $this->transaksi->getTotal() - $this->transaksi->getPajak();
             $potongan = $this->subtotalKotor() - $totalSetelahDiskon;
 
             if ($potongan > 0) {
-                $lines[] = 'Diskon        : -' . $this->formatRupiah($potongan);
+                $lines[] = $this->rightAligned('Diskon', '-' . $this->formatRupiah($potongan), $w);
             }
         }
 
         $pajak = $this->transaksi->getPajak();
 
         if ($pajak > 0) {
-            $lines[] = 'Pajak (PPN)   : ' . $this->formatRupiah($pajak);
+            $lines[] = $this->rightAligned('PPN', $this->formatRupiah($pajak), $w);
         }
 
-        $lines[] = 'TOTAL         : ' . $this->formatRupiah($this->transaksi->getTotal());
+        $lines[] = $dash;
+        $lines[] = $this->rightAligned('TOTAL', $this->formatRupiah($this->transaksi->getTotal()), $w, true);
+        $lines[] = $dash;
 
+        // --- Payment ---
         $pembayaran = $this->transaksi->getPembayaran();
 
         if ($pembayaran !== null) {
-            $lines[] = 'Metode Bayar  : ' . $pembayaran->getNamaMetode();
-            $lines[] = 'Dibayar       : ' . $this->formatRupiah($pembayaran->getJumlah());
+            $lines[] = 'Metode   : ' . $pembayaran->getNamaMetode();
+            $lines[] = $this->rightAligned('Dibayar', $this->formatRupiah($pembayaran->getJumlah()), $w);
 
-            // Kembalian dihitung polimorfik oleh strategi pembayaran
-            // (tunai: selisih; non-tunai: 0).
             $kembalian = $pembayaran->hitungKembalian(
                 $this->transaksi->getTotal(),
                 $pembayaran->getJumlah()
             );
 
             if ($kembalian > 0) {
-                $lines[] = 'Kembalian     : ' . $this->formatRupiah($kembalian);
+                $lines[] = $this->rightAligned('Kembalian', $this->formatRupiah($kembalian), $w, true);
             }
         }
 
-        $lines[] = '==================================';
-        $lines[] = $footer;
+        $lines[] = $sep;
+        $lines[] = $this->centerText($footer, $w);
+        $lines[] = $sep;
 
         return implode("\n", $lines) . "\n";
     }
@@ -188,7 +218,7 @@ class Struk implements Observer
             $items[] = [
                 'nama'     => $item->getProduk()->getNama(),
                 'qty'      => $item->getQty(),
-                'harga'    => $item->getProduk()->getHargaEfektif(),
+                'harga'    => $item->getProduk()->getHargaEfektif($item->getQty()),
                 'subtotal' => $item->getSubtotal(),
             ];
         }
@@ -250,5 +280,23 @@ class Struk implements Observer
     private function formatRupiah(float $jumlah): string
     {
         return 'Rp ' . number_format($jumlah, 0, ',', '.');
+    }
+
+    /** Center text within a given width. */
+    private function centerText(string $text, int $width): string
+    {
+        $len = mb_strlen($text);
+        if ($len >= $width) return $text;
+        $pad = (int) (($width - $len) / 2);
+        return str_repeat(' ', $pad) . $text;
+    }
+
+    /** Right-aligned label + value pair. Bold lines prefix with '>>' when $bold. */
+    private function rightAligned(string $label, string $value, int $width, bool $bold = false): string
+    {
+        $prefix = $bold ? '>> ' : '';
+        $labelFull = $prefix . $label;
+        $gap = max(1, $width - mb_strlen($labelFull) - mb_strlen($value));
+        return $labelFull . str_repeat(' ', $gap) . $value;
     }
 }

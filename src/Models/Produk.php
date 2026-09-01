@@ -473,15 +473,16 @@ class Produk implements DataReporter
 
     public static function cari(int $id): ?self
     {
+        $adminId = currentAdminId();
         $stmt = Database::connect()->prepare(
             'SELECT p.id, p.nama, p.harga, p.stok, p.kategori_id, p.satuan, p.harga_per_gram,
                     p.barcode, p.harga_beli, p.stok_minimum, p.supplier_id, p.is_active, p.gambar,
                     p.harga_grosir, p.batas_grosir
              FROM produk p
-             WHERE p.id = :id
+             WHERE p.id = :id AND p.admin_id = :admin_id
              LIMIT 1'
         );
-        $stmt->execute([':id' => $id]);
+        $stmt->execute([':id' => $id, ':admin_id' => $adminId]);
         $row = $stmt->fetch();
 
         return $row === false ? null : new self($row);
@@ -580,8 +581,9 @@ class Produk implements DataReporter
         $start = max(0, (int) ($params['start'] ?? 0));
         $length = max(1, (int) ($params['length'] ?? 10));
 
-        $where = 'WHERE p.is_active = 1';
-        $bind = [];
+        $adminId = currentAdminId();
+        $where = 'WHERE p.is_active = 1 AND p.admin_id = :admin_id';
+        $bind = [':admin_id' => $adminId];
 
         if ($cari !== '') {
             $where .= ' AND (p.nama LIKE :cari_nama OR p.barcode LIKE :cari_barcode OR k.nama LIKE :cari_kategori)';
@@ -591,7 +593,9 @@ class Produk implements DataReporter
         }
 
         $pdo = Database::connect();
-        $total = (int) $pdo->query('SELECT COUNT(*) FROM produk WHERE is_active = 1')->fetchColumn();
+        $totalStmt = $pdo->prepare('SELECT COUNT(*) FROM produk WHERE is_active = 1 AND admin_id = :admin_id');
+        $totalStmt->execute([':admin_id' => $adminId]);
+        $total = (int) $totalStmt->fetchColumn();
 
         $stmtFiltered = $pdo->prepare('SELECT COUNT(*) FROM produk p JOIN kategori k ON k.id = p.kategori_id ' . $where);
         $stmtFiltered->execute($bind);

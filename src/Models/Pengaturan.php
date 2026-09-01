@@ -63,6 +63,9 @@ class Pengaturan
     public static function get(string $kunci, string $default = ''): string
     {
         $adminId = currentAdminId();
+        if ($adminId <= 0) {
+            return $default;
+        }
         $stmt = Database::connect()->prepare(
             'SELECT nilai FROM pengaturan WHERE kunci = :kunci AND admin_id = :admin_id LIMIT 1'
         );

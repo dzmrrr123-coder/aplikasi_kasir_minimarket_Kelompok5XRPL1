@@ -16,6 +16,21 @@ use App\Database\Database;
  */
 class Laba implements DataReporter
 {
+    private DateTimeImmutable $mulai;
+    private DateTimeImmutable $akhir;
+
+    public function __construct()
+    {
+        $this->mulai = new DateTimeImmutable(date('Y-m-01'));
+        $this->akhir = new DateTimeImmutable(date('Y-m-d'));
+    }
+
+    public function setPeriode(DateTimeImmutable $mulai, DateTimeImmutable $akhir): void
+    {
+        $this->mulai = $mulai;
+        $this->akhir = $akhir;
+    }
+
     /**
      * Ringkasan laba per periode (tanggal_mulai & tanggal_akhir di params).
      *
@@ -159,12 +174,17 @@ class Laba implements DataReporter
         $stmtFiltered->execute($bind);
         $filtered = (int) $stmtFiltered->fetchColumn();
 
-        $total = (int) $pdo->query(
+        $stmtTotal = $pdo->prepare(
             'SELECT COUNT(*) FROM transaksi t
              JOIN users u ON u.id = t.kasir_id
-             WHERE t.tanggal >= ' . $pdo->quote($bind[':mulai']) . '
-               AND t.tanggal < ' . $pdo->quote($bind[':akhir'])
-        )->fetchColumn();
+             WHERE t.tanggal >= :mulai
+               AND t.tanggal < :akhir'
+        );
+        $stmtTotal->execute([
+            ':mulai' => $bind[':mulai'],
+            ':akhir' => $bind[':akhir'],
+        ]);
+        $total = (int) $stmtTotal->fetchColumn();
 
         $stmt = $pdo->prepare(
             'SELECT t.id, t.tanggal, t.total, u.nama AS kasir_nama,
@@ -204,5 +224,142 @@ class Laba implements DataReporter
             'filtered' => $filtered,
             'rows'     => $rows,
         ];
+    }
+
+    /**
+     * Ekspor laporan laba sebagai PDF (via Dompdf).
+     */
+    public function eksporPDF(): string
+    {
+        $ringkasan = $this->ringkasan([
+            'tanggal_mulai' => $this->mulai->format('Y-m-d'),
+            'tanggal_akhir' => $this->akhir->format('Y-m-d'),
+        ]);
+
+        $tabel = $this->getDataTabel([
+            'tanggal_mulai' => $this->mulai->format('Y-m-d'),
+            'tanggal_akhir' => $this->akhir->format('Y-m-d'),
+            'start' => 0,
+            'length' => 1000,
+        ]);
+
+        $barisTabel = '';
+        foreach ($tabel['rows'] as $row) {
+            $labaClass = $row['laba'] >= 0 ? 'color:green' : 'color:red';
+            $barisTabel .= sprintf(
+                '<tr><td>%s</td><td>%s</td><td style="text-align:right">%s</td><td style="text-align:right">%s</td><td style="text-align:right;%s">%s</td></tr>',
+                htmlspecialchars((string) $row['id']),
+                htmlspecialchars($row['tanggal']),
+                htmlspecialchars($row['kasir_nama']),
+                'Rp ' . number_format($row['omzet'], 0, ',', '.'),
+                $labaClass,
+                'Rp ' . number_format($row['laba'], 0, ',', '.')
+            );
+        }
+
+        $namaToko = Pengaturan::get('nama_toko', 'Minimarket');
+        $periode = $this->mulai->format('d-m-Y') . ' s/d ' . $this->akhir->format('d-m-Y');
+        $labaClass = $ringkasan['laba'] >= 0 ? 'color:green' : 'color:red';
+
+        $html = '<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><style>
+            body { font-family: DejaVu Sans, sans-serif; font-size: 12px; color: #222; }
+            h1 { font-size: 18px; margin: 0 0 2px; }
+            .periode { color: #666; margin-bottom: 16px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+            th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
+            th { background: #f0f0f0; }
+            .ringkasan { margin-top: 16px; }
+            .ringkasan td { border: none; padding: 2px 8px; }
+            .ringkasan .label { font-weight: bold; }
+        </style></head><body>
+            <h1>' . htmlspecialchars($namaToko) . '</h1>
+            <div class="periode">Laporan Laba & Rugi — ' . htmlspecialchars($periode) . '</div>
+            <table class="ringkasan">
+                <tr><td class="label">Omzet</td><td>Rp ' . number_format($ringkasan['omzet'], 0, ',', '.') . '</td></tr>
+                <tr><td class="label">HPP</td><td>Rp ' . number_format($ringkasan['hpp'], 0, ',', '.') . '</td></tr>
+                <tr><td class="label">Laba</td><td style="' . $labaClass . ';font-weight:bold">Rp ' . number_format($ringkasan['laba'], 0, ',', '.') . '</td></tr>
+                <tr><td class="label">Margin</td><td>' . number_format($ringkasan['margin'], 1) . '%</td></tr>
+                <tr><td class="label">Jumlah Transaksi</td><td>' . $ringkasan['jumlah_transaksi'] . '</td></tr>
+            </table>
+            <table>
+                <thead><tr><th>No.</th><th>Tanggal</th><th>Kasir</th><th style="text-align:right">Omzet</th><th style="text-align:right">Laba</th></tr></thead>
+                <tbody>' . $barisTabel . '</tbody>
+            </table>
+        </body></html>';
+
+        $dompdf = new \Dompdf\Dompdf([
+            'isRemoteEnabled' => false,
+            'defaultFont' => 'DejaVu Sans',
+        ]);
+        $dompdf->loadHtml($html);
+        $dompdf->setPaper('A4', 'portrait');
+        $dompdf->render();
+
+        return $dompdf->output();
+    }
+
+    /**
+     * Ekspor laporan laba sebagai CSV.
+     */
+    public function keCsv(): string
+    {
+        $ringkasan = $this->ringkasan([
+            'tanggal_mulai' => $this->mulai->format('Y-m-d'),
+            'tanggal_akhir' => $this->akhir->format('Y-m-d'),
+        ]);
+
+        $tabel = $this->getDataTabel([
+            'tanggal_mulai' => $this->mulai->format('Y-m-d'),
+            'tanggal_akhir' => $this->akhir->format('Y-m-d'),
+            'start' => 0,
+            'length' => 1000,
+        ]);
+
+        $periode = $this->mulai->format('d-m-Y') . ' s/d ' . $this->akhir->format('d-m-Y');
+        $baris = [
+            ['Periode', $periode],
+            [],
+            ['Omzet', $ringkasan['omzet']],
+            ['HPP', $ringkasan['hpp']],
+            ['Laba', $ringkasan['laba']],
+            ['Margin', number_format($ringkasan['margin'], 1) . '%'],
+            ['Jumlah Transaksi', $ringkasan['jumlah_transaksi']],
+            [],
+            ['No.', 'Tanggal', 'Kasir', 'Omzet', 'HPP', 'Laba'],
+        ];
+
+        foreach ($tabel['rows'] as $row) {
+            $baris[] = [
+                $row['id'],
+                $row['tanggal'],
+                $row['kasir_nama'],
+                $row['omzet'],
+                $row['hpp'],
+                $row['laba'],
+            ];
+        }
+
+        return self::keCsvDariBaris($baris);
+    }
+
+    private static function keCsvDariBaris(array $baris): string
+    {
+        $out = '';
+        foreach ($baris as $kolom) {
+            $escaped = array_map(
+                static fn ($nilai): string => self::escapeCsv((string) $nilai),
+                $kolom
+            );
+            $out .= implode(',', $escaped) . "\r\n";
+        }
+        return $out;
+    }
+
+    private static function escapeCsv(string $nilai): string
+    {
+        if (str_contains($nilai, ',') || str_contains($nilai, '"') || str_contains($nilai, "\n") || str_contains($nilai, "\r")) {
+            return '"' . str_replace('"', '""', $nilai) . '"';
+        }
+        return $nilai;
     }
 }

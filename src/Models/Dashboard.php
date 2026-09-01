@@ -172,4 +172,75 @@ class Dashboard
 
         return $stmt->fetchAll();
     }
+
+    /**
+     * Analisis jam ramai: jumlah transaksi & total penjualan per jam dalam
+     * rentang tanggal tertentu. Berguna untuk optimasi shift kasir.
+     *
+     * @return array<int, array{jam: int, jumlah: int, total: float}>
+     */
+    public static function jamRamai(string $tanggalMulai, string $tanggalAkhir): array
+    {
+        $pdo = Database::connect();
+        $akhir = (new DateTimeImmutable($tanggalAkhir))->modify('+1 day')->format('Y-m-d');
+
+        $stmt = $pdo->prepare(
+            'SELECT HOUR(tanggal) AS jam,
+                    COUNT(*) AS jumlah,
+                    COALESCE(SUM(total), 0) AS total
+             FROM transaksi
+             WHERE tanggal >= :mulai AND tanggal < :akhir
+             GROUP BY HOUR(tanggal)
+             ORDER BY jam'
+        );
+        $stmt->execute([':mulai' => $tanggalMulai, ':akhir' => $akhir]);
+
+        $hasil = [];
+        foreach ($stmt->fetchAll() as $row) {
+            $hasil[] = [
+                'jam'    => (int) $row['jam'],
+                'jumlah' => (int) $row['jumlah'],
+                'total'  => (float) $row['total'],
+            ];
+        }
+
+        return $hasil;
+    }
+
+    /**
+     * Breakdown penjualan per kasir dalam rentang tanggal tertentu.
+     *
+     * @return array<int, array{kasir_nama: string, jumlah_transaksi: int, total_penjualan: float, rata_rata: float}>
+     */
+    public static function penjualanPerKasir(string $tanggalMulai, string $tanggalAkhir): array
+    {
+        $pdo = Database::connect();
+        $akhir = (new DateTimeImmutable($tanggalAkhir))->modify('+1 day')->format('Y-m-d');
+
+        $stmt = $pdo->prepare(
+            'SELECT u.nama AS kasir_nama,
+                    COUNT(*) AS jumlah_transaksi,
+                    COALESCE(SUM(t.total), 0) AS total_penjualan
+             FROM transaksi t
+             JOIN users u ON u.id = t.kasir_id
+             WHERE t.tanggal >= :mulai AND t.tanggal < :akhir
+             GROUP BY t.kasir_id, u.nama
+             ORDER BY total_penjualan DESC'
+        );
+        $stmt->execute([':mulai' => $tanggalMulai, ':akhir' => $akhir]);
+
+        $hasil = [];
+        foreach ($stmt->fetchAll() as $row) {
+            $jumlah = (int) $row['jumlah_transaksi'];
+            $total = (float) $row['total_penjualan'];
+            $hasil[] = [
+                'kasir_nama'        => $row['kasir_nama'],
+                'jumlah_transaksi'  => $jumlah,
+                'total_penjualan'   => $total,
+                'rata_rata'         => $jumlah > 0 ? $total / $jumlah : 0.0,
+            ];
+        }
+
+        return $hasil;
+    }
 }

@@ -391,18 +391,21 @@ class Member implements DataReporter
         $start = max(0, (int) ($params['start'] ?? 0));
         $length = max(1, (int) ($params['length'] ?? 10));
 
-        $where = '';
-        $bind = [];
+        $adminId = currentAdminId();
+        $where = 'WHERE admin_id = :admin_id';
+        $bind = [':admin_id' => $adminId];
 
         if ($cari !== '') {
-            $where = 'WHERE nama LIKE :cari_nama OR telepon LIKE :cari_telepon OR nomor_member LIKE :cari_nomor';
+            $where .= ' AND (nama LIKE :cari_nama OR telepon LIKE :cari_telepon OR nomor_member LIKE :cari_nomor)';
             $bind[':cari_nama'] = '%' . $cari . '%';
             $bind[':cari_telepon'] = '%' . $cari . '%';
             $bind[':cari_nomor'] = '%' . $cari . '%';
         }
 
         $pdo = Database::connect();
-        $total = (int) $pdo->query('SELECT COUNT(*) FROM member')->fetchColumn();
+        $totalStmt = $pdo->prepare('SELECT COUNT(*) FROM member WHERE admin_id = :admin_id');
+        $totalStmt->execute([':admin_id' => $adminId]);
+        $total = (int) $totalStmt->fetchColumn();
 
         $stmtFiltered = $pdo->prepare('SELECT COUNT(*) FROM member ' . $where);
         $stmtFiltered->execute($bind);

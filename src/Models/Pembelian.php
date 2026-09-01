@@ -85,7 +85,7 @@ class Pembelian implements DataReporter
     /**
      * Simpan pembelian beserta item-nya, lalu update stok & harga beli produk.
      *
-     * @param array<int, array{qty: float, harga_beli: float}> $items
+     * @param array<int, array{produk_id: int, qty: float, harga_beli: float}> $items
      *        daftar item: ['produk_id' => int, 'qty' => float, 'harga_beli' => float]
      *
      * @return int id pembelian baru

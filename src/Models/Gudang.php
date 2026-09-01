@@ -412,9 +412,12 @@ class Gudang
      */
     public static function gudangUtama(): ?self
     {
-        $row = Database::connect()->query(
-            'SELECT id, nama, alamat, is_utama, is_aktif FROM gudang WHERE is_utama = 1 AND is_aktif = 1 LIMIT 1'
-        )->fetch();
+        $adminId = currentAdminId();
+        $stmt = Database::connect()->prepare(
+            'SELECT id, nama, alamat, is_utama, is_aktif FROM gudang WHERE is_utama = 1 AND is_aktif = 1 AND admin_id = :admin_id LIMIT 1'
+        );
+        $stmt->execute([':admin_id' => $adminId]);
+        $row = $stmt->fetch();
 
         return $row === false ? null : new self($row);
     }

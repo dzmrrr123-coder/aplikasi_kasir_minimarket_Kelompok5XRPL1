@@ -22,7 +22,7 @@ interface DataReporter
      *
      * @param array<string, mixed> $params filter (tanggal_mulai/akhir, limit, dst.)
      *
-     * @return array{labels: string[], series: array{label: string, data: array<int, int|float>}}
+     * @return array{labels: string[], series: array<string, mixed>}
      */
     public function getAgregasiGrafik(array $params = []): array;
 

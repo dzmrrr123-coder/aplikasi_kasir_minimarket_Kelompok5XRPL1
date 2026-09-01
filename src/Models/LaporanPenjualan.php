@@ -256,6 +256,82 @@ class LaporanPenjualan implements Observer, DataReporter
         return $nilai;
     }
 
+    /**
+     * Ekspor laporan ke format Excel (HTML table yang bisa dibuka Excel).
+     * Format ini kompatibel dengan Microsoft Excel, Google Sheets, dan LibreOffice.
+     */
+    public function keExcel(): string
+    {
+        $laporan = $this->generate();
+
+        $periode = $this->tanggalMulai->format('d-m-Y') . ' s/d ' . $this->tanggalAkhir->format('d-m-Y');
+
+        $html = '<html xmlns:o="urn:schemas-microsoft-com:office:office"
+        xmlns:x="urn:schemas-microsoft-com:office:excel"
+        xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+<meta charset="utf-8">
+<!--[if gte mso 9]>
+<xml>
+ <x:ExcelWorkbook>
+  <x:ExcelWorksheets>
+   <x:ExcelWorksheet>
+    <x:Name>Laporan Penjualan</x:Name>
+   </x:ExcelWorksheet>
+  </x:ExcelWorksheets>
+ </x:ExcelWorkbook>
+</xml>
+<![endif]-->
+<style>
+  table { border-collapse: collapse; }
+  th, td { border: 1px solid #333; padding: 6px 10px; text-align: left; }
+  th { background-color: #0d9488; color: #fff; font-weight: bold; }
+  .total-row { font-weight: bold; background-color: #f0fdfa; }
+  .header-title { font-size: 16px; font-weight: bold; margin-bottom: 4px; }
+  .header-sub { font-size: 11px; color: #666; }
+</style>
+</head>
+<body>
+<div class="header-title">Laporan Penjualan</div>
+<div class="header-sub">Periode: ' . htmlspecialchars($periode) . '</div>
+<br>
+<table>
+<tr>
+  <th>No.</th>
+  <th>No. Transaksi</th>
+  <th>Tanggal</th>
+  <th>Kasir</th>
+  <th>Total (Rp)</th>
+</tr>';
+
+        $nomor = 0;
+        foreach ($laporan['transaksi'] as $tx) {
+            $nomor++;
+            $html .= '<tr>'
+                . '<td>' . $nomor . '</td>'
+                . '<td>#' . htmlspecialchars($tx->getId()) . '</td>'
+                . '<td>' . htmlspecialchars($tx->getTanggal()->format('d-m-Y H:i')) . '</td>'
+                . '<td>' . htmlspecialchars($tx->getKasirNama()) . '</td>'
+                . '<td style="mso-number-format:\'\#\\,\\#0\';">' . number_format($tx->getTotal(), 0, ',', '.') . '</td>'
+                . '</tr>';
+        }
+
+        $html .= '<tr class="total-row">'
+            . '<td colspan="4">Jumlah Transaksi</td>'
+            . '<td>' . $laporan['jumlah'] . '</td>'
+            . '</tr>'
+            . '<tr class="total-row">'
+            . '<td colspan="4">Total Penjualan</td>'
+            . '<td style="mso-number-format:\'\#\\,\\#0\';">' . number_format($laporan['total'], 0, ',', '.') . '</td>'
+            . '</tr>';
+
+        $html .= '</table>
+</body>
+</html>';
+
+        return $html;
+    }
+
     // ------------------------------------------------------------
     // DataReporter (Polimorfisme) — untuk Chart.js & DataTables
     // ------------------------------------------------------------
@@ -337,12 +413,17 @@ class LaporanPenjualan implements Observer, DataReporter
 
         $pdo = Database::connect();
 
-        $total = (int) $pdo->query(
+        $stmtTotal = $pdo->prepare(
             'SELECT COUNT(*) FROM transaksi t
              JOIN users u ON u.id = t.kasir_id
-             WHERE t.tanggal >= ' . $pdo->quote($bind[':mulai']) . '
-               AND t.tanggal < ' . $pdo->quote($bind[':akhir'])
-        )->fetchColumn();
+             WHERE t.tanggal >= :mulai
+               AND t.tanggal < :akhir'
+        );
+        $stmtTotal->execute([
+            ':mulai' => $bind[':mulai'],
+            ':akhir' => $bind[':akhir'],
+        ]);
+        $total = (int) $stmtTotal->fetchColumn();
 
         $stmtFiltered = $pdo->prepare(
             'SELECT COUNT(*) FROM transaksi t

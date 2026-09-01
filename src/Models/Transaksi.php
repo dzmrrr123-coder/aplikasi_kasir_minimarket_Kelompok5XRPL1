@@ -18,6 +18,7 @@ class Transaksi implements Subject
     private int $kasirId = 0;
     private string $kasirNama = '';
     private int $memberId = 0;
+    private int $gudangId = 0;
     private array $items = []; // ItemTransaksi[]
     private ?Diskon $diskon = null;
     private ?PaymentMethod $pembayaran = null;
@@ -49,6 +50,9 @@ class Transaksi implements Subject
         }
         if (isset($data['member_id'])) {
             $this->memberId = (int) $data['member_id'];
+        }
+        if (isset($data['gudang_id'])) {
+            $this->gudangId = (int) $data['gudang_id'];
         }
     }
 
@@ -109,6 +113,16 @@ class Transaksi implements Subject
     public function setMemberId(int $memberId): void
     {
         $this->memberId = $memberId;
+    }
+
+    public function getGudangId(): int
+    {
+        return $this->gudangId;
+    }
+
+    public function setGudangId(int $gudangId): void
+    {
+        $this->gudangId = $gudangId;
     }
 
     /** Nama member dari database (kosong bila bukan transaksi member). */
@@ -193,7 +207,7 @@ class Transaksi implements Subject
      *
      * @throws RuntimeException bila stok produk tidak cukup
      */
-    public function tambahItem(Produk $produk, float $qty): void
+    public function tambahItem(Produk $produk, float $qty, float $potongan = 0.0): void
     {
         if ($qty <= 0) {
             throw new RuntimeException('Jumlah item harus lebih dari 0.');
@@ -208,11 +222,14 @@ class Transaksi implements Subject
         // tidak mengubah objek Produk milik pemanggil (stok DB tetap aktual).
         $produkSalinan = clone $produk;
 
-        $subtotal = round($produkSalinan->getHargaEfektif() * $qty, 2);
+        $subtotal = round($produkSalinan->getHargaEfektif($qty) * $qty, 2) - $potongan;
+        $subtotal = max(0.0, $subtotal); // cegah subtotal minus
+        
         $item = new ItemTransaksi([
             'produk'  => $produkSalinan,
             'qty'     => $qty,
             'subtotal'=> $subtotal,
+            'potongan'=> $potongan,
         ]);
         $this->items[] = $item;
     }
@@ -238,9 +255,24 @@ class Transaksi implements Subject
 
         // PPN (persen) dihitung atas total setelah diskon, dari pengaturan toko.
         $persenPajak = (float) (Pengaturan::get('pajak', '0') ?: 0);
-        $this->pajak = $persenPajak > 0 ? round($total * $persenPajak / 100, 2) : 0.0;
+        $inklusif = (bool) (Pengaturan::get('pajak_inklusif', '0') ?: false);
 
-        $this->total = max(0.0, round($total + $this->pajak, 2));
+        if ($persenPajak > 0) {
+            if ($inklusif) {
+                // Harga barang sudah termasuk pajak
+                // Total = Subtotal
+                // Pajak = Total - (Total / (1 + persenPajak / 100))
+                $this->pajak = round($total - ($total / (1 + ($persenPajak / 100))), 2);
+                $this->total = max(0.0, $total);
+            } else {
+                // Pajak ditambahkan ke subtotal
+                $this->pajak = round($total * $persenPajak / 100, 2);
+                $this->total = max(0.0, round($total + $this->pajak, 2));
+            }
+        } else {
+            $this->pajak = 0.0;
+            $this->total = max(0.0, $total);
+        }
 
         return $this->total;
     }
@@ -306,8 +338,8 @@ class Transaksi implements Subject
             $pembayaranId = $pembayaran instanceof Pembayaran ? $pembayaran->simpan() : null;
 
             $stmt = $pdo->prepare(
-                'INSERT INTO transaksi (tanggal, total, pajak, kasir_id, diskon_id, pembayaran_id, member_id)
-                 VALUES (:tanggal, :total, :pajak, :kasir_id, :diskon_id, :pembayaran_id, :member_id)'
+                'INSERT INTO transaksi (tanggal, total, pajak, kasir_id, diskon_id, pembayaran_id, member_id, gudang_id)
+                 VALUES (:tanggal, :total, :pajak, :kasir_id, :diskon_id, :pembayaran_id, :member_id, :gudang_id)'
             );
             $stmt->execute([
                 ':tanggal'        => $this->tanggal->format('Y-m-d H:i:s'),
@@ -317,6 +349,7 @@ class Transaksi implements Subject
                 ':diskon_id'      => $diskonId,
                 ':pembayaran_id'  => $pembayaranId,
                 ':member_id'      => $this->memberId > 0 ? $this->memberId : null,
+                ':gudang_id'      => $this->gudangId > 0 ? $this->gudangId : null,
             ]);
 
             $transaksiId = (int) $pdo->lastInsertId();
@@ -352,6 +385,17 @@ class Transaksi implements Subject
                     throw new RuntimeException(
                         sprintf('Stok "%s" tidak cukup saat pembayaran.', $produk->getNama())
                     );
+                }
+
+                // Multi-gudang: sync stok di gudang juga.
+                if ($this->gudangId > 0) {
+                    $stokGudang = Gudang::stokProduk($this->gudangId, (int) $produk->getId());
+                    if ($stokGudang < $qtyStok) {
+                        throw new RuntimeException(
+                            sprintf('Stok "%s" di gudang tidak cukup (tersedia: %d).', $produk->getNama(), $stokGudang)
+                        );
+                    }
+                    Gudang::setStokProduk($this->gudangId, (int) $produk->getId(), $stokGudang - $qtyStok);
                 }
             }
 
@@ -408,13 +452,18 @@ class Transaksi implements Subject
             // Ambil member_id, total & poin_diberikan dari DB (objek bisa
             // jadi belum punya nilai itu; poin dikembalikan sesuai snapshot).
             $stmtInfo = $pdo->prepare(
-                'SELECT member_id, total, poin_diberikan FROM transaksi WHERE id = :id LIMIT 1'
+                'SELECT member_id, total, poin_diberikan, gudang_id FROM transaksi WHERE id = :id LIMIT 1'
             );
             $stmtInfo->execute([':id' => (int) $this->id]);
             $info = $stmtInfo->fetch();
             $memberId = $info === false ? 0 : (int) ($info['member_id'] ?? 0);
             $totalFinal = $info === false ? 0.0 : (float) ($info['total'] ?? 0);
             $poinDiberikan = $info === false ? 0 : (int) ($info['poin_diberikan'] ?? 0);
+            $gudangIdDb = $info === false ? 0 : (int) ($info['gudang_id'] ?? 0);
+            // Gunakan gudang_id dari DB (lebih reliable daripada dari objek in-memory)
+            if ($gudangIdDb > 0) {
+                $this->gudangId = $gudangIdDb;
+            }
 
             $items = ItemTransaksi::untukTransaksi((int) $this->id);
 
@@ -430,6 +479,11 @@ class Transaksi implements Subject
                     ':qty' => $qtyStok,
                     ':id'  => (int) $produk->getId(),
                 ]);
+
+                // Multi-gudang: kembalikan stok di gudang juga.
+                if ($this->gudangId > 0) {
+                    Gudang::tambahStok($this->gudangId, (int) $produk->getId(), $qtyStok);
+                }
             }
 
             $stmt = $pdo->prepare('DELETE FROM transaksi WHERE id = :id');

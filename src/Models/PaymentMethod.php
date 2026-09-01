@@ -25,6 +25,11 @@ interface PaymentMethod
     public function getNamaMetode(): string;
 
     /**
+     * Jumlah yang dibayar oleh pelanggan.
+     */
+    public function getJumlah(): float;
+
+    /**
      * Menghitung kembalian berdasarkan total dan jumlah dibayar.
      * Metode yang tidak punya konsep kembalian (non-tunai) mengembalikan 0.
      */

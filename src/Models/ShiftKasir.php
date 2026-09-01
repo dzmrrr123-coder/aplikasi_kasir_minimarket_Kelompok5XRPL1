@@ -42,16 +42,16 @@ class ShiftKasir implements DataReporter
             $this->modalAwal = (float) $data['modal_awal'];
         }
         if (isset($data['ditutup_pada'])) {
-            $this->ditutupPada = $data['ditutup_pada'] !== null ? (string) $data['ditutup_pada'] : null;
+            $this->ditutupPada = (string) $data['ditutup_pada'];
         }
         if (isset($data['total_sistem'])) {
             $this->totalSistem = (float) $data['total_sistem'];
         }
         if (isset($data['total_kas_fisik'])) {
-            $this->totalKasFisik = $data['total_kas_fisik'] !== null ? (float) $data['total_kas_fisik'] : null;
+            $this->totalKasFisik = (float) $data['total_kas_fisik'];
         }
         if (isset($data['selisih'])) {
-            $this->selisih = $data['selisih'] !== null ? (float) $data['selisih'] : null;
+            $this->selisih = (float) $data['selisih'];
         }
         if (isset($data['catatan'])) {
             $this->catatan = (string) $data['catatan'];
@@ -171,6 +171,11 @@ class ShiftKasir implements DataReporter
             throw new \RuntimeException('Modal awal tidak boleh negatif.');
         }
 
+        $user = User::cari($kasirId);
+        if ($user === null) {
+            throw new \RuntimeException('Akun kasir tidak ditemukan di database atau sesi Anda telah kedaluwarsa. Silakan login kembali.');
+        }
+
         if (self::shiftAktif($kasirId) !== null) {
             throw new \RuntimeException('Masih ada shift yang terbuka. Tutup kas dulu.');
         }
@@ -186,6 +191,25 @@ class ShiftKasir implements DataReporter
         ]);
 
         return (int) Database::connect()->lastInsertId();
+    }
+
+    /** Jumlah transaksi selama shift ini. */
+    public function jumlahTransaksiShift(): int
+    {
+        $sampai = $this->ditutupPada ?? date('Y-m-d H:i:s');
+
+        $stmt = Database::connect()->prepare(
+            'SELECT COUNT(*) FROM rekap_penjualan
+             WHERE tanggal >= :mulai AND tanggal <= :sampai
+               AND kasir_id = :kasir'
+        );
+        $stmt->execute([
+            ':mulai'  => $this->dibukaPada,
+            ':sampai' => $sampai,
+            ':kasir'  => $this->kasirId,
+        ]);
+
+        return (int) $stmt->fetchColumn();
     }
 
     /**

@@ -143,7 +143,10 @@ class Supplier implements DataReporter
      */
     public function getAgregasiGrafik(array $params = []): array
     {
-        $total = (int) Database::connect()->query('SELECT COUNT(*) FROM supplier')->fetchColumn();
+        $adminId = currentAdminId();
+        $stmt = Database::connect()->prepare('SELECT COUNT(*) FROM supplier WHERE admin_id = :admin_id');
+        $stmt->execute([':admin_id' => $adminId]);
+        $total = (int) $stmt->fetchColumn();
 
         return [
             'labels' => ['Supplier'],
@@ -166,18 +169,21 @@ class Supplier implements DataReporter
         $start = max(0, (int) ($params['start'] ?? 0));
         $length = max(1, (int) ($params['length'] ?? 10));
 
-        $where = '';
-        $bind = [];
+        $adminId = currentAdminId();
+        $where = 'WHERE admin_id = :admin_id';
+        $bind = [':admin_id' => $adminId];
 
         if ($cari !== '') {
-            $where = 'WHERE nama LIKE :cari_nama OR kontak LIKE :cari_kontak OR alamat LIKE :cari_alamat';
+            $where .= ' AND (nama LIKE :cari_nama OR kontak LIKE :cari_kontak OR alamat LIKE :cari_alamat)';
             $bind[':cari_nama'] = '%' . $cari . '%';
             $bind[':cari_kontak'] = '%' . $cari . '%';
             $bind[':cari_alamat'] = '%' . $cari . '%';
         }
 
         $pdo = Database::connect();
-        $total = (int) $pdo->query('SELECT COUNT(*) FROM supplier')->fetchColumn();
+        $totalStmt = $pdo->prepare('SELECT COUNT(*) FROM supplier WHERE admin_id = :admin_id');
+        $totalStmt->execute([':admin_id' => $adminId]);
+        $total = (int) $totalStmt->fetchColumn();
 
         $stmtFiltered = $pdo->prepare('SELECT COUNT(*) FROM supplier ' . $where);
         $stmtFiltered->execute($bind);
